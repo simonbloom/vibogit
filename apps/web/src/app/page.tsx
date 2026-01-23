@@ -25,7 +25,7 @@ export default function Home() {
         <div className="flex flex-col items-center justify-center p-12 text-center min-h-[calc(100vh-57px)]">
           <h2 className="text-xl font-semibold mb-2">Start the daemon</h2>
           <p className="text-muted-foreground mb-4">Run this command in your terminal:</p>
-          <code className="px-4 py-2 bg-muted rounded-md font-mono text-sm">pnpm daemon</code>
+          <code className="px-4 py-2 bg-muted rounded-md font-mono text-sm">bun run daemon</code>
         </div>
       )}
 

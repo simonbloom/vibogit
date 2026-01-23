@@ -59,7 +59,8 @@ export class DevServerManager {
 
   private detectPort(script: string): number | undefined {
     // Try to detect port from script
-    const portMatch = script.match(/(?:--port|PORT=|:)(\d{4,5})/);
+    // Match: --port 3000, -p 3000, PORT=3000, :3000
+    const portMatch = script.match(/(?:--port\s+|-p\s+|PORT=|:)(\d{4,5})/);
     if (portMatch) {
       return parseInt(portMatch[1], 10);
     }

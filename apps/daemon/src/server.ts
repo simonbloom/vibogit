@@ -307,14 +307,20 @@ async function handleMessage(
 
       case "devServerStart": {
         const { path, config } = payload as { path: string; config: DevServerConfig };
+        console.log("[devServerStart] Starting for path:", path, "config:", config);
         await devServerManager.start(path, config, (log) => {
           // Send log to client
-          ws.send(JSON.stringify({
-            type: "devServerLog",
-            id: generateId(),
-            payload: { path, log },
-          }));
+          try {
+            ws.send(JSON.stringify({
+              type: "devServerLog",
+              id: generateId(),
+              payload: { path, log },
+            }));
+          } catch (err) {
+            console.log("[devServerStart] Failed to send log:", err);
+          }
         });
+        console.log("[devServerStart] Started successfully");
         response = { success: true };
         break;
       }
@@ -429,6 +435,7 @@ async function handleMessage(
 
       case "killPort": {
         const { port } = payload as { port: number };
+        console.log("[killPort] Killing port:", port);
         
         if (!port || port < 1 || port > 65535) {
           response = { success: false, killed: false, error: "Invalid port" };
@@ -442,6 +449,7 @@ async function handleMessage(
           });
           
           const pids = checkResult.stdout.toString().trim();
+          console.log("[killPort] PIDs on port", port, ":", pids || "(none)");
           
           if (!pids) {
             response = { success: true, killed: false };
@@ -453,8 +461,10 @@ async function handleMessage(
             cmd: ["sh", "-c", `lsof -ti:${port} | xargs kill -9 2>/dev/null || true`],
           });
           
+          console.log("[killPort] Killed processes on port", port);
           response = { success: true, killed: true };
         } catch (error) {
+          console.log("[killPort] Error:", error);
           response = { success: false, killed: false, error: String(error) };
         }
         break;
