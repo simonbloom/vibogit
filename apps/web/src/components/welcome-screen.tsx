@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useDaemon } from "@/lib/daemon-context";
+import { useTabs } from "@/lib/tabs-context";
 import { FolderOpen, Loader2 } from "lucide-react";
 import { clsx } from "clsx";
 import type { RecentProject } from "@vibogit/shared";
@@ -12,6 +13,7 @@ interface WelcomeScreenProps {
 
 export function WelcomeScreen({ recentProjects = [] }: WelcomeScreenProps) {
   const { state, send, setRepoPath } = useDaemon();
+  const { addTab } = useTabs();
   const [isLoading, setIsLoading] = useState(false);
   const [checkingPath, setCheckingPath] = useState<string | null>(null);
   const [showInitDialog, setShowInitDialog] = useState(false);
@@ -39,6 +41,7 @@ export function WelcomeScreen({ recentProjects = [] }: WelcomeScreenProps) {
     try {
       const isRepoResponse = await send<{ isRepo: boolean }>("isGitRepo", { path });
       if (isRepoResponse.isRepo) {
+        addTab(path);
         await setRepoPath(path);
       } else {
         setPendingPath(path);
@@ -57,6 +60,7 @@ export function WelcomeScreen({ recentProjects = [] }: WelcomeScreenProps) {
     setIsLoading(true);
     try {
       await send("initGit", { path: pendingPath });
+      addTab(pendingPath);
       await setRepoPath(pendingPath);
     } catch (error) {
       console.error("Failed to init git:", error);

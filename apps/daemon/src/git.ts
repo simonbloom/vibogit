@@ -8,7 +8,7 @@ import type {
   DiffHunk,
   DiffLine,
   FileStatus,
-} from "@vibogit/shared";
+} from "./types";
 
 export class GitService {
   private getGit(repoPath: string): SimpleGit {

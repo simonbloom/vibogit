@@ -1,8 +1,9 @@
 import type { ServerWebSocket } from "bun";
-import type { WebSocketMessage } from "@vibogit/shared";
+import type { WebSocketMessage, DevServerConfig } from "./types";
 import { GitService } from "./git";
 import { FileWatcher } from "./watch";
 import { SystemService } from "./system";
+import { DevServerManager } from "./devserver";
 
 interface ClientData {
   id: string;
@@ -12,6 +13,7 @@ interface ClientData {
 const gitService = new GitService();
 const fileWatcher = new FileWatcher();
 const systemService = new SystemService();
+const devServerManager = new DevServerManager();
 const clients = new Map<ServerWebSocket<ClientData>, ClientData>();
 
 function generateId(): string {
@@ -223,6 +225,54 @@ async function handleMessage(
         const { url } = payload as { url: string };
         await systemService.openInBrowser(url);
         response = { success: true };
+        break;
+      }
+
+      case "devServerDetect": {
+        const { path } = payload as { path: string };
+        const config = await devServerManager.detectCommand(path);
+        response = { config };
+        break;
+      }
+
+      case "devServerStart": {
+        const { path, config } = payload as { path: string; config: DevServerConfig };
+        await devServerManager.start(path, config, (log) => {
+          // Send log to client
+          ws.send(JSON.stringify({
+            type: "devServerLog",
+            id: generateId(),
+            payload: { path, log },
+          }));
+        });
+        response = { success: true };
+        break;
+      }
+
+      case "devServerStop": {
+        const { path } = payload as { path: string };
+        await devServerManager.stop(path);
+        response = { success: true };
+        break;
+      }
+
+      case "devServerRestart": {
+        const { path, config } = payload as { path: string; config: DevServerConfig };
+        await devServerManager.restart(path, config, (log) => {
+          ws.send(JSON.stringify({
+            type: "devServerLog",
+            id: generateId(),
+            payload: { path, log },
+          }));
+        });
+        response = { success: true };
+        break;
+      }
+
+      case "devServerState": {
+        const { path } = payload as { path: string };
+        const state = devServerManager.getState(path);
+        response = { state };
         break;
       }
 

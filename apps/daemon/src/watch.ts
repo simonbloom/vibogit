@@ -1,5 +1,5 @@
 import { watch, type FSWatcher } from "chokidar";
-import type { FileChangeEvent } from "@vibogit/shared";
+import type { FileChangeEvent } from "./types";
 
 type ChangeCallback = (event: FileChangeEvent) => void;
 

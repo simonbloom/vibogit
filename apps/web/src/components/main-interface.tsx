@@ -9,6 +9,7 @@ import { CommitHistory } from "@/components/commit-history";
 import { AICommitButton } from "@/components/ai-commit-button";
 import { SettingsPanel } from "@/components/settings-panel";
 import { DevServerPanel } from "@/components/dev-server-panel";
+import { CreatePRDialog } from "@/components/create-pr-dialog";
 import { getSettings } from "@/lib/settings";
 import {
   ArrowUp,
@@ -23,6 +24,7 @@ import {
   History,
   FileText,
   Settings,
+  GitPullRequest,
 } from "lucide-react";
 import { clsx } from "clsx";
 import type { GitFile } from "@vibogit/shared";
@@ -35,6 +37,7 @@ export function MainInterface() {
   const [commitMessage, setCommitMessage] = useState("");
   const [activeView, setActiveView] = useState<"changes" | "history">("changes");
   const [showSettings, setShowSettings] = useState(false);
+  const [showCreatePR, setShowCreatePR] = useState(false);
 
   const { status, branches, repoPath } = state;
   const currentBranch = branches.find((b) => b.current);
@@ -135,6 +138,13 @@ export function MainInterface() {
           <div className="flex items-center justify-between mb-2">
             <h2 className="font-semibold text-text-primary truncate">{projectName}</h2>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowCreatePR(true)}
+                className="text-text-muted hover:text-text-secondary transition-colors"
+                title="Create Pull Request"
+              >
+                <GitPullRequest className="w-4 h-4" />
+              </button>
               <button
                 onClick={() => setShowSettings(true)}
                 className="text-text-muted hover:text-text-secondary transition-colors"
@@ -315,6 +325,14 @@ export function MainInterface() {
 
       {/* Settings Panel */}
       <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />
+
+      {/* Create PR Dialog */}
+      <CreatePRDialog
+        isOpen={showCreatePR}
+        onClose={() => setShowCreatePR(false)}
+        repoPath={repoPath}
+        currentBranch={currentBranch}
+      />
     </div>
   );
 }

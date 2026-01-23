@@ -1,20 +1,42 @@
 {
-  "name": "@vibogit/daemon",
-  "version": "0.0.1",
-  "private": true,
+  "name": "vibogit-daemon",
+  "version": "0.1.0",
+  "description": "Local daemon for ViboGit - Web-based Git client",
+  "author": "Simon Bloom",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/simonbloom/vibogit.git",
+    "directory": "apps/daemon"
+  },
+  "keywords": ["git", "daemon", "websocket", "vibogit"],
   "type": "module",
+  "bin": {
+    "vibogit-daemon": "./bin/vibogit-daemon.js"
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@vibogit/shared": "workspace:*",
     "simple-git": "^3.24.0",
     "chokidar": "^4.0.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "peerDependencies": {
+    "bun": ">=1.0.0"
   }
 }
