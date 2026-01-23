@@ -37,7 +37,9 @@ export type MessageType =
   | "stashDrop"
   | "keychainGet"
   | "keychainSet"
-  | "keychainDelete";
+  | "keychainDelete"
+  | "listFiles"
+  | "getRemotes";
 
 export interface WebSocketMessage<T = unknown> {
   type: MessageType;

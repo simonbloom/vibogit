@@ -5,6 +5,58 @@ import { FileWatcher } from "./watch";
 import { SystemService } from "./system";
 import { DevServerManager } from "./devserver";
 import { SecureStorage } from "./keychain";
+import { readdirSync, statSync } from "fs";
+import { join, relative } from "path";
+
+interface FileNode {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  children?: FileNode[];
+}
+
+async function listFilesRecursive(basePath: string, currentPath: string, maxDepth: number, depth = 0): Promise<FileNode[]> {
+  if (depth > maxDepth) return [];
+  
+  const ignoreDirs = new Set(["node_modules", ".git", ".next", "dist", "build", ".turbo", ".cache"]);
+  const nodes: FileNode[] = [];
+  
+  try {
+    const entries = readdirSync(currentPath, { withFileTypes: true });
+    
+    for (const entry of entries) {
+      if (entry.name.startsWith(".") && entry.name !== ".env") continue;
+      if (ignoreDirs.has(entry.name)) continue;
+      
+      const fullPath = join(currentPath, entry.name);
+      const relativePath = relative(basePath, fullPath);
+      
+      if (entry.isDirectory()) {
+        const children = await listFilesRecursive(basePath, fullPath, maxDepth, depth + 1);
+        nodes.push({
+          name: entry.name,
+          path: relativePath,
+          type: "directory",
+          children,
+        });
+      } else {
+        nodes.push({
+          name: entry.name,
+          path: relativePath,
+          type: "file",
+        });
+      }
+    }
+  } catch {
+    // Ignore errors (permission denied, etc.)
+  }
+  
+  // Sort: directories first, then files, alphabetically
+  return nodes.sort((a, b) => {
+    if (a.type === b.type) return a.name.localeCompare(b.name);
+    return a.type === "directory" ? -1 : 1;
+  });
+}
 
 interface ClientData {
   id: string;
@@ -324,6 +376,20 @@ async function handleMessage(
         const { key } = payload as { key: string };
         const deleted = await secureStorage.deleteApiKey(key);
         response = { success: deleted };
+        break;
+      }
+
+      case "listFiles": {
+        const { path } = payload as { path: string };
+        const tree = await listFilesRecursive(path, path, 2);
+        response = { tree };
+        break;
+      }
+
+      case "getRemotes": {
+        const { repoPath } = payload as { repoPath: string };
+        const remotes = await gitService.getRemotes(repoPath);
+        response = { remotes };
         break;
       }
 

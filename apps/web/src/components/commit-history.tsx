@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { clsx } from "clsx";
-import { GitCommit, Loader2, Clock, User } from "lucide-react";
+import { Loader2, User, Clock } from "lucide-react";
 import type { GitCommit as GitCommitType } from "@vibogit/shared";
 
 interface CommitHistoryProps {
@@ -45,16 +45,16 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-text-muted p-8">
+      <div className="flex flex-col items-center justify-center h-64 text-text-muted">
         <Loader2 className="w-8 h-8 animate-spin mb-4" />
-        <p>Loading timeline...</p>
+        <p>Loading commits...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-status-deleted p-8">
+      <div className="flex flex-col items-center justify-center h-64 text-status-deleted">
         <p>{error}</p>
       </div>
     );
@@ -62,94 +62,78 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
 
   if (commits.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-text-muted p-8">
-        <GitCommit className="w-12 h-12 mb-4 opacity-50" />
+      <div className="flex flex-col items-center justify-center h-64 text-text-muted">
         <p>No commits yet</p>
-        <p className="text-sm mt-2">Make your first save to start the timeline</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="p-4">
-        <h3 className="text-sm font-medium text-text-secondary mb-4 uppercase tracking-wider">
-          Timeline
-        </h3>
-        <div className="relative">
-          {/* Timeline line */}
-          <div className="absolute left-3 top-0 bottom-0 w-px bg-border" />
-
-          {/* Commits */}
-          <div className="space-y-4">
-            {commits.map((commit, index) => (
-              <CommitItem key={commit.hash} commit={commit} isFirst={index === 0} />
-            ))}
-          </div>
-        </div>
-      </div>
+    <div className="py-2">
+      {commits.map((commit, index) => (
+        <CommitRow key={commit.hash} commit={commit} isFirst={index === 0} />
+      ))}
     </div>
   );
 }
 
-interface CommitItemProps {
+interface CommitRowProps {
   commit: GitCommitType;
   isFirst: boolean;
 }
 
-function CommitItem({ commit, isFirst }: CommitItemProps) {
+function CommitRow({ commit, isFirst }: CommitRowProps) {
   const formattedDate = formatCommitDate(commit.date);
 
   return (
-    <div className="relative flex gap-4 pl-6">
-      {/* Timeline dot */}
-      <div
-        className={clsx(
-          "absolute left-0 w-6 h-6 rounded-full flex items-center justify-center",
-          isFirst ? "bg-accent" : "bg-surface-light border border-border"
-        )}
-      >
-        <GitCommit className={clsx("w-3 h-3", isFirst ? "text-background" : "text-text-muted")} />
+    <div className="flex items-start gap-3 px-4 py-3 hover:bg-surface-light transition-colors">
+      {/* Timeline indicator */}
+      <div className="flex flex-col items-center pt-1">
+        <div
+          className={clsx(
+            "w-3 h-3 rounded-full",
+            isFirst ? "bg-accent" : "bg-text-muted/30"
+          )}
+        />
+        <div className="w-px flex-1 bg-border mt-2" />
       </div>
 
-      {/* Commit content */}
-      <div className="flex-1 pb-4">
-        <div className="bg-surface rounded-lg p-3 border border-border hover:border-accent/30 transition-colors">
-          <p className="text-text-primary text-sm font-medium mb-2 line-clamp-2">
-            {commit.message}
-          </p>
-          <div className="flex items-center gap-4 text-xs text-text-muted">
-            <span className="flex items-center gap-1">
-              <User className="w-3 h-3" />
-              {commit.author}
-            </span>
-            <span className="flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              {formattedDate}
-            </span>
-            <span className="font-mono text-accent">{commit.hashShort}</span>
-          </div>
-          {commit.refs && commit.refs.length > 0 && (
-            <div className="flex gap-1 mt-2 flex-wrap">
-              {commit.refs.map((ref, i) => (
-                <span
-                  key={i}
-                  className={clsx(
-                    "text-xs px-2 py-0.5 rounded",
-                    ref.includes("HEAD")
-                      ? "bg-accent/20 text-accent"
-                      : ref.includes("origin")
-                      ? "bg-status-added/20 text-status-added"
-                      : "bg-surface-light text-text-secondary"
-                  )}
-                >
-                  {ref}
-                </span>
-              ))}
-            </div>
-          )}
+      {/* Commit info */}
+      <div className="flex-1 min-w-0">
+        <p className="text-text-primary font-medium leading-snug">
+          {commit.message}
+        </p>
+        <div className="flex items-center gap-3 mt-1 text-sm text-text-muted">
+          <span className="font-mono text-accent">{commit.hashShort}</span>
+          <span className="flex items-center gap-1">
+            <User className="w-3 h-3" />
+            {commit.author}
+          </span>
+          <span className="flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            {formattedDate}
+          </span>
         </div>
       </div>
+
+      {/* Branch labels */}
+      {commit.refs && commit.refs.length > 0 && (
+        <div className="flex gap-1 flex-shrink-0">
+          {commit.refs.map((ref, i) => (
+            <span
+              key={i}
+              className={clsx(
+                "text-xs px-2 py-1 rounded font-medium",
+                ref.includes("HEAD") || ref === "main" || ref === "master"
+                  ? "bg-accent/20 text-accent border border-accent/30"
+                  : "bg-status-added/20 text-status-added border border-status-added/30"
+              )}
+            >
+              {ref.includes("->") ? ref.split("->")[1]?.trim() : ref}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -163,10 +147,9 @@ function formatCommitDate(dateString: string): string {
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
   if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffHours < 24) return `${diffHours} hr ago`;
   if (diffDays === 1) return "yesterday";
   if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
   return date.toLocaleDateString();
 }

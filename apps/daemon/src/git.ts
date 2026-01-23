@@ -383,4 +383,13 @@ export class GitService {
       await git.stash(["drop"]);
     }
   }
+
+  async getRemotes(repoPath: string): Promise<Array<{ name: string; refs: { fetch: string; push: string } }>> {
+    const git = this.getGit(repoPath);
+    const result = await git.getRemotes(true);
+    return result.map((r) => ({
+      name: r.name,
+      refs: r.refs,
+    }));
+  }
 }
