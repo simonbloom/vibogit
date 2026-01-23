@@ -6,7 +6,6 @@ import { BranchSelector } from "@/components/branch-selector";
 import { CommitHistory } from "@/components/commit-history";
 import { AICommitButton } from "@/components/ai-commit-button";
 import { SettingsPanel } from "@/components/settings-panel";
-import { DevServerPanel } from "@/components/dev-server-panel";
 import { CreatePRDialog } from "@/components/create-pr-dialog";
 import { FileTree } from "@/components/file-tree";
 import { getSettings } from "@/lib/settings";
@@ -23,13 +22,11 @@ import {
   GitPullRequest,
   GitBranch,
   Plus,
-  Check,
-  Github,
 } from "lucide-react";
 import { clsx } from "clsx";
 
 export function MainInterface() {
-  const { state, send, refreshStatus, refreshBranches, setRepoPath } = useDaemon();
+  const { state, send, refreshStatus, refreshBranches } = useDaemon();
   const [isPulling, setIsPulling] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
@@ -114,10 +111,7 @@ export function MainInterface() {
         }
         case "github":
           try {
-            const result = await send<{ remotes: Array<{ name: string; refs: { fetch: string } }> }>(
-              "getRemotes",
-              { repoPath }
-            );
+            const result = await send<{ remotes: Array<{ name: string; refs: { fetch: string } }> }>("getRemotes", { repoPath });
             const origin = result.remotes.find((r) => r.name === "origin");
             if (origin) {
               let url = origin.refs.fetch;
@@ -139,236 +133,135 @@ export function MainInterface() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-73px)]">
+    <div className="flex flex-col h-[calc(100vh-57px)]">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b">
+      <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
         <div className="flex items-center gap-3">
-          <Folder className="w-5 h-5 text-primary" />
           <span className="font-semibold">{projectName}</span>
           <BranchSelector currentBranch={currentBranch} branches={branches} />
-          <button
-            onClick={() => {}}
-            className="flex items-center justify-center w-6 h-6 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-            title="Create branch"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-          {totalChanges > 0 && (
-            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs font-medium">
-              <Check className="w-3 h-3" />
-            </span>
-          )}
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => handleQuickLink("finder")}
-            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-            title="Open in Finder"
-          >
+        <div className="flex items-center gap-1">
+          <button onClick={() => handleQuickLink("finder")} className="p-2 text-muted-foreground hover:text-foreground rounded hover:bg-muted" title="Finder">
             <Folder className="w-4 h-4" />
           </button>
-          <button
-            onClick={() => handleQuickLink("github")}
-            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-            title="Open on GitHub"
-          >
+          <button onClick={() => handleQuickLink("github")} className="p-2 text-muted-foreground hover:text-foreground rounded hover:bg-muted" title="GitHub">
             <Globe className="w-4 h-4" />
           </button>
-          <button
-            onClick={() => handleQuickLink("terminal")}
-            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-            title="Open in Terminal"
-          >
+          <button onClick={() => handleQuickLink("terminal")} className="p-2 text-muted-foreground hover:text-foreground rounded hover:bg-muted" title="Terminal">
             <Terminal className="w-4 h-4" />
           </button>
-          <button
-            onClick={() => handleQuickLink("editor")}
-            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-            title="Open in Editor"
-          >
+          <button onClick={() => handleQuickLink("editor")} className="p-2 text-muted-foreground hover:text-foreground rounded hover:bg-muted" title="Editor">
             <Code className="w-4 h-4" />
           </button>
-          <button
-            onClick={() => {}}
-            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-            title="GitHub"
-          >
-            <Github className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setShowSettings(true)}
-            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-            title="Settings"
-          >
+          <button onClick={() => setShowSettings(true)} className="p-2 text-muted-foreground hover:text-foreground rounded hover:bg-muted" title="Settings">
             <Settings className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Action Bar */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b">
-        <div className="flex items-center">
-          <button
-            onClick={handlePull}
-            disabled={isPulling}
-            className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-l-lg border text-secondary-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50"
-          >
-            {isPulling ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <ArrowDown className="w-4 h-4" />
-            )}
-            Pull
-            {(status?.behind || 0) > 0 && (
-              <span className="text-xs text-destructive">({status?.behind})</span>
-            )}
-          </button>
-          <button
-            onClick={handlePull}
-            disabled={isPulling}
-            className="flex items-center justify-center w-10 py-2 bg-secondary border-y border-r rounded-r-lg text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50"
-            title="Fetch"
-          >
-            <RefreshCw className={clsx("w-4 h-4", isPulling && "animate-spin")} />
-          </button>
-        </div>
-
+      {/* Actions */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b">
+        <button
+          onClick={handlePull}
+          disabled={isPulling}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted disabled:opacity-50"
+        >
+          {isPulling ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowDown className="w-4 h-4" />}
+          Pull
+        </button>
+        <button
+          onClick={handlePull}
+          disabled={isPulling}
+          className="p-1.5 border rounded-md hover:bg-muted disabled:opacity-50"
+          title="Fetch"
+        >
+          <RefreshCw className={clsx("w-4 h-4", isPulling && "animate-spin")} />
+        </button>
         <button
           onClick={handlePush}
           disabled={isPushing || (status?.ahead || 0) === 0}
-          className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-lg border text-secondary-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted disabled:opacity-50"
         >
-          {isPushing ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <ArrowUp className="w-4 h-4" />
-          )}
+          {isPushing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4" />}
           Push
-          {(status?.ahead || 0) > 0 && (
-            <span className="text-xs text-green-500">({status?.ahead})</span>
-          )}
         </button>
-
-        <div className="flex items-center">
-          <button
-            onClick={() => setShowQuickCommit(!showQuickCommit)}
-            disabled={totalChanges === 0}
-            className={clsx(
-              "flex items-center gap-2 px-4 py-2 rounded-l-lg border transition-colors disabled:opacity-50",
-              totalChanges > 0
-                ? "bg-primary/10 text-primary border-primary/30"
-                : "bg-secondary text-secondary-foreground"
-            )}
-          >
-            <GitBranch className="w-4 h-4" />
-            Quick Commit
-            {totalChanges > 0 && <span className="text-xs">({totalChanges})</span>}
-          </button>
-          <button
-            onClick={() => {}}
-            disabled={totalChanges === 0}
-            className={clsx(
-              "flex items-center justify-center w-10 py-2 border-y border-r rounded-r-lg transition-colors disabled:opacity-50",
-              totalChanges > 0
-                ? "bg-primary/10 text-primary border-primary/30"
-                : "bg-secondary text-muted-foreground"
-            )}
-            title="Stage selected"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-        </div>
-
+        <button
+          onClick={() => setShowQuickCommit(!showQuickCommit)}
+          disabled={totalChanges === 0}
+          className={clsx(
+            "flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md disabled:opacity-50",
+            totalChanges > 0 ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+          )}
+        >
+          <GitBranch className="w-4 h-4" />
+          Commit {totalChanges > 0 && `(${totalChanges})`}
+        </button>
         <button
           onClick={() => setShowCreatePR(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-lg border text-secondary-foreground hover:bg-secondary/80 transition-colors"
+          className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted"
         >
           <GitPullRequest className="w-4 h-4" />
-          Create PR
+          PR
         </button>
       </div>
 
-      {/* Quick Commit Panel */}
+      {/* Quick Commit */}
       {showQuickCommit && (
-        <div className="px-4 py-3 border-b bg-muted">
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={commitMessage}
-              onChange={(e) => setCommitMessage(e.target.value)}
-              placeholder="Commit message..."
-              className="flex-1 px-3 py-2 bg-background border rounded-lg placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              onKeyDown={(e) => e.key === "Enter" && handleQuickCommit()}
-            />
-            <AICommitButton
-              onMessageGenerated={setCommitMessage}
-              disabled={totalChanges === 0}
-            />
-            <button
-              onClick={handleQuickCommit}
-              disabled={isCommitting || !commitMessage.trim()}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              {isCommitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Commit"}
-            </button>
-            <button
-              onClick={() => setShowQuickCommit(false)}
-              className="px-3 py-2 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
+        <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted/30">
+          <input
+            type="text"
+            value={commitMessage}
+            onChange={(e) => setCommitMessage(e.target.value)}
+            placeholder="Commit message..."
+            className="flex-1 px-3 py-1.5 text-sm border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+            onKeyDown={(e) => e.key === "Enter" && handleQuickCommit()}
+            autoFocus
+          />
+          <AICommitButton onMessageGenerated={setCommitMessage} disabled={totalChanges === 0} />
+          <button
+            onClick={handleQuickCommit}
+            disabled={isCommitting || !commitMessage.trim()}
+            className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md disabled:opacity-50"
+          >
+            {isCommitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Commit"}
+          </button>
+          <button onClick={() => setShowQuickCommit(false)} className="px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground">
+            Cancel
+          </button>
         </div>
       )}
 
-      {/* Dev Servers */}
-      <DevServerPanel repoPath={repoPath} />
-
-      {/* View Toggle & Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-2 border-b">
-          <button
-            onClick={() => setActiveView("graph")}
-            className={clsx(
-              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-              activeView === "graph"
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <GitBranch className="w-4 h-4" />
-            Graph
-          </button>
-          <button
-            onClick={() => setActiveView("tree")}
-            className={clsx(
-              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-              activeView === "tree"
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Folder className="w-4 h-4" />
-            Tree
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-auto">
-          {activeView === "graph" ? (
-            <CommitHistory repoPath={repoPath} />
-          ) : (
-            <FileTree repoPath={repoPath} />
+      {/* Tabs */}
+      <div className="flex items-center gap-1 px-4 py-1 border-b">
+        <button
+          onClick={() => setActiveView("graph")}
+          className={clsx(
+            "flex items-center gap-1.5 px-3 py-1 text-sm rounded-md",
+            activeView === "graph" ? "bg-muted font-medium" : "text-muted-foreground hover:text-foreground"
           )}
-        </div>
+        >
+          <GitBranch className="w-3.5 h-3.5" />
+          Graph
+        </button>
+        <button
+          onClick={() => setActiveView("tree")}
+          className={clsx(
+            "flex items-center gap-1.5 px-3 py-1 text-sm rounded-md",
+            activeView === "tree" ? "bg-muted font-medium" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Folder className="w-3.5 h-3.5" />
+          Tree
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-auto">
+        {activeView === "graph" ? <CommitHistory repoPath={repoPath} /> : <FileTree repoPath={repoPath} />}
       </div>
 
       <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />
-      <CreatePRDialog
-        isOpen={showCreatePR}
-        onClose={() => setShowCreatePR(false)}
-        repoPath={repoPath}
-        currentBranch={currentBranch}
-      />
+      <CreatePRDialog isOpen={showCreatePR} onClose={() => setShowCreatePR(false)} repoPath={repoPath} currentBranch={currentBranch} />
     </div>
   );
 }

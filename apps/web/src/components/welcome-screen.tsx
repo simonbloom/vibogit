@@ -13,14 +13,11 @@ export function WelcomeScreen() {
   const { state, send, setRepoPath } = useDaemon();
   const { addTab } = useTabs();
   const [isLoading, setIsLoading] = useState(false);
-  const [checkingPath, setCheckingPath] = useState<string | null>(null);
   const [showInitDialog, setShowInitDialog] = useState(false);
   const [pendingPath, setPendingPath] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
 
   const handleOpenProject = useCallback(async () => {
     if (state.connection !== "connected") return;
-
     setIsLoading(true);
     try {
       const response = await send<{ path: string | null }>("pickFolder");
@@ -35,7 +32,6 @@ export function WelcomeScreen() {
   }, [state.connection, send]);
 
   const checkAndOpenPath = async (path: string) => {
-    setCheckingPath(path);
     try {
       const isRepoResponse = await send<{ isRepo: boolean }>("isGitRepo", { path });
       if (isRepoResponse.isRepo) {
@@ -48,14 +44,11 @@ export function WelcomeScreen() {
       }
     } catch (error) {
       console.error("Failed to check path:", error);
-    } finally {
-      setCheckingPath(null);
     }
   };
 
   const handleInitGit = async () => {
     if (!pendingPath) return;
-
     setIsLoading(true);
     try {
       await send("initGit", { path: pendingPath });
@@ -71,91 +64,22 @@ export function WelcomeScreen() {
     }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-
-    const items = e.dataTransfer.items;
-    if (items.length > 0) {
-      const item = items[0];
-      if (item.kind === "file") {
-        const entry = item.webkitGetAsEntry?.();
-        if (entry?.isDirectory) {
-          console.log("Folder dropped:", entry.name);
-        }
-      }
-    }
-  };
-
   const handleRecentProjectClick = async (project: RecentProject) => {
     await checkAndOpenPath(project.path);
   };
 
-  const getProjectName = (path: string) => {
-    return path.split("/").pop() || path;
-  };
-
-  if (checkingPath) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-73px)] p-8">
-        <Loader2 className="w-8 h-8 text-primary animate-spin mb-4" />
-        <p className="text-muted-foreground">Checking folder...</p>
-        <p className="text-muted-foreground/60 text-sm mt-2 font-mono">{checkingPath}</p>
-      </div>
-    );
-  }
-
   if (showInitDialog && pendingPath) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-73px)] p-8">
-        <div className="bg-card rounded-xl p-8 max-w-md w-full border">
-          <div className="text-center mb-6">
-            <FolderOpen className="w-12 h-12 text-primary mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">
-              {getProjectName(pendingPath)}
-            </h2>
-            <p className="text-muted-foreground">
-              This folder isn&apos;t a git project yet.
-            </p>
-          </div>
-
-          <div className="bg-muted rounded-lg p-4 mb-6">
-            <h3 className="font-medium mb-2">Initialize Git</h3>
-            <p className="text-muted-foreground text-sm">
-              This will track your changes so you can save and ship your work.
-            </p>
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                setShowInitDialog(false);
-                setPendingPath(null);
-              }}
-              className="flex-1 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
-            >
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-57px)] p-8">
+        <div className="border rounded-lg p-6 max-w-sm w-full">
+          <h2 className="font-semibold mb-1">{pendingPath.split("/").pop()}</h2>
+          <p className="text-sm text-muted-foreground mb-4">This folder isn&apos;t a git repository.</p>
+          <div className="flex gap-2">
+            <button onClick={() => { setShowInitDialog(false); setPendingPath(null); }} className="flex-1 px-3 py-1.5 text-sm border rounded-md hover:bg-muted">
               Cancel
             </button>
-            <button
-              onClick={handleInitGit}
-              disabled={isLoading}
-              className="flex-1 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin mx-auto" />
-              ) : (
-                "Set it up"
-              )}
+            <button onClick={handleInitGit} disabled={isLoading} className="flex-1 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md disabled:opacity-50">
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Initialize Git"}
             </button>
           </div>
         </div>
@@ -164,64 +88,31 @@ export function WelcomeScreen() {
   }
 
   return (
-    <div
-      className={clsx(
-        "flex flex-col items-center justify-center min-h-[calc(100vh-73px)] p-8 transition-colors",
-        isDragging && "bg-primary/5"
-      )}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold mb-2">Welcome to ViboGit</h1>
-        <p className="text-muted-foreground">Git for the Vibe Coder</p>
-      </div>
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-57px)] p-8">
+      <h1 className="text-2xl font-bold mb-1">ViboGit</h1>
+      <p className="text-muted-foreground mb-6">Git for the Vibe Coder</p>
 
       <button
         onClick={handleOpenProject}
         disabled={isLoading || state.connection !== "connected"}
-        className={clsx(
-          "flex items-center gap-3 px-8 py-4 bg-primary text-primary-foreground font-medium rounded-xl",
-          "hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed",
-          "shadow-lg hover:shadow-xl"
-        )}
+        className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 disabled:opacity-50"
       >
-        {isLoading ? (
-          <Loader2 className="w-5 h-5 animate-spin" />
-        ) : (
-          <FolderOpen className="w-5 h-5" />
-        )}
-        <span>Open a Project</span>
+        {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <FolderOpen className="w-5 h-5" />}
+        Open Project
       </button>
 
-      <p className="text-muted-foreground/60 text-sm mt-4">
-        Or drag a folder here
-      </p>
-
       {recentProjects.length > 0 && (
-        <div className="mt-12 w-full max-w-md">
-          <h3 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">
-            Recent Projects
-          </h3>
-          <div className="bg-card rounded-xl border overflow-hidden">
-            {recentProjects.map((project, index) => (
+        <div className="mt-8 w-full max-w-sm">
+          <h3 className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Recent</h3>
+          <div className="border rounded-lg divide-y">
+            {recentProjects.map((project) => (
               <button
                 key={project.path}
                 onClick={() => handleRecentProjectClick(project)}
-                className={clsx(
-                  "w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors",
-                  index !== recentProjects.length - 1 && "border-b"
-                )}
+                className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-muted/50 text-sm"
               >
-                <FolderOpen className="w-4 h-4 text-primary flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{project.name}</p>
-                  <p className="text-muted-foreground/60 text-xs truncate">{project.path}</p>
-                </div>
-                <span className="text-muted-foreground/60 text-xs flex-shrink-0">
-                  {formatRelativeTime(project.lastOpenedAt)}
-                </span>
+                <FolderOpen className="w-4 h-4 text-muted-foreground" />
+                <span className="truncate">{project.name}</span>
               </button>
             ))}
           </div>
@@ -229,20 +120,4 @@ export function WelcomeScreen() {
       )}
     </div>
   );
-}
-
-function formatRelativeTime(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays === 1) return "yesterday";
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
 }
