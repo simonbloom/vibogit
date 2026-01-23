@@ -75,15 +75,12 @@ export function MainInterface() {
 
   const handleQuickCommit = async () => {
     if (!repoPath || !commitMessage.trim()) return;
+    if ((status?.staged.length || 0) === 0) {
+      console.error("No files staged - use Changes tab to stage files first");
+      return;
+    }
     setIsCommitting(true);
     try {
-      const allFiles = [
-        ...(status?.unstaged.map((f) => f.path) || []),
-        ...(status?.untracked.map((f) => f.path) || []),
-      ];
-      if (allFiles.length > 0) {
-        await send("stage", { repoPath, files: allFiles });
-      }
       await send("commit", { repoPath, message: commitMessage });
       setCommitMessage("");
       setShowQuickCommit(false);
@@ -188,14 +185,14 @@ export function MainInterface() {
         </button>
         <button
           onClick={() => setShowQuickCommit(!showQuickCommit)}
-          disabled={totalChanges === 0}
+          disabled={(status?.staged.length || 0) === 0}
           className={clsx(
             "flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md disabled:opacity-50",
-            totalChanges > 0 ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+            (status?.staged.length || 0) > 0 ? "bg-primary text-primary-foreground" : "hover:bg-muted"
           )}
         >
           <GitBranch className="w-4 h-4" />
-          Commit {totalChanges > 0 && `(${totalChanges})`}
+          Commit {(status?.staged.length || 0) > 0 && `(${status?.staged.length})`}
         </button>
         <button
           onClick={() => setShowCreatePR(true)}
