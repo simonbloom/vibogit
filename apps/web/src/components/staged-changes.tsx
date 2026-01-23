@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { Check, FileText, FilePlus, FileX, ArrowUp, ArrowDown } from "lucide-react";
 
@@ -10,55 +11,52 @@ interface StagedChangesProps {
 export function StagedChanges({ repoPath }: StagedChangesProps) {
   const { state, send, refreshStatus } = useDaemon();
   const { status } = state;
+  const [toCommit, setToCommit] = useState<Set<string>>(new Set());
 
-  const stagedFiles = status?.staged || [];
-  const unstagedFiles = [
+  const allFiles = [
+    ...(status?.staged || []),
     ...(status?.unstaged || []),
     ...(status?.untracked || []),
   ];
 
-  const stageFile = async (path: string) => {
-    if (!repoPath) return;
+  // Auto-add all files to commit when changes update
+  useEffect(() => {
+    setToCommit(new Set(allFiles.map((f) => f.path)));
+  }, [status]);
+
+  const filesToCommit = allFiles.filter((f) => toCommit.has(f.path));
+  const filesExcluded = allFiles.filter((f) => !toCommit.has(f.path));
+
+  const excludeFile = (path: string) => {
+    setToCommit((prev) => {
+      const next = new Set(prev);
+      next.delete(path);
+      return next;
+    });
+  };
+
+  const includeFile = (path: string) => {
+    setToCommit((prev) => new Set(prev).add(path));
+  };
+
+  const stageForCommit = async () => {
+    if (!repoPath || filesToCommit.length === 0) return;
     try {
-      await send("stage", { repoPath, files: [path] });
+      // Unstage everything first
+      const currentlyStaged = status?.staged.map((f) => f.path) || [];
+      if (currentlyStaged.length > 0) {
+        await send("unstage", { repoPath, files: currentlyStaged });
+      }
+      // Stage only selected files
+      await send("stage", { repoPath, files: filesToCommit.map((f) => f.path) });
       await refreshStatus();
     } catch (error) {
-      console.error("Failed to stage file:", error);
+      console.error("Failed to stage:", error);
     }
   };
 
-  const unstageFile = async (path: string) => {
-    if (!repoPath) return;
-    try {
-      await send("unstage", { repoPath, files: [path] });
-      await refreshStatus();
-    } catch (error) {
-      console.error("Failed to unstage file:", error);
-    }
-  };
-
-  const stageAll = async () => {
-    if (!repoPath || unstagedFiles.length === 0) return;
-    try {
-      await send("stage", { repoPath, files: unstagedFiles.map((f) => f.path) });
-      await refreshStatus();
-    } catch (error) {
-      console.error("Failed to stage all:", error);
-    }
-  };
-
-  const unstageAll = async () => {
-    if (!repoPath || stagedFiles.length === 0) return;
-    try {
-      await send("unstage", { repoPath, files: stagedFiles.map((f) => f.path) });
-      await refreshStatus();
-    } catch (error) {
-      console.error("Failed to unstage all:", error);
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
+  const getStatusIcon = (fileStatus: string) => {
+    switch (fileStatus) {
       case "added":
       case "untracked":
         return <FilePlus className="w-4 h-4 text-green-600" />;
@@ -69,7 +67,7 @@ export function StagedChanges({ repoPath }: StagedChangesProps) {
     }
   };
 
-  if (stagedFiles.length === 0 && unstagedFiles.length === 0) {
+  if (allFiles.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8">
         <Check className="w-8 h-8 mb-2" />
@@ -79,40 +77,40 @@ export function StagedChanges({ repoPath }: StagedChangesProps) {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Staged (Ready to Commit) */}
-      <div className="border-b">
-        <div className="flex items-center justify-between px-4 py-2 bg-green-50 border-b">
-          <span className="text-sm font-medium text-green-800">
-            Staged for commit ({stagedFiles.length})
+    <div className="flex flex-col gap-4 p-4 h-full overflow-auto">
+      {/* To Commit Card */}
+      <div className="rounded-lg border-2 border-green-200 bg-green-50 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2 bg-green-100 border-b border-green-200">
+          <span className="text-sm font-semibold text-green-800">
+            Will Commit ({filesToCommit.length})
           </span>
-          {stagedFiles.length > 0 && (
+          {filesToCommit.length > 0 && (
             <button
-              onClick={unstageAll}
-              className="text-xs text-green-700 hover:text-green-900"
+              onClick={stageForCommit}
+              className="px-3 py-1 text-xs font-medium bg-green-600 text-white rounded hover:bg-green-700"
             >
-              Unstage all
+              Stage All
             </button>
           )}
         </div>
-        {stagedFiles.length === 0 ? (
-          <div className="px-4 py-3 text-sm text-muted-foreground italic">
-            No files staged
+        {filesToCommit.length === 0 ? (
+          <div className="px-4 py-6 text-sm text-green-700 text-center italic">
+            No files selected for commit
           </div>
         ) : (
-          <div className="max-h-48 overflow-auto">
-            {stagedFiles.map((file) => (
+          <div className="divide-y divide-green-200">
+            {filesToCommit.map((file) => (
               <div
                 key={file.path}
-                className="flex items-center gap-3 px-4 py-2 hover:bg-muted/50 border-b border-border/50"
+                className="flex items-center gap-3 px-4 py-2 hover:bg-green-100/50"
               >
                 {getStatusIcon(file.status)}
-                <span className="text-sm truncate flex-1">{file.path}</span>
-                <span className="text-xs text-muted-foreground">{file.status}</span>
+                <span className="text-sm truncate flex-1 text-green-900">{file.path}</span>
+                <span className="text-xs text-green-600">{file.status}</span>
                 <button
-                  onClick={() => unstageFile(file.path)}
-                  className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
-                  title="Unstage"
+                  onClick={() => excludeFile(file.path)}
+                  className="p-1.5 text-green-600 hover:text-green-800 hover:bg-green-200 rounded"
+                  title="Exclude from commit"
                 >
                   <ArrowDown className="w-4 h-4" />
                 </button>
@@ -122,39 +120,31 @@ export function StagedChanges({ repoPath }: StagedChangesProps) {
         )}
       </div>
 
-      {/* Unstaged (Not committing) */}
-      <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-between px-4 py-2 bg-muted/50 border-b">
-          <span className="text-sm font-medium text-muted-foreground">
-            Not staged ({unstagedFiles.length})
+      {/* Excluded Card */}
+      <div className="rounded-lg border bg-card overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2 bg-muted border-b">
+          <span className="text-sm font-semibold text-muted-foreground">
+            Won't Commit ({filesExcluded.length})
           </span>
-          {unstagedFiles.length > 0 && (
-            <button
-              onClick={stageAll}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              Stage all
-            </button>
-          )}
         </div>
-        {unstagedFiles.length === 0 ? (
-          <div className="px-4 py-3 text-sm text-muted-foreground italic">
-            All changes staged
+        {filesExcluded.length === 0 ? (
+          <div className="px-4 py-6 text-sm text-muted-foreground text-center italic">
+            All files will be committed
           </div>
         ) : (
-          <div className="flex-1 overflow-auto">
-            {unstagedFiles.map((file) => (
+          <div className="divide-y">
+            {filesExcluded.map((file) => (
               <div
                 key={file.path}
-                className="flex items-center gap-3 px-4 py-2 hover:bg-muted/50 border-b border-border/50"
+                className="flex items-center gap-3 px-4 py-2 hover:bg-muted/50"
               >
                 {getStatusIcon(file.status)}
                 <span className="text-sm truncate flex-1">{file.path}</span>
                 <span className="text-xs text-muted-foreground">{file.status}</span>
                 <button
-                  onClick={() => stageFile(file.path)}
-                  className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
-                  title="Stage"
+                  onClick={() => includeFile(file.path)}
+                  className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
+                  title="Include in commit"
                 >
                   <ArrowUp className="w-4 h-4" />
                 </button>
