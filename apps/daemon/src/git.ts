@@ -11,6 +11,28 @@ import type {
   GitStash,
 } from "./types";
 
+function extractGitError(error: unknown): string {
+  if (error instanceof Error) {
+    const msg = error.message;
+    // Extract meaningful message from git errors
+    if (msg.includes("fatal:")) {
+      const match = msg.match(/fatal:\s*(.+?)(?:\n|$)/);
+      if (match) return match[1].trim();
+    }
+    if (msg.includes("error:")) {
+      const match = msg.match(/error:\s*(.+?)(?:\n|$)/);
+      if (match) return match[1].trim();
+    }
+    // Remove "Command failed" prefix if present
+    if (msg.includes("Command failed")) {
+      const lines = msg.split("\n").filter(l => l.trim() && !l.includes("Command failed") && !l.includes("exit code"));
+      if (lines.length > 0) return lines[0].trim();
+    }
+    return msg;
+  }
+  return "Unknown git error";
+}
+
 export class GitService {
   private getGit(repoPath: string): SimpleGit {
     return simpleGit(repoPath);
@@ -124,25 +146,33 @@ export class GitService {
     branch?: string,
     force: boolean = false
   ): Promise<void> {
-    const git = this.getGit(repoPath);
-    if (force) {
-      if (branch) {
-        await git.raw(["push", "--force", remote, branch]);
+    try {
+      const git = this.getGit(repoPath);
+      if (force) {
+        if (branch) {
+          await git.raw(["push", "--force", remote, branch]);
+        } else {
+          await git.raw(["push", "--force", remote]);
+        }
       } else {
-        await git.raw(["push", "--force", remote]);
+        if (branch) {
+          await git.push(remote, branch);
+        } else {
+          await git.push(remote);
+        }
       }
-    } else {
-      if (branch) {
-        await git.push(remote, branch);
-      } else {
-        await git.push(remote);
-      }
+    } catch (error) {
+      throw new Error(extractGitError(error));
     }
   }
 
   async pull(repoPath: string, remote: string = "origin", branch?: string): Promise<void> {
-    const git = this.getGit(repoPath);
-    await git.pull(remote, branch);
+    try {
+      const git = this.getGit(repoPath);
+      await git.pull(remote, branch);
+    } catch (error) {
+      throw new Error(extractGitError(error));
+    }
   }
 
   async fetch(
@@ -175,8 +205,12 @@ export class GitService {
   }
 
   async checkout(repoPath: string, branch: string): Promise<void> {
-    const git = this.getGit(repoPath);
-    await git.checkout(branch);
+    try {
+      const git = this.getGit(repoPath);
+      await git.checkout(branch);
+    } catch (error) {
+      throw new Error(extractGitError(error));
+    }
   }
 
   async createBranch(
@@ -316,20 +350,28 @@ export class GitService {
   }
 
   async stashSave(repoPath: string, message?: string): Promise<void> {
-    const git = this.getGit(repoPath);
-    if (message) {
-      await git.stash(["push", "-m", message]);
-    } else {
-      await git.stash(["push"]);
+    try {
+      const git = this.getGit(repoPath);
+      if (message) {
+        await git.stash(["push", "-m", message]);
+      } else {
+        await git.stash(["push"]);
+      }
+    } catch (error) {
+      throw new Error(extractGitError(error));
     }
   }
 
   async stashPop(repoPath: string, index?: number): Promise<void> {
-    const git = this.getGit(repoPath);
-    if (index !== undefined) {
-      await git.stash(["pop", `stash@{${index}}`]);
-    } else {
-      await git.stash(["pop"]);
+    try {
+      const git = this.getGit(repoPath);
+      if (index !== undefined) {
+        await git.stash(["pop", `stash@{${index}}`]);
+      } else {
+        await git.stash(["pop"]);
+      }
+    } catch (error) {
+      throw new Error(extractGitError(error));
     }
   }
 
