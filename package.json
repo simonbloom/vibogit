@@ -1,0 +1,17 @@
+{
+  "name": "vibogit",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "web": "pnpm --filter @vibogit/web dev",
+    "daemon": "pnpm --filter @vibogit/daemon dev"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}
