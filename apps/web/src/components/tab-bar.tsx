@@ -46,11 +46,14 @@ export function TabBar() {
   return (
     <div className="flex items-center bg-surface border-b border-border overflow-x-auto">
       {tabs.map((tab) => (
-        <button
+        <div
           key={tab.id}
+          role="button"
+          tabIndex={0}
           onClick={() => handleTabClick(tab.id, tab.repoPath)}
+          onKeyDown={(e) => e.key === "Enter" && handleTabClick(tab.id, tab.repoPath)}
           className={clsx(
-            "group flex items-center gap-2 px-4 py-2 border-r border-border min-w-0 max-w-48 transition-colors",
+            "group flex items-center gap-2 px-4 py-2 border-r border-border min-w-0 max-w-48 transition-colors cursor-pointer",
             tab.id === activeTabId
               ? "bg-background text-text-primary"
               : "text-text-secondary hover:text-text-primary hover:bg-surface-light"
@@ -69,7 +72,7 @@ export function TabBar() {
           >
             <X className="w-3 h-3" />
           </button>
-        </button>
+        </div>
       ))}
       <button
         onClick={handleAddTab}
