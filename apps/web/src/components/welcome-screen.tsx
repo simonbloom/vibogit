@@ -3,15 +3,13 @@
 import { useState, useCallback } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { useTabs } from "@/lib/tabs-context";
+import { useRecentProjects } from "@/lib/use-recent-projects";
 import { FolderOpen, Loader2 } from "lucide-react";
 import { clsx } from "clsx";
 import type { RecentProject } from "@vibogit/shared";
 
-interface WelcomeScreenProps {
-  recentProjects?: RecentProject[];
-}
-
-export function WelcomeScreen({ recentProjects = [] }: WelcomeScreenProps) {
+export function WelcomeScreen() {
+  const { projects: recentProjects, addRecentProject } = useRecentProjects();
   const { state, send, setRepoPath } = useDaemon();
   const { addTab } = useTabs();
   const [isLoading, setIsLoading] = useState(false);
@@ -42,6 +40,7 @@ export function WelcomeScreen({ recentProjects = [] }: WelcomeScreenProps) {
       const isRepoResponse = await send<{ isRepo: boolean }>("isGitRepo", { path });
       if (isRepoResponse.isRepo) {
         addTab(path);
+        addRecentProject(path, path.split("/").pop() || path);
         await setRepoPath(path);
       } else {
         setPendingPath(path);
@@ -61,6 +60,7 @@ export function WelcomeScreen({ recentProjects = [] }: WelcomeScreenProps) {
     try {
       await send("initGit", { path: pendingPath });
       addTab(pendingPath);
+      addRecentProject(pendingPath, pendingPath.split("/").pop() || pendingPath);
       await setRepoPath(pendingPath);
     } catch (error) {
       console.error("Failed to init git:", error);

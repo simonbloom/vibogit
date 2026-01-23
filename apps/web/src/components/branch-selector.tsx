@@ -105,9 +105,18 @@ export function BranchSelector({ currentBranch, branches }: BranchSelectorProps)
   };
 
   const handleStashAndSwitch = async () => {
-    // For now, just switch - stash can be implemented later
-    if (pendingBranch) {
+    if (!pendingBranch || !repoPath) return;
+
+    setIsLoading(true);
+    try {
+      // Stash changes first
+      await send("stashSave", { repoPath, message: `Auto-stash before switching to ${pendingBranch}` });
+      // Then switch branch
       await switchBranch(pendingBranch);
+    } catch (error) {
+      console.error("Failed to stash and switch:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -149,15 +158,22 @@ export function BranchSelector({ currentBranch, branches }: BranchSelectorProps)
                   {isLoading ? (
                     <Loader2 className="w-4 h-4 animate-spin mx-auto" />
                   ) : (
-                    "Switch anyway"
+                    "Stash & Switch"
                   )}
+                </button>
+                <button
+                  onClick={() => switchBranch(pendingBranch!)}
+                  disabled={isLoading}
+                  className="w-full px-3 py-2 bg-surface-light text-text-secondary text-sm rounded-lg hover:text-text-primary transition-colors disabled:opacity-50"
+                >
+                  Switch anyway (discard changes)
                 </button>
                 <button
                   onClick={() => {
                     setShowUnsavedWarning(false);
                     setPendingBranch(null);
                   }}
-                  className="w-full px-3 py-2 bg-surface-light text-text-secondary text-sm rounded-lg hover:text-text-primary transition-colors"
+                  className="w-full px-3 py-2 text-text-muted text-sm hover:text-text-secondary transition-colors"
                 >
                   Cancel
                 </button>

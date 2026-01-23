@@ -4,6 +4,7 @@ import { GitService } from "./git";
 import { FileWatcher } from "./watch";
 import { SystemService } from "./system";
 import { DevServerManager } from "./devserver";
+import { SecureStorage } from "./keychain";
 
 interface ClientData {
   id: string;
@@ -14,6 +15,7 @@ const gitService = new GitService();
 const fileWatcher = new FileWatcher();
 const systemService = new SystemService();
 const devServerManager = new DevServerManager();
+const secureStorage = new SecureStorage();
 const clients = new Map<ServerWebSocket<ClientData>, ClientData>();
 
 function generateId(): string {
@@ -273,6 +275,55 @@ async function handleMessage(
         const { path } = payload as { path: string };
         const state = devServerManager.getState(path);
         response = { state };
+        break;
+      }
+
+      case "stashList": {
+        const { repoPath } = payload as { repoPath: string };
+        const stashes = await gitService.stashList(repoPath);
+        response = { stashes };
+        break;
+      }
+
+      case "stashSave": {
+        const { repoPath, message } = payload as { repoPath: string; message?: string };
+        await gitService.stashSave(repoPath, message);
+        response = { success: true };
+        break;
+      }
+
+      case "stashPop": {
+        const { repoPath, index } = payload as { repoPath: string; index?: number };
+        await gitService.stashPop(repoPath, index);
+        response = { success: true };
+        break;
+      }
+
+      case "stashDrop": {
+        const { repoPath, index } = payload as { repoPath: string; index?: number };
+        await gitService.stashDrop(repoPath, index);
+        response = { success: true };
+        break;
+      }
+
+      case "keychainGet": {
+        const { key } = payload as { key: string };
+        const value = await secureStorage.getApiKey(key);
+        response = { value };
+        break;
+      }
+
+      case "keychainSet": {
+        const { key, value } = payload as { key: string; value: string };
+        await secureStorage.setApiKey(key, value);
+        response = { success: true };
+        break;
+      }
+
+      case "keychainDelete": {
+        const { key } = payload as { key: string };
+        const deleted = await secureStorage.deleteApiKey(key);
+        response = { success: deleted };
         break;
       }
 

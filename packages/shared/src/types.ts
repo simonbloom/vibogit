@@ -30,7 +30,14 @@ export type MessageType =
   | "devServerStop"
   | "devServerRestart"
   | "devServerState"
-  | "devServerLog";
+  | "devServerLog"
+  | "stashList"
+  | "stashSave"
+  | "stashPop"
+  | "stashDrop"
+  | "keychainGet"
+  | "keychainSet"
+  | "keychainDelete";
 
 export interface WebSocketMessage<T = unknown> {
   type: MessageType;
@@ -258,4 +265,18 @@ export interface DevServerState {
   running: boolean;
   port?: number;
   logs: string[];
+}
+
+// Stash
+export interface GitStash {
+  index: number;
+  message: string;
+  date: string;
+}
+
+// Recent Projects
+export interface RecentProject {
+  path: string;
+  name: string;
+  lastOpenedAt: string;
 }

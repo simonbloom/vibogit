@@ -8,6 +8,7 @@ import type {
   DiffHunk,
   DiffLine,
   FileStatus,
+  GitStash,
 } from "./types";
 
 export class GitService {
@@ -301,5 +302,43 @@ export class GitService {
         refs: e.refs ? e.refs.split(", ").filter(Boolean) : undefined,
       };
     });
+  }
+
+  async stashList(repoPath: string): Promise<GitStash[]> {
+    const git = this.getGit(repoPath);
+    const result = await git.stashList();
+
+    return result.all.map((entry, index) => ({
+      index,
+      message: entry.message,
+      date: entry.date,
+    }));
+  }
+
+  async stashSave(repoPath: string, message?: string): Promise<void> {
+    const git = this.getGit(repoPath);
+    if (message) {
+      await git.stash(["push", "-m", message]);
+    } else {
+      await git.stash(["push"]);
+    }
+  }
+
+  async stashPop(repoPath: string, index?: number): Promise<void> {
+    const git = this.getGit(repoPath);
+    if (index !== undefined) {
+      await git.stash(["pop", `stash@{${index}}`]);
+    } else {
+      await git.stash(["pop"]);
+    }
+  }
+
+  async stashDrop(repoPath: string, index?: number): Promise<void> {
+    const git = this.getGit(repoPath);
+    if (index !== undefined) {
+      await git.stash(["drop", `stash@{${index}}`]);
+    } else {
+      await git.stash(["drop"]);
+    }
   }
 }
