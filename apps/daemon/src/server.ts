@@ -194,6 +194,21 @@ async function handleMessage(
         response = { diff };
         break;
       }
+      case "readFile": {
+        const { repoPath, filePath } = payload as {
+          repoPath: string;
+          filePath: string;
+        };
+        const fullPath = join(repoPath, filePath);
+        const file = Bun.file(fullPath);
+        const size = file.size;
+        if (size > 1024 * 1024) {
+          throw new Error("File too large (> 1MB)");
+        }
+        const content = await file.text();
+        response = { content };
+        break;
+      }
 
       case "log": {
         const { repoPath, limit, branch } = payload as {
