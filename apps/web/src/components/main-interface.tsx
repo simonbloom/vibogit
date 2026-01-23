@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { BranchSelector } from "@/components/branch-selector";
+import { DevServerConnection } from "@/components/dev-server-connection";
 import { CommitHistory } from "@/components/commit-history";
 import { AICommitButton } from "@/components/ai-commit-button";
 import { SettingsPanel } from "@/components/settings-panel";
 import { CreatePRDialog } from "@/components/create-pr-dialog";
 import { FileTree } from "@/components/file-tree";
 import { StagedChanges } from "@/components/staged-changes";
+import { PortPromptModal } from "@/components/port-prompt-modal";
 import { getSettings } from "@/lib/settings";
 import {
   ArrowUp,
@@ -38,6 +40,8 @@ export function MainInterface() {
   const [showSettings, setShowSettings] = useState(false);
   const [showCreatePR, setShowCreatePR] = useState(false);
   const [showQuickCommit, setShowQuickCommit] = useState(false);
+  const [devServerPort, setDevServerPort] = useState<number | null>(null);
+  const [showPortPrompt, setShowPortPrompt] = useState(false);
 
   const { status, branches, repoPath } = state;
   const currentBranch = branches.find((b) => b.current);
@@ -110,15 +114,19 @@ export function MainInterface() {
           break;
         }
         case "browser":
-          try {
-            const [stateResponse, configResponse] = await Promise.all([
-              send<{ state: DevServerState }>("devServerState", { path: repoPath }),
-              send<{ config: DevServerConfig | null }>("devServerDetect", { path: repoPath }),
-            ]);
-            const port = stateResponse.state.port || configResponse.config?.port || 5557;
-            window.open(`http://localhost:${port}`, "_blank");
-          } catch {
-            window.open("http://localhost:5557", "_blank");
+          if (devServerPort) {
+            window.open(`http://localhost:${devServerPort}`, "_blank");
+          } else {
+            try {
+              const [stateResponse, configResponse] = await Promise.all([
+                send<{ state: DevServerState }>("devServerState", { path: repoPath }),
+                send<{ config: DevServerConfig | null }>("devServerDetect", { path: repoPath }),
+              ]);
+              const port = stateResponse.state.port || configResponse.config?.port || 5557;
+              window.open(`http://localhost:${port}`, "_blank");
+            } catch {
+              window.open("http://localhost:5557", "_blank");
+            }
           }
           break;
         case "github":
@@ -151,6 +159,7 @@ export function MainInterface() {
         <div className="flex items-center gap-3">
           <span className="font-semibold">{projectName}</span>
           <BranchSelector currentBranch={currentBranch} branches={branches} />
+          <DevServerConnection repoPath={repoPath} onPortChange={setDevServerPort} onRequestPortPrompt={() => setShowPortPrompt(true)} />
         </div>
         <div className="flex items-center gap-1">
           <button onClick={() => handleQuickLink("finder")} className="p-2 text-muted-foreground hover:text-foreground rounded hover:bg-muted" title="Finder">
@@ -294,6 +303,20 @@ export function MainInterface() {
 
       <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />
       <CreatePRDialog isOpen={showCreatePR} onClose={() => setShowCreatePR(false)} repoPath={repoPath} currentBranch={currentBranch} />
+      <PortPromptModal
+        isOpen={showPortPrompt}
+        onClose={() => setShowPortPrompt(false)}
+        onSubmit={async (port, saveToConfig) => {
+          if (saveToConfig && repoPath) {
+            try {
+              await send("updateAgentsConfig", { repoPath, port });
+            } catch {
+              // Silent fail on save
+            }
+          }
+          setDevServerPort(port);
+        }}
+      />
     </div>
   );
 }

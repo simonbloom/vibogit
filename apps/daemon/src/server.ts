@@ -5,6 +5,7 @@ import { FileWatcher } from "./watch";
 import { SystemService } from "./system";
 import { DevServerManager } from "./devserver";
 import { SecureStorage } from "./keychain";
+import { readAgentsConfig, updateAgentsConfig } from "./agents-config";
 import { readdirSync, statSync } from "fs";
 import { join, relative } from "path";
 
@@ -405,6 +406,57 @@ async function handleMessage(
         const { repoPath } = payload as { repoPath: string };
         const remotes = await gitService.getRemotes(repoPath);
         response = { remotes };
+        break;
+      }
+
+      case "readAgentsConfig": {
+        const { repoPath } = payload as { repoPath: string };
+        const config = readAgentsConfig(repoPath);
+        response = { config };
+        break;
+      }
+
+      case "updateAgentsConfig": {
+        const { repoPath, port, devCommand } = payload as {
+          repoPath: string;
+          port: number;
+          devCommand?: string;
+        };
+        const result = updateAgentsConfig(repoPath, port, devCommand);
+        response = result;
+        break;
+      }
+
+      case "killPort": {
+        const { port } = payload as { port: number };
+        
+        if (!port || port < 1 || port > 65535) {
+          response = { success: false, killed: false, error: "Invalid port" };
+          break;
+        }
+        
+        try {
+          // Check if anything is on the port first
+          const checkResult = Bun.spawnSync({
+            cmd: ["lsof", "-ti", `:${port}`],
+          });
+          
+          const pids = checkResult.stdout.toString().trim();
+          
+          if (!pids) {
+            response = { success: true, killed: false };
+            break;
+          }
+          
+          // Kill the processes
+          Bun.spawnSync({
+            cmd: ["sh", "-c", `lsof -ti:${port} | xargs kill -9 2>/dev/null || true`],
+          });
+          
+          response = { success: true, killed: true };
+        } catch (error) {
+          response = { success: false, killed: false, error: String(error) };
+        }
         break;
       }
 

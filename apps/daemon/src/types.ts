@@ -39,7 +39,11 @@ export type MessageType =
   | "keychainSet"
   | "keychainDelete"
   | "listFiles"
-  | "getRemotes";
+  | "getRemotes"
+  | "readFile"
+  | "readAgentsConfig"
+  | "updateAgentsConfig"
+  | "killPort";
 
 export interface WebSocketMessage<T = unknown> {
   type: MessageType;
