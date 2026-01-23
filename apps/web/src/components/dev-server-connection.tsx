@@ -101,7 +101,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     };
   }, [clearPolling]);
 
-  const startPolling = useCallback((targetPort: number, isRestart: boolean) => {
+  const startPolling = useCallback((targetPort: number, targetRepoPath: string) => {
     clearPolling();
     
     // Set 30 second timeout
@@ -111,23 +111,24 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
       setErrorMessage("Server start timeout (30s)");
     }, 30000);
 
-    // Poll every 1 second
+    // Poll daemon's devServerState every 1 second
     pollingRef.current = setInterval(async () => {
       try {
-        const response = await fetch(`http://localhost:${targetPort}`, {
-          method: "HEAD",
-          mode: "no-cors",
+        const response = await send<{ state: DevServerState }>("devServerState", {
+          path: targetRepoPath,
         });
-        // If we get here, server is responding
-        clearPolling();
-        setStatus("connected");
-        setPort(targetPort);
-        onPortChange?.(targetPort);
+        
+        if (response.state.running && response.state.port) {
+          clearPolling();
+          setStatus("connected");
+          setPort(response.state.port);
+          onPortChange?.(response.state.port);
+        }
       } catch {
-        // Server not yet responding, continue polling
+        // Daemon error, continue polling
       }
     }, 1000);
-  }, [clearPolling, onPortChange]);
+  }, [clearPolling, onPortChange, send]);
 
   const handleConnect = async () => {
     if (!repoPath || daemonState.connection !== "connected") return;
@@ -178,7 +179,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
       });
 
       // 4. Start polling
-      startPolling(targetPort, false);
+      startPolling(targetPort, repoPath);
 
     } catch (error) {
       setStatus("error");
@@ -214,7 +215,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
       });
 
       // 4. Start polling
-      startPolling(port, true);
+      startPolling(port, repoPath);
 
     } catch (error) {
       setStatus("error");
