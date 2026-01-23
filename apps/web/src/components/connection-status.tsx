@@ -50,7 +50,7 @@ export function ConnectionStatus() {
           )}
         />
         <span className="text-muted-foreground">
-          {state.connection === "connected" && "Connected"}
+          {state.connection === "connected" && (devServer?.port ? "Connected to" : "Connected")}
           {state.connection === "connecting" && "Connecting..."}
           {state.connection === "disconnected" && "Disconnected"}
           {state.connection === "error" && "Error"}

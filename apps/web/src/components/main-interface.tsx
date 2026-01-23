@@ -17,14 +17,16 @@ import {
   Folder,
   Terminal,
   Code,
-  Globe,
+  ExternalLink,
   Loader2,
   Settings,
   GitPullRequest,
   GitBranch,
+  Github,
   FileEdit,
 } from "lucide-react";
 import { clsx } from "clsx";
+import type { DevServerConfig, DevServerState } from "@vibogit/shared";
 
 export function MainInterface() {
   const { state, send, refreshStatus, refreshBranches } = useDaemon();
@@ -92,7 +94,7 @@ export function MainInterface() {
     }
   };
 
-  const handleQuickLink = async (type: "finder" | "terminal" | "editor" | "github") => {
+  const handleQuickLink = async (type: "finder" | "terminal" | "editor" | "github" | "browser") => {
     if (!repoPath) return;
     try {
       switch (type) {
@@ -107,6 +109,18 @@ export function MainInterface() {
           await send("openEditor", { path: repoPath, editor: settings.editor });
           break;
         }
+        case "browser":
+          try {
+            const [stateResponse, configResponse] = await Promise.all([
+              send<{ state: DevServerState }>("devServerState", { path: repoPath }),
+              send<{ config: DevServerConfig | null }>("devServerDetect", { path: repoPath }),
+            ]);
+            const port = stateResponse.state.port || configResponse.config?.port || 5557;
+            window.open(`http://localhost:${port}`, "_blank");
+          } catch {
+            window.open("http://localhost:5557", "_blank");
+          }
+          break;
         case "github":
           try {
             const result = await send<{ remotes: Array<{ name: string; refs: { fetch: string } }> }>("getRemotes", { repoPath });
@@ -142,8 +156,11 @@ export function MainInterface() {
           <button onClick={() => handleQuickLink("finder")} className="p-2 text-muted-foreground hover:text-foreground rounded hover:bg-muted" title="Finder">
             <Folder className="w-4 h-4" />
           </button>
+          <button onClick={() => handleQuickLink("browser")} className="p-2 text-muted-foreground hover:text-foreground rounded hover:bg-muted" title="Open in browser">
+            <ExternalLink className="w-4 h-4" />
+          </button>
           <button onClick={() => handleQuickLink("github")} className="p-2 text-muted-foreground hover:text-foreground rounded hover:bg-muted" title="GitHub">
-            <Globe className="w-4 h-4" />
+            <Github className="w-4 h-4" />
           </button>
           <button onClick={() => handleQuickLink("terminal")} className="p-2 text-muted-foreground hover:text-foreground rounded hover:bg-muted" title="Terminal">
             <Terminal className="w-4 h-4" />
