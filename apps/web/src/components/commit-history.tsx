@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useDaemon } from "@/lib/daemon-context";
-import { clsx } from "clsx";
-import { Loader2, User, Clock } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import type { GitCommit as GitCommitType } from "@vibogit/shared";
 
 interface CommitHistoryProps {
@@ -46,8 +45,8 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-        <Loader2 className="w-8 h-8 animate-spin mb-4" />
-        <p>Loading commits...</p>
+        <Loader2 className="w-6 h-6 animate-spin mb-2" />
+        <p className="text-sm">Loading commits...</p>
       </div>
     );
   }
@@ -55,7 +54,7 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-destructive">
-        <p>{error}</p>
+        <p className="text-sm">{error}</p>
       </div>
     );
   }
@@ -63,15 +62,20 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
   if (commits.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-        <p>No commits yet</p>
+        <p className="text-sm">No commits yet</p>
       </div>
     );
   }
 
   return (
-    <div className="py-2">
+    <div className="overflow-auto">
       {commits.map((commit, index) => (
-        <CommitRow key={commit.hash} commit={commit} isFirst={index === 0} />
+        <CommitRow
+          key={commit.hash}
+          commit={commit}
+          isFirst={index === 0}
+          isLast={index === commits.length - 1}
+        />
       ))}
     </div>
   );
@@ -80,55 +84,69 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
 interface CommitRowProps {
   commit: GitCommitType;
   isFirst: boolean;
+  isLast: boolean;
 }
 
-function CommitRow({ commit, isFirst }: CommitRowProps) {
+function CommitRow({ commit, isFirst, isLast }: CommitRowProps) {
   const formattedDate = formatCommitDate(commit.date);
+  const isHead = commit.refs?.some(r => r.includes("HEAD"));
 
   return (
-    <div className="flex items-start gap-3 px-4 py-3 hover:bg-muted/50 transition-colors">
-      <div className="flex flex-col items-center pt-1">
-        <div
-          className={clsx(
-            "w-3 h-3 rounded-full",
-            isFirst ? "bg-primary" : "bg-muted-foreground/30"
+    <div className="flex items-stretch hover:bg-muted/30 transition-colors">
+      {/* Graph column */}
+      <div className="w-12 flex-shrink-0 flex justify-center relative">
+        {/* Line above node */}
+        {!isFirst && (
+          <div className="absolute top-0 w-0.5 h-[calc(50%-6px)] bg-blue-400" />
+        )}
+        {/* Node */}
+        <div className="absolute top-1/2 -translate-y-1/2 z-10">
+          {isHead ? (
+            <div className="w-3 h-3 rounded-full bg-blue-500 ring-2 ring-blue-200" />
+          ) : (
+            <div className="w-2.5 h-2.5 rounded-full bg-blue-400" />
           )}
-        />
-        <div className="w-px flex-1 bg-border mt-2" />
+        </div>
+        {/* Line below node */}
+        {!isLast && (
+          <div className="absolute bottom-0 w-0.5 h-[calc(50%-6px)] bg-blue-400" />
+        )}
       </div>
 
-      <div className="flex-1 min-w-0">
-        <p className="font-medium leading-snug">{commit.message}</p>
-        <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-          <span className="font-mono text-primary">{commit.hashShort}</span>
-          <span className="flex items-center gap-1">
-            <User className="w-3 h-3" />
-            {commit.author}
-          </span>
-          <span className="flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            {formattedDate}
-          </span>
+      {/* Commit info */}
+      <div className="flex-1 py-2 pr-4 min-w-0 border-b border-border/50">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium truncate">{commit.message}</p>
+            <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+              <span className="font-mono text-blue-600">{commit.hashShort}</span>
+              <span>{commit.author}</span>
+              <span>{formattedDate}</span>
+            </div>
+          </div>
+          {/* Branch/tag labels */}
+          {commit.refs && commit.refs.length > 0 && (
+            <div className="flex gap-1 flex-shrink-0">
+              {commit.refs.map((ref, i) => {
+                const label = ref.includes("->") ? ref.split("->")[1]?.trim() : ref;
+                const isMain = label === "main" || label === "master" || ref.includes("HEAD");
+                return (
+                  <span
+                    key={i}
+                    className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                      isMain
+                        ? "bg-blue-100 text-blue-700 border border-blue-200"
+                        : "bg-green-100 text-green-700 border border-green-200"
+                    }`}
+                  >
+                    {label}
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
-
-      {commit.refs && commit.refs.length > 0 && (
-        <div className="flex gap-1 flex-shrink-0">
-          {commit.refs.map((ref, i) => (
-            <span
-              key={i}
-              className={clsx(
-                "text-xs px-2 py-1 rounded font-medium border",
-                ref.includes("HEAD") || ref === "main" || ref === "master"
-                  ? "bg-primary/10 text-primary border-primary/30"
-                  : "bg-green-500/10 text-green-500 border-green-500/30"
-              )}
-            >
-              {ref.includes("->") ? ref.split("->")[1]?.trim() : ref}
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -142,8 +160,8 @@ function formatCommitDate(dateString: string): string {
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
   if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins} min ago`;
-  if (diffHours < 24) return `${diffHours} hr ago`;
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
   if (diffDays === 1) return "yesterday";
   if (diffDays < 7) return `${diffDays}d ago`;
   return date.toLocaleDateString();
