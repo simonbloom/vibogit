@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { Loader2 } from "lucide-react";
 import type { GitCommit as GitCommitType } from "@vibogit/shared";
@@ -10,95 +10,97 @@ interface CommitHistoryProps {
   limit?: number;
 }
 
-interface GraphNode {
+interface GraphRow {
   commit: GitCommitType;
-  column: number;
-  lines: GraphLine[];
-}
-
-interface GraphLine {
-  fromCol: number;
-  toCol: number;
-  type: "straight" | "merge" | "branch";
+  nodeCol: number;
+  columnsBefore: Array<string | null>;
+  columnsAfter: Array<string | null>;
+  mergeTargets: number[];
 }
 
 const COLORS = [
-  "#3b82f6", // blue
-  "#22c55e", // green
-  "#f59e0b", // amber
-  "#ef4444", // red
-  "#8b5cf6", // violet
-  "#ec4899", // pink
-  "#06b6d4", // cyan
+  "#3b82f6",
+  "#22c55e",
+  "#f59e0b",
+  "#ef4444",
+  "#8b5cf6",
+  "#ec4899",
+  "#06b6d4",
+  "#14b8a6",
 ];
 
-function buildGraph(commits: GitCommitType[]): GraphNode[] {
-  const nodes: GraphNode[] = [];
-  const activeColumns: Map<string, number> = new Map();
-  let nextColumn = 0;
+function buildGraph(commits: GitCommitType[]): { rows: GraphRow[]; colorMap: Map<string, string> } {
+  const rows: GraphRow[] = [];
+  const columns: Array<string | null> = [];
+  const colorMap = new Map<string, string>();
+  let colorIndex = 0;
 
-  for (let i = 0; i < commits.length; i++) {
-    const commit = commits[i];
-    const lines: GraphLine[] = [];
-
-    // Find or assign column for this commit
-    let column = activeColumns.get(commit.hash);
-    if (column === undefined) {
-      column = nextColumn++;
+  const assignColor = (hash: string) => {
+    if (!colorMap.has(hash)) {
+      colorMap.set(hash, COLORS[colorIndex % COLORS.length]);
+      colorIndex += 1;
     }
-    activeColumns.delete(commit.hash);
+  };
 
-    // Handle parents
+  const findColumn = (hash: string) => columns.indexOf(hash);
+
+  const assignColumn = (hash: string) => {
+    const existing = findColumn(hash);
+    if (existing !== -1) return existing;
+    const empty = columns.indexOf(null);
+    if (empty !== -1) {
+      columns[empty] = hash;
+      return empty;
+    }
+    columns.push(hash);
+    return columns.length - 1;
+  };
+
+  for (const commit of commits) {
+    assignColor(commit.hash);
+    const nodeCol = assignColumn(commit.hash);
+    const columnsBefore = [...columns];
+    const mergeTargets: number[] = [];
     const parents = commit.parents || [];
-    
+
     if (parents.length === 0) {
-      // Root commit - no lines below
-    } else if (parents.length === 1) {
-      // Single parent - straight line or pass to parent
-      const parentHash = parents[0];
-      const existingParentCol = activeColumns.get(parentHash);
-      
-      if (existingParentCol !== undefined) {
-        // Parent already has a column, merge into it
-        lines.push({ fromCol: column, toCol: existingParentCol, type: "merge" });
-      } else {
-        // Assign this column to parent
-        activeColumns.set(parentHash, column);
-        lines.push({ fromCol: column, toCol: column, type: "straight" });
-      }
+      columns[nodeCol] = null;
     } else {
-      // Merge commit - multiple parents
-      parents.forEach((parentHash, idx) => {
-        const existingParentCol = activeColumns.get(parentHash);
-        
-        if (existingParentCol !== undefined) {
-          lines.push({ fromCol: column, toCol: existingParentCol, type: "merge" });
-        } else {
-          if (idx === 0) {
-            // First parent continues in same column
-            activeColumns.set(parentHash, column);
-            lines.push({ fromCol: column, toCol: column, type: "straight" });
-          } else {
-            // Other parents get new columns
-            const newCol = nextColumn++;
-            activeColumns.set(parentHash, newCol);
-            lines.push({ fromCol: column, toCol: newCol, type: "branch" });
-          }
-        }
-      });
-    }
+      const firstParent = parents[0];
+      assignColor(firstParent);
+      const existingFirstCol = findColumn(firstParent);
 
-    // Continue active columns that aren't touched
-    for (const [hash, col] of activeColumns) {
-      if (!parents.includes(hash)) {
-        lines.push({ fromCol: col, toCol: col, type: "straight" });
+      if (existingFirstCol !== -1 && existingFirstCol !== nodeCol) {
+        mergeTargets.push(existingFirstCol);
+        columns[nodeCol] = null;
+      } else {
+        columns[nodeCol] = firstParent;
+      }
+
+      for (const parent of parents.slice(1)) {
+        assignColor(parent);
+        const existingCol = findColumn(parent);
+        if (existingCol !== -1) {
+          mergeTargets.push(existingCol);
+        } else {
+          const newCol = assignColumn(parent);
+          mergeTargets.push(newCol);
+        }
       }
     }
 
-    nodes.push({ commit, column, lines });
+    const columnsAfter = [...columns];
+    rows.push({ commit, nodeCol, columnsBefore, columnsAfter, mergeTargets });
   }
 
-  return nodes;
+  return { rows, colorMap };
+}
+
+function lastColumnIndex(cols: Array<string | null>): number {
+  for (let i = cols.length - 1; i >= 0; i -= 1) {
+    if (cols[i]) return i;
+  }
+  return 0;
 }
 
 export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
@@ -133,11 +135,13 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
     loadCommits();
   }, [repoPath, limit, send]);
 
-  const graphNodes = useMemo(() => buildGraph(commits), [commits]);
-  const maxColumn = useMemo(() => 
-    Math.max(0, ...graphNodes.map(n => Math.max(n.column, ...n.lines.map(l => Math.max(l.fromCol, l.toCol))))),
-    [graphNodes]
-  );
+  const graphData = useMemo(() => buildGraph(commits), [commits]);
+  const maxColumn = useMemo(() => {
+    if (graphData.rows.length === 0) return 0;
+    return Math.max(
+      ...graphData.rows.map((row) => Math.max(lastColumnIndex(row.columnsBefore), lastColumnIndex(row.columnsAfter)))
+    );
+  }, [graphData.rows]);
 
   if (isLoading) {
     return (
@@ -168,13 +172,13 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
 
   return (
     <div className="overflow-auto">
-      {graphNodes.map((node, index) => (
+      {graphData.rows.map((row, index) => (
         <CommitRow
-          key={node.commit.hash}
-          node={node}
-          isFirst={index === 0}
-          isLast={index === graphNodes.length - 1}
+          key={row.commit.hash}
+          row={row}
           graphWidth={graphWidth}
+          isFirst={index === 0}
+          colorMap={graphData.colorMap}
         />
       ))}
     </div>
@@ -182,78 +186,101 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
 }
 
 interface CommitRowProps {
-  node: GraphNode;
-  isFirst: boolean;
-  isLast: boolean;
+  row: GraphRow;
   graphWidth: number;
+  isFirst: boolean;
+  colorMap: Map<string, string>;
 }
 
-function CommitRow({ node, isFirst, isLast, graphWidth }: CommitRowProps) {
-  const { commit, column, lines } = node;
+function CommitRow({ row, graphWidth, isFirst, colorMap }: CommitRowProps) {
+  const { commit, nodeCol, columnsBefore, columnsAfter, mergeTargets } = row;
   const formattedDate = formatCommitDate(commit.date);
-  const isHead = commit.refs?.some(r => r.includes("HEAD"));
-  const color = COLORS[column % COLORS.length];
-  const ROW_HEIGHT = 40;
-  const COL_WIDTH = 20;
-  const OFFSET = 16;
+  const isHead = commit.refs?.some((r) => r.includes("HEAD"));
+  const nodeColor = colorMap.get(commit.hash) || COLORS[0];
+  const ROW_HEIGHT = 44;
+  const COL_WIDTH = 18;
+  const OFFSET = 14;
+  const midY = ROW_HEIGHT / 2;
 
   return (
     <div className="flex items-stretch hover:bg-muted/30 transition-colors" style={{ minHeight: ROW_HEIGHT }}>
-      {/* Graph column */}
       <div className="flex-shrink-0 relative" style={{ width: graphWidth, height: ROW_HEIGHT }}>
         <svg width={graphWidth} height={ROW_HEIGHT} className="absolute inset-0">
-          {/* Draw lines */}
-          {lines.map((line, i) => {
-            const x1 = OFFSET + line.fromCol * COL_WIDTH;
-            const x2 = OFFSET + line.toCol * COL_WIDTH;
-            const lineColor = COLORS[line.fromCol % COLORS.length];
-            
-            if (line.type === "straight") {
-              return (
-                <line
-                  key={i}
-                  x1={x1}
-                  y1={0}
-                  x2={x2}
-                  y2={ROW_HEIGHT}
-                  stroke={lineColor}
-                  strokeWidth={2}
-                />
-              );
-            } else {
-              // Curved line for merge/branch
-              const midY = ROW_HEIGHT / 2;
-              return (
-                <path
-                  key={i}
-                  d={`M ${x1} ${midY} Q ${x1} ${ROW_HEIGHT} ${x2} ${ROW_HEIGHT}`}
-                  fill="none"
-                  stroke={lineColor}
-                  strokeWidth={2}
-                />
-              );
-            }
+          {/* Vertical lines for existing branches */}
+          {columnsBefore.map((hash, index) => {
+            if (!hash) return null;
+            const x = OFFSET + index * COL_WIDTH;
+            const lineColor = colorMap.get(hash) || COLORS[0];
+            return (
+              <line
+                key={`col-${index}`}
+                x1={x}
+                y1={isFirst && index === nodeCol ? midY : 0}
+                x2={x}
+                y2={ROW_HEIGHT}
+                stroke={lineColor}
+                strokeWidth={2}
+              />
+            );
           })}
-          
-          {/* Draw node */}
+
+          {/* Lines for newly created columns (from merges) */}
+          {columnsAfter.map((hash, index) => {
+            if (!hash) return null;
+            if (columnsBefore[index]) return null;
+            const x = OFFSET + index * COL_WIDTH;
+            const lineColor = colorMap.get(hash) || COLORS[0];
+            return (
+              <line
+                key={`new-${index}`}
+                x1={x}
+                y1={midY}
+                x2={x}
+                y2={ROW_HEIGHT}
+                stroke={lineColor}
+                strokeWidth={2}
+              />
+            );
+          })}
+
+          {/* Merge curves */}
+          {mergeTargets.map((targetCol, i) => {
+            if (targetCol === nodeCol) return null;
+            const x1 = OFFSET + nodeCol * COL_WIDTH;
+            const x2 = OFFSET + targetCol * COL_WIDTH;
+            const targetHash = columnsAfter[targetCol] || columnsBefore[targetCol];
+            const lineColor = targetHash ? colorMap.get(targetHash) || COLORS[0] : COLORS[0];
+            const controlY = midY + 12;
+            const curve = `M ${x1} ${midY} C ${x1} ${controlY}, ${x2} ${controlY}, ${x2} ${ROW_HEIGHT}`;
+            return (
+              <path
+                key={`merge-${i}`}
+                d={curve}
+                fill="none"
+                stroke={lineColor}
+                strokeWidth={2}
+              />
+            );
+          })}
+
+          {/* Node */}
           <circle
-            cx={OFFSET + column * COL_WIDTH}
-            cy={ROW_HEIGHT / 2}
+            cx={OFFSET + nodeCol * COL_WIDTH}
+            cy={midY}
             r={isHead ? 5 : 4}
-            fill={color}
+            fill={nodeColor}
             stroke={isHead ? "#fff" : "none"}
             strokeWidth={isHead ? 2 : 0}
           />
         </svg>
       </div>
 
-      {/* Commit info */}
       <div className="flex-1 py-1.5 pr-4 min-w-0 border-b border-border/50">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium truncate">{commit.message}</p>
             <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-              <span className="font-mono" style={{ color }}>{commit.hashShort}</span>
+              <span className="font-mono" style={{ color: nodeColor }}>{commit.hashShort}</span>
               <span>{commit.author}</span>
               <span>{formattedDate}</span>
             </div>
