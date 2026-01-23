@@ -84,6 +84,7 @@ export interface GitCommit {
   email: string;
   date: string;
   refs?: string[];
+  parents?: string[];
 }
 
 export interface GitDiff {

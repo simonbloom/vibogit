@@ -311,6 +311,7 @@ export class GitService {
         email: "%ae",
         date: "%ai",
         refs: "%D",
+        parents: "%P",
       },
     };
 
@@ -325,6 +326,7 @@ export class GitService {
         email: string;
         date: string;
         refs: string;
+        parents: string;
       };
       return {
         hash: e.hash,
@@ -334,6 +336,7 @@ export class GitService {
         email: e.email,
         date: e.date,
         refs: e.refs ? e.refs.split(", ").filter(Boolean) : undefined,
+        parents: e.parents ? e.parents.split(" ").filter(Boolean) : [],
       };
     });
   }
