@@ -15,7 +15,8 @@ interface GraphRow {
   nodeCol: number;
   columnsBefore: Array<string | null>;
   columnsAfter: Array<string | null>;
-  mergeTargets: number[];
+  mergeInCols: number[];
+  branchOutCols: number[];
 }
 
 const COLORS = [
@@ -29,18 +30,9 @@ const COLORS = [
   "#14b8a6",
 ];
 
-function buildGraph(commits: GitCommitType[]): { rows: GraphRow[]; colorMap: Map<string, string> } {
+function buildGraph(commits: GitCommitType[]): GraphRow[] {
   const rows: GraphRow[] = [];
   const columns: Array<string | null> = [];
-  const colorMap = new Map<string, string>();
-  let colorIndex = 0;
-
-  const assignColor = (hash: string) => {
-    if (!colorMap.has(hash)) {
-      colorMap.set(hash, COLORS[colorIndex % COLORS.length]);
-      colorIndex += 1;
-    }
-  };
 
   const findColumn = (hash: string) => columns.indexOf(hash);
 
@@ -57,43 +49,52 @@ function buildGraph(commits: GitCommitType[]): { rows: GraphRow[]; colorMap: Map
   };
 
   for (const commit of commits) {
-    assignColor(commit.hash);
-    const nodeCol = assignColumn(commit.hash);
     const columnsBefore = [...columns];
-    const mergeTargets: number[] = [];
+    let nodeCol = findColumn(commit.hash);
+    if (nodeCol === -1) {
+      nodeCol = assignColumn(commit.hash);
+    }
+
+    const mergeInCols = new Set<number>();
+    const branchOutCols = new Set<number>();
     const parents = commit.parents || [];
 
     if (parents.length === 0) {
       columns[nodeCol] = null;
     } else {
       const firstParent = parents[0];
-      assignColor(firstParent);
       const existingFirstCol = findColumn(firstParent);
 
       if (existingFirstCol !== -1 && existingFirstCol !== nodeCol) {
-        mergeTargets.push(existingFirstCol);
-        columns[nodeCol] = null;
-      } else {
-        columns[nodeCol] = firstParent;
+        mergeInCols.add(existingFirstCol);
+        columns[existingFirstCol] = null;
       }
 
+      columns[nodeCol] = firstParent;
+
       for (const parent of parents.slice(1)) {
-        assignColor(parent);
         const existingCol = findColumn(parent);
         if (existingCol !== -1) {
-          mergeTargets.push(existingCol);
+          mergeInCols.add(existingCol);
         } else {
           const newCol = assignColumn(parent);
-          mergeTargets.push(newCol);
+          branchOutCols.add(newCol);
         }
       }
     }
 
     const columnsAfter = [...columns];
-    rows.push({ commit, nodeCol, columnsBefore, columnsAfter, mergeTargets });
+    rows.push({
+      commit,
+      nodeCol,
+      columnsBefore,
+      columnsAfter,
+      mergeInCols: Array.from(mergeInCols),
+      branchOutCols: Array.from(branchOutCols),
+    });
   }
 
-  return { rows, colorMap };
+  return rows;
 }
 
 function lastColumnIndex(cols: Array<string | null>): number {
@@ -135,13 +136,13 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
     loadCommits();
   }, [repoPath, limit, send]);
 
-  const graphData = useMemo(() => buildGraph(commits), [commits]);
+  const graphRows = useMemo(() => buildGraph(commits), [commits]);
   const maxColumn = useMemo(() => {
-    if (graphData.rows.length === 0) return 0;
+    if (graphRows.length === 0) return 0;
     return Math.max(
-      ...graphData.rows.map((row) => Math.max(lastColumnIndex(row.columnsBefore), lastColumnIndex(row.columnsAfter)))
+      ...graphRows.map((row) => Math.max(lastColumnIndex(row.columnsBefore), lastColumnIndex(row.columnsAfter)))
     );
-  }, [graphData.rows]);
+  }, [graphRows]);
 
   if (isLoading) {
     return (
@@ -172,13 +173,11 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
 
   return (
     <div className="overflow-auto">
-      {graphData.rows.map((row, index) => (
+      {graphRows.map((row) => (
         <CommitRow
           key={row.commit.hash}
           row={row}
           graphWidth={graphWidth}
-          isFirst={index === 0}
-          colorMap={graphData.colorMap}
         />
       ))}
     </div>
@@ -188,15 +187,13 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
 interface CommitRowProps {
   row: GraphRow;
   graphWidth: number;
-  isFirst: boolean;
-  colorMap: Map<string, string>;
 }
 
-function CommitRow({ row, graphWidth, isFirst, colorMap }: CommitRowProps) {
-  const { commit, nodeCol, columnsBefore, columnsAfter, mergeTargets } = row;
+function CommitRow({ row, graphWidth }: CommitRowProps) {
+  const { commit, nodeCol, columnsBefore, columnsAfter, mergeInCols, branchOutCols } = row;
   const formattedDate = formatCommitDate(commit.date);
   const isHead = commit.refs?.some((r) => r.includes("HEAD"));
-  const nodeColor = colorMap.get(commit.hash) || COLORS[0];
+  const nodeColor = COLORS[nodeCol % COLORS.length];
   const ROW_HEIGHT = 44;
   const COL_WIDTH = 18;
   const OFFSET = 14;
@@ -206,33 +203,32 @@ function CommitRow({ row, graphWidth, isFirst, colorMap }: CommitRowProps) {
     <div className="flex items-stretch hover:bg-muted/30 transition-colors" style={{ minHeight: ROW_HEIGHT }}>
       <div className="flex-shrink-0 relative" style={{ width: graphWidth, height: ROW_HEIGHT }}>
         <svg width={graphWidth} height={ROW_HEIGHT} className="absolute inset-0">
-          {/* Vertical lines for existing branches */}
+          {/* Upper segments (from previous row) */}
           {columnsBefore.map((hash, index) => {
             if (!hash) return null;
             const x = OFFSET + index * COL_WIDTH;
-            const lineColor = colorMap.get(hash) || COLORS[0];
+            const lineColor = COLORS[index % COLORS.length];
             return (
               <line
-                key={`col-${index}`}
+                key={`upper-${index}`}
                 x1={x}
-                y1={isFirst && index === nodeCol ? midY : 0}
+                y1={0}
                 x2={x}
-                y2={ROW_HEIGHT}
+                y2={midY}
                 stroke={lineColor}
                 strokeWidth={2}
               />
             );
           })}
 
-          {/* Lines for newly created columns (from merges) */}
+          {/* Lower segments (to next row) */}
           {columnsAfter.map((hash, index) => {
             if (!hash) return null;
-            if (columnsBefore[index]) return null;
             const x = OFFSET + index * COL_WIDTH;
-            const lineColor = colorMap.get(hash) || COLORS[0];
+            const lineColor = COLORS[index % COLORS.length];
             return (
               <line
-                key={`new-${index}`}
+                key={`lower-${index}`}
                 x1={x}
                 y1={midY}
                 x2={x}
@@ -243,18 +239,36 @@ function CommitRow({ row, graphWidth, isFirst, colorMap }: CommitRowProps) {
             );
           })}
 
-          {/* Merge curves */}
-          {mergeTargets.map((targetCol, i) => {
+          {/* Merge-in curves (existing branch merging into node) */}
+          {mergeInCols.map((targetCol) => {
+            if (targetCol === nodeCol) return null;
+            const x1 = OFFSET + targetCol * COL_WIDTH;
+            const x2 = OFFSET + nodeCol * COL_WIDTH;
+            const lineColor = COLORS[targetCol % COLORS.length];
+            const controlY = midY - 10;
+            const curve = `M ${x1} ${midY} C ${x1} ${controlY}, ${x2} ${controlY}, ${x2} ${midY}`;
+            return (
+              <path
+                key={`merge-in-${targetCol}`}
+                d={curve}
+                fill="none"
+                stroke={lineColor}
+                strokeWidth={2}
+              />
+            );
+          })}
+
+          {/* Branch-out curves (new branch starting below) */}
+          {branchOutCols.map((targetCol) => {
             if (targetCol === nodeCol) return null;
             const x1 = OFFSET + nodeCol * COL_WIDTH;
             const x2 = OFFSET + targetCol * COL_WIDTH;
-            const targetHash = columnsAfter[targetCol] || columnsBefore[targetCol];
-            const lineColor = targetHash ? colorMap.get(targetHash) || COLORS[0] : COLORS[0];
-            const controlY = midY + 12;
+            const lineColor = COLORS[targetCol % COLORS.length];
+            const controlY = midY + 10;
             const curve = `M ${x1} ${midY} C ${x1} ${controlY}, ${x2} ${controlY}, ${x2} ${ROW_HEIGHT}`;
             return (
               <path
-                key={`merge-${i}`}
+                key={`branch-out-${targetCol}`}
                 d={curve}
                 fill="none"
                 stroke={lineColor}
