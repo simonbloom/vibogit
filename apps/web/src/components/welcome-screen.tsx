@@ -91,8 +91,6 @@ export function WelcomeScreen() {
       if (item.kind === "file") {
         const entry = item.webkitGetAsEntry?.();
         if (entry?.isDirectory) {
-          // Note: Web API doesn't give us the full path for security reasons
-          // The daemon will need to handle this differently
           console.log("Folder dropped:", entry.name);
         }
       }
@@ -110,9 +108,9 @@ export function WelcomeScreen() {
   if (checkingPath) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-73px)] p-8">
-        <Loader2 className="w-8 h-8 text-accent animate-spin mb-4" />
-        <p className="text-text-secondary">Checking folder...</p>
-        <p className="text-text-muted text-sm mt-2 font-mono">{checkingPath}</p>
+        <Loader2 className="w-8 h-8 text-primary animate-spin mb-4" />
+        <p className="text-muted-foreground">Checking folder...</p>
+        <p className="text-muted-foreground/60 text-sm mt-2 font-mono">{checkingPath}</p>
       </div>
     );
   }
@@ -120,20 +118,20 @@ export function WelcomeScreen() {
   if (showInitDialog && pendingPath) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-73px)] p-8">
-        <div className="bg-surface rounded-xl p-8 max-w-md w-full border border-border">
+        <div className="bg-card rounded-xl p-8 max-w-md w-full border">
           <div className="text-center mb-6">
-            <FolderOpen className="w-12 h-12 text-accent mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-text-primary mb-2">
+            <FolderOpen className="w-12 h-12 text-primary mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2">
               {getProjectName(pendingPath)}
             </h2>
-            <p className="text-text-secondary">
+            <p className="text-muted-foreground">
               This folder isn&apos;t a git project yet.
             </p>
           </div>
 
-          <div className="bg-surface-light rounded-lg p-4 mb-6">
-            <h3 className="font-medium text-text-primary mb-2">Initialize Git</h3>
-            <p className="text-text-secondary text-sm">
+          <div className="bg-muted rounded-lg p-4 mb-6">
+            <h3 className="font-medium mb-2">Initialize Git</h3>
+            <p className="text-muted-foreground text-sm">
               This will track your changes so you can save and ship your work.
             </p>
           </div>
@@ -144,14 +142,14 @@ export function WelcomeScreen() {
                 setShowInitDialog(false);
                 setPendingPath(null);
               }}
-              className="flex-1 px-4 py-2 bg-surface-light text-text-secondary rounded-lg hover:bg-border transition-colors"
+              className="flex-1 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleInitGit}
               disabled={isLoading}
-              className="flex-1 px-4 py-2 bg-accent text-background font-medium rounded-lg hover:bg-accent/90 transition-colors disabled:opacity-50"
+              className="flex-1 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin mx-auto" />
@@ -169,26 +167,24 @@ export function WelcomeScreen() {
     <div
       className={clsx(
         "flex flex-col items-center justify-center min-h-[calc(100vh-73px)] p-8 transition-colors",
-        isDragging && "bg-accent/5"
+        isDragging && "bg-primary/5"
       )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-text-primary mb-2">
-          Welcome to ViboGit
-        </h1>
-        <p className="text-text-secondary">Git for the Vibe Coder</p>
+        <h1 className="text-3xl font-bold mb-2">Welcome to ViboGit</h1>
+        <p className="text-muted-foreground">Git for the Vibe Coder</p>
       </div>
 
       <button
         onClick={handleOpenProject}
         disabled={isLoading || state.connection !== "connected"}
         className={clsx(
-          "flex items-center gap-3 px-8 py-4 bg-accent text-background font-medium rounded-xl",
-          "hover:bg-accent/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed",
-          "shadow-lg shadow-accent/20 hover:shadow-xl hover:shadow-accent/30"
+          "flex items-center gap-3 px-8 py-4 bg-primary text-primary-foreground font-medium rounded-xl",
+          "hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed",
+          "shadow-lg hover:shadow-xl"
         )}
       >
         {isLoading ? (
@@ -199,35 +195,31 @@ export function WelcomeScreen() {
         <span>Open a Project</span>
       </button>
 
-      <p className="text-text-muted text-sm mt-4">
+      <p className="text-muted-foreground/60 text-sm mt-4">
         Or drag a folder here
       </p>
 
       {recentProjects.length > 0 && (
         <div className="mt-12 w-full max-w-md">
-          <h3 className="text-sm font-medium text-text-secondary mb-3 uppercase tracking-wider">
+          <h3 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">
             Recent Projects
           </h3>
-          <div className="bg-surface rounded-xl border border-border overflow-hidden">
+          <div className="bg-card rounded-xl border overflow-hidden">
             {recentProjects.map((project, index) => (
               <button
                 key={project.path}
                 onClick={() => handleRecentProjectClick(project)}
                 className={clsx(
-                  "w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-surface-light transition-colors",
-                  index !== recentProjects.length - 1 && "border-b border-border"
+                  "w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors",
+                  index !== recentProjects.length - 1 && "border-b"
                 )}
               >
-                <FolderOpen className="w-4 h-4 text-accent flex-shrink-0" />
+                <FolderOpen className="w-4 h-4 text-primary flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-text-primary font-medium truncate">
-                    {project.name}
-                  </p>
-                  <p className="text-text-muted text-xs truncate">
-                    {project.path}
-                  </p>
+                  <p className="font-medium truncate">{project.name}</p>
+                  <p className="text-muted-foreground/60 text-xs truncate">{project.path}</p>
                 </div>
-                <span className="text-text-muted text-xs flex-shrink-0">
+                <span className="text-muted-foreground/60 text-xs flex-shrink-0">
                   {formatRelativeTime(project.lastOpenedAt)}
                 </span>
               </button>

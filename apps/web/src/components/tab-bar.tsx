@@ -15,7 +15,7 @@ export function TabBar() {
       if (response.path) {
         const isRepoResponse = await send<{ isRepo: boolean }>("isGitRepo", { path: response.path });
         if (isRepoResponse.isRepo) {
-          const tab = addTab(response.path);
+          addTab(response.path);
           setRepoPath(response.path);
         }
       }
@@ -32,8 +32,6 @@ export function TabBar() {
   const handleCloseTab = async (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
     removeTab(tabId);
-    
-    // If no tabs left, clear the repo path
     if (tabs.length <= 1) {
       await setRepoPath(null);
     }
@@ -44,7 +42,7 @@ export function TabBar() {
   }
 
   return (
-    <div className="flex items-center bg-surface border-b border-border overflow-x-auto">
+    <div className="flex items-center bg-muted border-b overflow-x-auto">
       {tabs.map((tab) => (
         <div
           key={tab.id}
@@ -53,18 +51,18 @@ export function TabBar() {
           onClick={() => handleTabClick(tab.id, tab.repoPath)}
           onKeyDown={(e) => e.key === "Enter" && handleTabClick(tab.id, tab.repoPath)}
           className={clsx(
-            "group flex items-center gap-2 px-4 py-2 border-r border-border min-w-0 max-w-48 transition-colors cursor-pointer",
+            "group flex items-center gap-2 px-4 py-2 border-r min-w-0 max-w-48 transition-colors cursor-pointer",
             tab.id === activeTabId
-              ? "bg-background text-text-primary"
-              : "text-text-secondary hover:text-text-primary hover:bg-surface-light"
+              ? "bg-background"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/80"
           )}
         >
-          <FolderOpen className="w-4 h-4 flex-shrink-0 text-accent" />
+          <FolderOpen className="w-4 h-4 flex-shrink-0 text-primary" />
           <span className="truncate text-sm">{tab.name}</span>
           <button
             onClick={(e) => handleCloseTab(e, tab.id)}
             className={clsx(
-              "flex-shrink-0 p-0.5 rounded hover:bg-border transition-colors",
+              "flex-shrink-0 p-0.5 rounded hover:bg-muted transition-colors",
               tab.id === activeTabId
                 ? "opacity-100"
                 : "opacity-0 group-hover:opacity-100"
@@ -76,7 +74,7 @@ export function TabBar() {
       ))}
       <button
         onClick={handleAddTab}
-        className="flex items-center justify-center w-10 h-full p-2 text-text-muted hover:text-text-primary hover:bg-surface-light transition-colors"
+        className="flex items-center justify-center w-10 h-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
         title="Open another project"
       >
         <Plus className="w-4 h-4" />

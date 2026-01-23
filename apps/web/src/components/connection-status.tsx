@@ -8,19 +8,19 @@ export function ConnectionStatus() {
 
   const statusConfig = {
     disconnected: {
-      color: "bg-status-deleted",
+      color: "bg-destructive",
       text: "Disconnected",
     },
     connecting: {
-      color: "bg-status-modified",
+      color: "bg-yellow-500",
       text: "Connecting...",
     },
     connected: {
-      color: "bg-status-added",
+      color: "bg-green-500",
       text: "Connected",
     },
     error: {
-      color: "bg-status-deleted",
+      color: "bg-destructive",
       text: "Error",
     },
   };
@@ -36,7 +36,7 @@ export function ConnectionStatus() {
           state.connection === "connecting" && "animate-pulse"
         )}
       />
-      <span className="text-sm text-text-secondary">{config.text}</span>
+      <span className="text-sm text-muted-foreground">{config.text}</span>
     </div>
   );
 }

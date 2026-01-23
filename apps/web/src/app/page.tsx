@@ -12,25 +12,22 @@ export default function Home() {
   const { tabs } = useTabs();
 
   return (
-    <main className="min-h-screen bg-background">
-      <header className="flex items-center justify-between p-4 border-b border-border">
-        <h1 className="text-xl font-semibold text-text-primary">ViboGit</h1>
+    <main className="min-h-screen">
+      <header className="flex items-center justify-between p-4 border-b">
+        <h1 className="text-xl font-semibold">ViboGit</h1>
         <ConnectionStatus />
       </header>
 
-      {/* Tab Bar - only show when connected and has tabs */}
       {state.connection === "connected" && tabs.length > 0 && <TabBar />}
 
       {state.connection === "disconnected" && (
         <div className="flex flex-col items-center justify-center p-8 text-center min-h-[calc(100vh-73px)]">
           <div className="space-y-4">
-            <h2 className="text-2xl font-semibold text-text-primary">
-              Welcome to ViboGit
-            </h2>
-            <p className="text-text-secondary max-w-md">
+            <h2 className="text-2xl font-semibold">Welcome to ViboGit</h2>
+            <p className="text-muted-foreground max-w-md">
               Start the daemon to begin managing your Git repositories.
             </p>
-            <code className="block bg-surface p-4 rounded-lg text-accent font-mono text-sm">
+            <code className="block bg-muted p-4 rounded-lg text-primary font-mono text-sm">
               pnpm daemon
             </code>
           </div>
@@ -40,8 +37,8 @@ export default function Home() {
       {state.connection === "connecting" && (
         <div className="flex flex-col items-center justify-center p-8 text-center min-h-[calc(100vh-73px)]">
           <div className="space-y-4">
-            <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-text-secondary">Connecting to daemon...</p>
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-muted-foreground">Connecting to daemon...</p>
           </div>
         </div>
       )}
@@ -53,10 +50,10 @@ export default function Home() {
       {state.connection === "error" && (
         <div className="flex flex-col items-center justify-center p-8 text-center min-h-[calc(100vh-73px)]">
           <div className="space-y-4">
-            <h2 className="text-2xl font-semibold text-status-deleted">
+            <h2 className="text-2xl font-semibold text-destructive">
               Connection Error
             </h2>
-            <p className="text-text-secondary max-w-md">{state.error}</p>
+            <p className="text-muted-foreground max-w-md">{state.error}</p>
           </div>
         </div>
       )}

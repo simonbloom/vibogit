@@ -45,7 +45,7 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-text-muted">
+      <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
         <Loader2 className="w-8 h-8 animate-spin mb-4" />
         <p>Loading commits...</p>
       </div>
@@ -54,7 +54,7 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-status-deleted">
+      <div className="flex flex-col items-center justify-center h-64 text-destructive">
         <p>{error}</p>
       </div>
     );
@@ -62,7 +62,7 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
 
   if (commits.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-text-muted">
+      <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
         <p>No commits yet</p>
       </div>
     );
@@ -86,25 +86,21 @@ function CommitRow({ commit, isFirst }: CommitRowProps) {
   const formattedDate = formatCommitDate(commit.date);
 
   return (
-    <div className="flex items-start gap-3 px-4 py-3 hover:bg-surface-light transition-colors">
-      {/* Timeline indicator */}
+    <div className="flex items-start gap-3 px-4 py-3 hover:bg-muted/50 transition-colors">
       <div className="flex flex-col items-center pt-1">
         <div
           className={clsx(
             "w-3 h-3 rounded-full",
-            isFirst ? "bg-accent" : "bg-text-muted/30"
+            isFirst ? "bg-primary" : "bg-muted-foreground/30"
           )}
         />
         <div className="w-px flex-1 bg-border mt-2" />
       </div>
 
-      {/* Commit info */}
       <div className="flex-1 min-w-0">
-        <p className="text-text-primary font-medium leading-snug">
-          {commit.message}
-        </p>
-        <div className="flex items-center gap-3 mt-1 text-sm text-text-muted">
-          <span className="font-mono text-accent">{commit.hashShort}</span>
+        <p className="font-medium leading-snug">{commit.message}</p>
+        <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+          <span className="font-mono text-primary">{commit.hashShort}</span>
           <span className="flex items-center gap-1">
             <User className="w-3 h-3" />
             {commit.author}
@@ -116,17 +112,16 @@ function CommitRow({ commit, isFirst }: CommitRowProps) {
         </div>
       </div>
 
-      {/* Branch labels */}
       {commit.refs && commit.refs.length > 0 && (
         <div className="flex gap-1 flex-shrink-0">
           {commit.refs.map((ref, i) => (
             <span
               key={i}
               className={clsx(
-                "text-xs px-2 py-1 rounded font-medium",
+                "text-xs px-2 py-1 rounded font-medium border",
                 ref.includes("HEAD") || ref === "main" || ref === "master"
-                  ? "bg-accent/20 text-accent border border-accent/30"
-                  : "bg-status-added/20 text-status-added border border-status-added/30"
+                  ? "bg-primary/10 text-primary border-primary/30"
+                  : "bg-green-500/10 text-green-500 border-green-500/30"
               )}
             >
               {ref.includes("->") ? ref.split("->")[1]?.trim() : ref}

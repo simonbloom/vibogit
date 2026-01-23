@@ -10,7 +10,6 @@ import {
   ChevronRight,
   Zap,
   Plus,
-  X,
   Loader2,
   ExternalLink,
 } from "lucide-react";
@@ -31,14 +30,11 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
   const [config, setConfig] = useState<DevServerConfig | null>(null);
   const [state, setState] = useState<DevServerState>({ running: false, logs: [] });
   const [isLoading, setIsLoading] = useState(false);
-  const [showAddForm, setShowAddForm] = useState(false);
   const [newServer, setNewServer] = useState<CustomServer>({ command: "bun run dev", port: 3000 });
   const logsEndRef = useRef<HTMLDivElement>(null);
 
-  // Detect dev server config
   useEffect(() => {
     if (!repoPath) return;
-
     const detect = async () => {
       try {
         const response = await send<{ config: DevServerConfig | null }>("devServerDetect", {
@@ -49,14 +45,11 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
         console.error("Failed to detect dev server:", error);
       }
     };
-
     detect();
   }, [repoPath, send]);
 
-  // Get initial state
   useEffect(() => {
     if (!repoPath) return;
-
     const getState = async () => {
       try {
         const response = await send<{ state: DevServerState }>("devServerState", {
@@ -67,7 +60,6 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
         console.error("Failed to get dev server state:", error);
       }
     };
-
     getState();
   }, [repoPath, send]);
 
@@ -79,7 +71,6 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
 
   const handleStart = async (serverConfig?: CustomServer) => {
     if (!repoPath) return;
-
     const useConfig = serverConfig || config;
     if (!useConfig) return;
 
@@ -101,7 +92,6 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
 
   const handleStop = async () => {
     if (!repoPath) return;
-
     setIsLoading(true);
     try {
       await send("devServerStop", { path: repoPath });
@@ -115,7 +105,6 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
 
   const handleAddServer = () => {
     handleStart(newServer);
-    setShowAddForm(false);
   };
 
   const handleOpenBrowser = () => {
@@ -124,26 +113,25 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
   };
 
   return (
-    <div className="border-b border-border">
-      {/* Header */}
+    <div className="border-b">
       <div
         role="button"
         tabIndex={0}
         onClick={() => setIsExpanded(!isExpanded)}
         onKeyDown={(e) => e.key === "Enter" && setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between px-4 py-3 hover:bg-surface-light transition-colors cursor-pointer"
+        className="flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-2">
           {isExpanded ? (
-            <ChevronDown className="w-4 h-4 text-text-muted" />
+            <ChevronDown className="w-4 h-4 text-muted-foreground" />
           ) : (
-            <ChevronRight className="w-4 h-4 text-text-muted" />
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
           )}
-          <Zap className="w-4 h-4 text-accent" />
-          <span className="font-medium text-text-primary">Dev Servers</span>
+          <Zap className="w-4 h-4 text-primary" />
+          <span className="font-medium">Dev Servers</span>
           {state.running && (
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-status-added/20 text-status-added text-xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-status-added animate-pulse" />
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 text-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
               Running
             </span>
           )}
@@ -152,7 +140,7 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={handleOpenBrowser}
-              className="p-1.5 rounded hover:bg-border text-text-muted hover:text-accent transition-colors"
+              className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
               title="Open in browser"
             >
               <ExternalLink className="w-4 h-4" />
@@ -160,7 +148,7 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
             <button
               onClick={handleStop}
               disabled={isLoading}
-              className="p-1.5 rounded hover:bg-border text-text-muted hover:text-status-deleted transition-colors disabled:opacity-50"
+              className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
               title="Stop"
             >
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-4 h-4" />}
@@ -169,24 +157,23 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
         )}
       </div>
 
-      {/* Content */}
       {isExpanded && (
         <div className="px-4 pb-4">
           {!config && !state.running ? (
-            <div className="text-center py-4 text-text-muted text-sm">
+            <div className="text-center py-4 text-muted-foreground text-sm">
               <p>No server config in agents.md</p>
               <p className="mt-1">Add a server manually below</p>
             </div>
           ) : config && !state.running ? (
-            <div className="flex items-center justify-between p-3 bg-surface rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
               <div className="text-sm">
-                <span className="text-text-muted">Command: </span>
-                <span className="font-mono text-text-primary">{config.command} {config.args.join(" ")}</span>
+                <span className="text-muted-foreground">Command: </span>
+                <span className="font-mono">{config.command} {config.args.join(" ")}</span>
               </div>
               <button
                 onClick={() => handleStart()}
                 disabled={isLoading}
-                className="flex items-center gap-1 px-3 py-1.5 bg-accent text-background rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
                 Start
@@ -195,9 +182,9 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
           ) : null}
 
           {state.running && state.logs.length > 0 && (
-            <div className="mt-3 h-32 overflow-y-auto bg-background rounded-lg p-2 font-mono text-xs">
+            <div className="mt-3 h-32 overflow-y-auto bg-muted rounded-lg p-2 font-mono text-xs">
               {state.logs.map((log, i) => (
-                <div key={i} className="text-text-muted whitespace-pre-wrap">
+                <div key={i} className="text-muted-foreground whitespace-pre-wrap">
                   {log}
                 </div>
               ))}
@@ -205,27 +192,26 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
             </div>
           )}
 
-          {/* Add Server Form */}
-          <div className="mt-4 pt-4 border-t border-border">
-            <h4 className="text-sm font-medium text-text-secondary mb-3">Add Server</h4>
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="text-sm font-medium text-muted-foreground mb-3">Add Server</h4>
             <div className="flex gap-2">
               <div className="flex-1">
-                <label className="text-xs text-text-muted mb-1 block">Command</label>
+                <label className="text-xs text-muted-foreground mb-1 block">Command</label>
                 <input
                   type="text"
                   value={newServer.command}
                   onChange={(e) => setNewServer({ ...newServer, command: e.target.value })}
-                  className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary text-sm font-mono focus:outline-none focus:border-accent"
+                  className="w-full px-3 py-2 bg-background border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
                   placeholder="bun run dev"
                 />
               </div>
               <div className="w-24">
-                <label className="text-xs text-text-muted mb-1 block">Port</label>
+                <label className="text-xs text-muted-foreground mb-1 block">Port</label>
                 <input
                   type="number"
                   value={newServer.port}
                   onChange={(e) => setNewServer({ ...newServer, port: parseInt(e.target.value) || 3000 })}
-                  className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary text-sm font-mono focus:outline-none focus:border-accent"
+                  className="w-full px-3 py-2 bg-background border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
             </div>
@@ -233,14 +219,14 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
               <button
                 onClick={handleAddServer}
                 disabled={isLoading || !newServer.command.trim()}
-                className="flex items-center gap-1 px-3 py-1.5 bg-accent text-background rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 <Plus className="w-4 h-4" />
                 Add
               </button>
               <button
                 onClick={() => setNewServer({ command: "bun run dev", port: 3000 })}
-                className="px-3 py-1.5 text-text-muted hover:text-text-primary text-sm transition-colors"
+                className="px-3 py-1.5 text-muted-foreground hover:text-foreground text-sm transition-colors"
               >
                 Cancel
               </button>

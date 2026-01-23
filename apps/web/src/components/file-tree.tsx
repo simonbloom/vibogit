@@ -68,14 +68,14 @@ export function FileTree({ repoPath }: FileTreeProps) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-accent" />
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
       </div>
     );
   }
 
   if (tree.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 text-text-muted">
+      <div className="flex items-center justify-center h-64 text-muted-foreground">
         No files to display
       </div>
     );
@@ -90,7 +90,7 @@ export function FileTree({ repoPath }: FileTreeProps) {
         <button
           onClick={() => isDirectory && toggleExpanded(node.path)}
           className={clsx(
-            "w-full flex items-center gap-2 px-3 py-1.5 hover:bg-surface-light transition-colors text-left",
+            "w-full flex items-center gap-2 px-3 py-1.5 hover:bg-muted/50 transition-colors text-left",
             isDirectory ? "cursor-pointer" : "cursor-default"
           )}
           style={{ paddingLeft: `${depth * 16 + 12}px` }}
@@ -98,23 +98,23 @@ export function FileTree({ repoPath }: FileTreeProps) {
           {isDirectory ? (
             <>
               {isExpanded ? (
-                <ChevronDown className="w-4 h-4 text-text-muted" />
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
               ) : (
-                <ChevronRight className="w-4 h-4 text-text-muted" />
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
               )}
               {isExpanded ? (
-                <FolderOpen className="w-4 h-4 text-accent" />
+                <FolderOpen className="w-4 h-4 text-primary" />
               ) : (
-                <Folder className="w-4 h-4 text-accent" />
+                <Folder className="w-4 h-4 text-primary" />
               )}
             </>
           ) : (
             <>
               <span className="w-4" />
-              <FileText className="w-4 h-4 text-text-muted" />
+              <FileText className="w-4 h-4 text-muted-foreground" />
             </>
           )}
-          <span className="text-sm text-text-primary truncate">{node.name}</span>
+          <span className="text-sm truncate">{node.name}</span>
         </button>
         {isDirectory && isExpanded && node.children && (
           <div>

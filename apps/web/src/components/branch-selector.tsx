@@ -34,7 +34,6 @@ export function BranchSelector({ currentBranch, branches }: BranchSelectorProps)
     (status?.unstaged.length || 0) +
     (status?.untracked.length || 0) > 0;
 
-  // Filter local branches
   const localBranches = branches.filter((b) => !b.remote);
 
   useEffect(() => {
@@ -109,9 +108,7 @@ export function BranchSelector({ currentBranch, branches }: BranchSelectorProps)
 
     setIsLoading(true);
     try {
-      // Stash changes first
       await send("stashSave", { repoPath, message: `Auto-stash before switching to ${pendingBranch}` });
-      // Then switch branch
       await switchBranch(pendingBranch);
     } catch (error) {
       console.error("Failed to stash and switch:", error);
@@ -124,27 +121,22 @@ export function BranchSelector({ currentBranch, branches }: BranchSelectorProps)
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={clsx(
-          "flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors",
-          "bg-surface hover:bg-surface-light border border-border"
-        )}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors bg-secondary hover:bg-secondary/80 border"
       >
-        <GitBranch className="w-4 h-4 text-accent" />
-        <span className="text-sm text-text-primary">
-          {currentBranch?.name || "No branch"}
-        </span>
-        <ChevronDown className={clsx("w-4 h-4 text-text-muted transition-transform", isOpen && "rotate-180")} />
+        <GitBranch className="w-4 h-4 text-primary" />
+        <span className="text-sm">{currentBranch?.name || "No branch"}</span>
+        <ChevronDown className={clsx("w-4 h-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-64 bg-surface border border-border rounded-lg shadow-xl z-50 overflow-hidden">
+        <div className="absolute top-full left-0 mt-2 w-64 bg-popover border rounded-lg shadow-xl z-50 overflow-hidden">
           {showUnsavedWarning ? (
             <div className="p-4">
               <div className="flex items-start gap-3 mb-4">
-                <AlertCircle className="w-5 h-5 text-status-modified flex-shrink-0 mt-0.5" />
+                <AlertCircle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm text-text-primary font-medium">Unsaved changes</p>
-                  <p className="text-xs text-text-secondary mt-1">
+                  <p className="text-sm font-medium">Unsaved changes</p>
+                  <p className="text-xs text-muted-foreground mt-1">
                     You have uncommitted changes. What would you like to do?
                   </p>
                 </div>
@@ -153,18 +145,14 @@ export function BranchSelector({ currentBranch, branches }: BranchSelectorProps)
                 <button
                   onClick={handleStashAndSwitch}
                   disabled={isLoading}
-                  className="w-full px-3 py-2 bg-accent text-background text-sm font-medium rounded-lg hover:bg-accent/90 transition-colors disabled:opacity-50"
+                  className="w-full px-3 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
-                  {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin mx-auto" />
-                  ) : (
-                    "Stash & Switch"
-                  )}
+                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Stash & Switch"}
                 </button>
                 <button
                   onClick={() => switchBranch(pendingBranch!)}
                   disabled={isLoading}
-                  className="w-full px-3 py-2 bg-surface-light text-text-secondary text-sm rounded-lg hover:text-text-primary transition-colors disabled:opacity-50"
+                  className="w-full px-3 py-2 bg-secondary text-secondary-foreground text-sm rounded-lg hover:bg-secondary/80 transition-colors disabled:opacity-50"
                 >
                   Switch anyway (discard changes)
                 </button>
@@ -173,7 +161,7 @@ export function BranchSelector({ currentBranch, branches }: BranchSelectorProps)
                     setShowUnsavedWarning(false);
                     setPendingBranch(null);
                   }}
-                  className="w-full px-3 py-2 text-text-muted text-sm hover:text-text-secondary transition-colors"
+                  className="w-full px-3 py-2 text-muted-foreground text-sm hover:text-foreground transition-colors"
                 >
                   Cancel
                 </button>
@@ -186,7 +174,7 @@ export function BranchSelector({ currentBranch, branches }: BranchSelectorProps)
                 value={newBranchName}
                 onChange={(e) => setNewBranchName(e.target.value)}
                 placeholder="new-branch-name"
-                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent"
+                className="w-full px-3 py-2 bg-background border rounded-lg text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleCreateBranch();
@@ -196,20 +184,16 @@ export function BranchSelector({ currentBranch, branches }: BranchSelectorProps)
               <div className="flex gap-2 mt-2">
                 <button
                   onClick={() => setShowNewBranch(false)}
-                  className="flex-1 px-3 py-1.5 bg-surface-light text-text-secondary text-sm rounded-lg hover:text-text-primary transition-colors"
+                  className="flex-1 px-3 py-1.5 bg-secondary text-secondary-foreground text-sm rounded-lg hover:bg-secondary/80 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleCreateBranch}
                   disabled={isLoading || !newBranchName.trim()}
-                  className="flex-1 px-3 py-1.5 bg-accent text-background text-sm font-medium rounded-lg hover:bg-accent/90 transition-colors disabled:opacity-50"
+                  className="flex-1 px-3 py-1.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
-                  {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin mx-auto" />
-                  ) : (
-                    "Create"
-                  )}
+                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Create"}
                 </button>
               </div>
             </div>
@@ -224,23 +208,19 @@ export function BranchSelector({ currentBranch, branches }: BranchSelectorProps)
                     className={clsx(
                       "w-full flex items-center gap-3 px-3 py-2 text-left transition-colors",
                       branch.current
-                        ? "bg-accent/10 text-accent"
-                        : "hover:bg-surface-light text-text-primary"
+                        ? "bg-primary/10 text-primary"
+                        : "hover:bg-muted"
                     )}
                   >
-                    {branch.current ? (
-                      <Check className="w-4 h-4" />
-                    ) : (
-                      <div className="w-4" />
-                    )}
+                    {branch.current ? <Check className="w-4 h-4" /> : <div className="w-4" />}
                     <span className="text-sm truncate flex-1">{branch.name}</span>
                   </button>
                 ))}
               </div>
-              <div className="border-t border-border">
+              <div className="border-t">
                 <button
                   onClick={() => setShowNewBranch(true)}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-left text-accent hover:bg-surface-light transition-colors"
+                  className="w-full flex items-center gap-3 px-3 py-2 text-left text-primary hover:bg-muted transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                   <span className="text-sm">New timeline</span>

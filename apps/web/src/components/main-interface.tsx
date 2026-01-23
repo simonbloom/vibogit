@@ -79,7 +79,6 @@ export function MainInterface() {
     if (!repoPath || !commitMessage.trim()) return;
     setIsCommitting(true);
     try {
-      // Stage all changes
       const allFiles = [
         ...(status?.unstaged.map((f) => f.path) || []),
         ...(status?.untracked.map((f) => f.path) || []),
@@ -87,7 +86,6 @@ export function MainInterface() {
       if (allFiles.length > 0) {
         await send("stage", { repoPath, files: allFiles });
       }
-      // Commit
       await send("commit", { repoPath, message: commitMessage });
       setCommitMessage("");
       setShowQuickCommit(false);
@@ -115,7 +113,6 @@ export function MainInterface() {
           break;
         }
         case "github":
-          // Get remote URL and open in browser
           try {
             const result = await send<{ remotes: Array<{ name: string; refs: { fetch: string } }> }>(
               "getRemotes",
@@ -124,7 +121,6 @@ export function MainInterface() {
             const origin = result.remotes.find((r) => r.name === "origin");
             if (origin) {
               let url = origin.refs.fetch;
-              // Convert git@ URL to https
               if (url.startsWith("git@")) {
                 url = url.replace("git@github.com:", "https://github.com/").replace(".git", "");
               } else if (url.endsWith(".git")) {
@@ -145,20 +141,20 @@ export function MainInterface() {
   return (
     <div className="flex flex-col h-[calc(100vh-73px)]">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+      <div className="flex items-center justify-between px-4 py-3 border-b">
         <div className="flex items-center gap-3">
-          <Folder className="w-5 h-5 text-accent" />
-          <span className="font-semibold text-text-primary">{projectName}</span>
+          <Folder className="w-5 h-5 text-primary" />
+          <span className="font-semibold">{projectName}</span>
           <BranchSelector currentBranch={currentBranch} branches={branches} />
           <button
             onClick={() => {}}
-            className="flex items-center justify-center w-6 h-6 rounded bg-accent/20 text-accent hover:bg-accent/30 transition-colors"
+            className="flex items-center justify-center w-6 h-6 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
             title="Create branch"
           >
             <Plus className="w-4 h-4" />
           </button>
           {totalChanges > 0 && (
-            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-accent text-background text-xs font-medium">
+            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs font-medium">
               <Check className="w-3 h-3" />
             </span>
           )}
@@ -166,42 +162,42 @@ export function MainInterface() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => handleQuickLink("finder")}
-            className="p-2 text-text-muted hover:text-text-primary transition-colors"
+            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
             title="Open in Finder"
           >
             <Folder className="w-4 h-4" />
           </button>
           <button
             onClick={() => handleQuickLink("github")}
-            className="p-2 text-text-muted hover:text-text-primary transition-colors"
+            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
             title="Open on GitHub"
           >
             <Globe className="w-4 h-4" />
           </button>
           <button
             onClick={() => handleQuickLink("terminal")}
-            className="p-2 text-text-muted hover:text-text-primary transition-colors"
+            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
             title="Open in Terminal"
           >
             <Terminal className="w-4 h-4" />
           </button>
           <button
             onClick={() => handleQuickLink("editor")}
-            className="p-2 text-text-muted hover:text-text-primary transition-colors"
+            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
             title="Open in Editor"
           >
             <Code className="w-4 h-4" />
           </button>
           <button
             onClick={() => {}}
-            className="p-2 text-text-muted hover:text-text-primary transition-colors"
+            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
             title="GitHub"
           >
             <Github className="w-4 h-4" />
           </button>
           <button
             onClick={() => setShowSettings(true)}
-            className="p-2 text-text-muted hover:text-text-primary transition-colors"
+            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
             title="Settings"
           >
             <Settings className="w-4 h-4" />
@@ -210,12 +206,12 @@ export function MainInterface() {
       </div>
 
       {/* Action Bar */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+      <div className="flex items-center gap-2 px-4 py-3 border-b">
         <div className="flex items-center">
           <button
             onClick={handlePull}
             disabled={isPulling}
-            className="flex items-center gap-2 px-4 py-2 bg-surface rounded-l-lg border border-border text-text-secondary hover:text-text-primary hover:bg-surface-light transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-l-lg border text-secondary-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50"
           >
             {isPulling ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -224,13 +220,13 @@ export function MainInterface() {
             )}
             Pull
             {(status?.behind || 0) > 0 && (
-              <span className="text-xs text-status-deleted">({status?.behind})</span>
+              <span className="text-xs text-destructive">({status?.behind})</span>
             )}
           </button>
           <button
             onClick={handlePull}
             disabled={isPulling}
-            className="flex items-center justify-center w-10 py-2 bg-surface border-y border-r border-border rounded-r-lg text-text-muted hover:text-text-primary hover:bg-surface-light transition-colors disabled:opacity-50"
+            className="flex items-center justify-center w-10 py-2 bg-secondary border-y border-r rounded-r-lg text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50"
             title="Fetch"
           >
             <RefreshCw className={clsx("w-4 h-4", isPulling && "animate-spin")} />
@@ -240,7 +236,7 @@ export function MainInterface() {
         <button
           onClick={handlePush}
           disabled={isPushing || (status?.ahead || 0) === 0}
-          className="flex items-center gap-2 px-4 py-2 bg-surface rounded-lg border border-border text-text-secondary hover:text-text-primary hover:bg-surface-light transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-lg border text-secondary-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50"
         >
           {isPushing ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -249,7 +245,7 @@ export function MainInterface() {
           )}
           Push
           {(status?.ahead || 0) > 0 && (
-            <span className="text-xs text-status-added">({status?.ahead})</span>
+            <span className="text-xs text-green-500">({status?.ahead})</span>
           )}
         </button>
 
@@ -258,17 +254,15 @@ export function MainInterface() {
             onClick={() => setShowQuickCommit(!showQuickCommit)}
             disabled={totalChanges === 0}
             className={clsx(
-              "flex items-center gap-2 px-4 py-2 rounded-l-lg border border-border transition-colors disabled:opacity-50",
+              "flex items-center gap-2 px-4 py-2 rounded-l-lg border transition-colors disabled:opacity-50",
               totalChanges > 0
-                ? "bg-accent/20 text-accent border-accent/30"
-                : "bg-surface text-text-secondary"
+                ? "bg-primary/10 text-primary border-primary/30"
+                : "bg-secondary text-secondary-foreground"
             )}
           >
             <GitBranch className="w-4 h-4" />
             Quick Commit
-            {totalChanges > 0 && (
-              <span className="text-xs">({totalChanges})</span>
-            )}
+            {totalChanges > 0 && <span className="text-xs">({totalChanges})</span>}
           </button>
           <button
             onClick={() => {}}
@@ -276,8 +270,8 @@ export function MainInterface() {
             className={clsx(
               "flex items-center justify-center w-10 py-2 border-y border-r rounded-r-lg transition-colors disabled:opacity-50",
               totalChanges > 0
-                ? "bg-accent/20 text-accent border-accent/30"
-                : "bg-surface text-text-muted border-border"
+                ? "bg-primary/10 text-primary border-primary/30"
+                : "bg-secondary text-muted-foreground"
             )}
             title="Stage selected"
           >
@@ -287,7 +281,7 @@ export function MainInterface() {
 
         <button
           onClick={() => setShowCreatePR(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-surface rounded-lg border border-border text-text-secondary hover:text-text-primary hover:bg-surface-light transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-lg border text-secondary-foreground hover:bg-secondary/80 transition-colors"
         >
           <GitPullRequest className="w-4 h-4" />
           Create PR
@@ -296,14 +290,14 @@ export function MainInterface() {
 
       {/* Quick Commit Panel */}
       {showQuickCommit && (
-        <div className="px-4 py-3 border-b border-border bg-surface">
+        <div className="px-4 py-3 border-b bg-muted">
           <div className="flex items-center gap-2">
             <input
               type="text"
               value={commitMessage}
               onChange={(e) => setCommitMessage(e.target.value)}
               placeholder="Commit message..."
-              className="flex-1 px-3 py-2 bg-background border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent"
+              className="flex-1 px-3 py-2 bg-background border rounded-lg placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               onKeyDown={(e) => e.key === "Enter" && handleQuickCommit()}
             />
             <AICommitButton
@@ -313,17 +307,13 @@ export function MainInterface() {
             <button
               onClick={handleQuickCommit}
               disabled={isCommitting || !commitMessage.trim()}
-              className="px-4 py-2 bg-accent text-background rounded-lg font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
-              {isCommitting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                "Commit"
-              )}
+              {isCommitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Commit"}
             </button>
             <button
               onClick={() => setShowQuickCommit(false)}
-              className="px-3 py-2 text-text-muted hover:text-text-primary transition-colors"
+              className="px-3 py-2 text-muted-foreground hover:text-foreground transition-colors"
             >
               Cancel
             </button>
@@ -336,15 +326,14 @@ export function MainInterface() {
 
       {/* View Toggle & Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Graph/Tree Toggle */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border">
+        <div className="flex items-center gap-2 px-4 py-2 border-b">
           <button
             onClick={() => setActiveView("graph")}
             className={clsx(
               "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
               activeView === "graph"
-                ? "bg-accent/20 text-accent"
-                : "text-text-muted hover:text-text-primary"
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
             <GitBranch className="w-4 h-4" />
@@ -355,8 +344,8 @@ export function MainInterface() {
             className={clsx(
               "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
               activeView === "tree"
-                ? "bg-accent/20 text-accent"
-                : "text-text-muted hover:text-text-primary"
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
             <Folder className="w-4 h-4" />
@@ -364,7 +353,6 @@ export function MainInterface() {
           </button>
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-auto">
           {activeView === "graph" ? (
             <CommitHistory repoPath={repoPath} />
@@ -374,10 +362,7 @@ export function MainInterface() {
         </div>
       </div>
 
-      {/* Settings Panel */}
       <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />
-
-      {/* Create PR Dialog */}
       <CreatePRDialog
         isOpen={showCreatePR}
         onClose={() => setShowCreatePR(false)}
