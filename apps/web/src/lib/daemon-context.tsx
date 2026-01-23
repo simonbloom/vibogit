@@ -6,6 +6,7 @@ import {
   useReducer,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
 import type {
@@ -62,7 +63,7 @@ interface PendingRequest {
 interface DaemonContextValue {
   state: DaemonState;
   send: <T = unknown>(type: string, payload?: unknown) => Promise<T>;
-  setRepoPath: (path: string | null) => void;
+  setRepoPath: (path: string | null) => Promise<void>;
   refreshStatus: () => Promise<void>;
   refreshBranches: () => Promise<void>;
 }
@@ -71,11 +72,47 @@ const DaemonContext = createContext<DaemonContextValue | null>(null);
 
 export function DaemonProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(daemonReducer, initialState);
-  const wsRef = { current: null as WebSocket | null };
-  const pendingRef = { current: new Map<string, PendingRequest>() };
-  const reconnectTimeoutRef = { current: null as NodeJS.Timeout | null };
+  const wsRef = useRef<WebSocket | null>(null);
+  const pendingRef = useRef(new Map<string, PendingRequest>());
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const repoPathRef = useRef<string | null>(null);
 
   const generateId = () => Math.random().toString(36).substring(2, 15);
+
+  const send = useCallback(<T = unknown,>(type: string, payload?: unknown): Promise<T> => {
+    return new Promise((resolve, reject) => {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        reject(new Error("Not connected to daemon"));
+        return;
+      }
+
+      const id = generateId();
+      pendingRef.current.set(id, {
+        resolve: resolve as (value: unknown) => void,
+        reject,
+      });
+
+      wsRef.current.send(JSON.stringify({ type, id, payload }));
+
+      setTimeout(() => {
+        if (pendingRef.current.has(id)) {
+          pendingRef.current.delete(id);
+          reject(new Error("Request timed out"));
+        }
+      }, 30000);
+    });
+  }, []);
+
+  const refreshStatusInternal = useCallback(async () => {
+    const path = repoPathRef.current;
+    if (!path) return;
+    try {
+      const response = await send<{ status: GitStatus }>("status", { repoPath: path });
+      dispatch({ type: "SET_STATUS", payload: response.status });
+    } catch (err) {
+      console.error("[Daemon] Failed to refresh status:", err);
+    }
+  }, [send]);
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -95,7 +132,6 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
         const message: WebSocketMessage = JSON.parse(event.data);
         const { type, id, payload, error } = message;
 
-        // Handle pending request
         const pending = pendingRef.current.get(id);
         if (pending) {
           pendingRef.current.delete(id);
@@ -107,14 +143,9 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // Handle server-initiated messages
+        // Handle server-initiated messages (file changes)
         if (type === "fileChange") {
-          // Auto-refresh status on file change
-          if (state.repoPath) {
-            send("status", { repoPath: state.repoPath }).then((response) => {
-              dispatch({ type: "SET_STATUS", payload: (response as { status: GitStatus }).status });
-            });
-          }
+          refreshStatusInternal();
         }
       } catch (err) {
         console.error("[Daemon] Failed to parse message:", err);
@@ -124,51 +155,22 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
     ws.onclose = () => {
       dispatch({ type: "SET_CONNECTION", payload: "disconnected" });
       wsRef.current = null;
-
-      // Attempt reconnect
       reconnectTimeoutRef.current = setTimeout(connect, RECONNECT_DELAY);
     };
 
     ws.onerror = () => {
       dispatch({ type: "SET_ERROR", payload: "Failed to connect to daemon" });
     };
-  }, [state.repoPath]);
-
-  const send = useCallback(<T = unknown,>(type: string, payload?: unknown): Promise<T> => {
-    return new Promise((resolve, reject) => {
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        reject(new Error("Not connected to daemon"));
-        return;
-      }
-
-      const id = generateId();
-      pendingRef.current.set(id, {
-        resolve: resolve as (value: unknown) => void,
-        reject,
-      });
-
-      wsRef.current.send(JSON.stringify({ type, id, payload }));
-
-      // Timeout after 30 seconds
-      setTimeout(() => {
-        if (pendingRef.current.has(id)) {
-          pendingRef.current.delete(id);
-          reject(new Error("Request timed out"));
-        }
-      }, 30000);
-    });
-  }, []);
+  }, [refreshStatusInternal]);
 
   const setRepoPath = useCallback(async (path: string | null) => {
+    repoPathRef.current = path;
     dispatch({ type: "SET_REPO_PATH", payload: path });
 
     if (path) {
-      // Watch for file changes
       await send("watch", { repoPath: path });
-      // Get initial status
       const response = await send<{ status: GitStatus }>("status", { repoPath: path });
       dispatch({ type: "SET_STATUS", payload: response.status });
-      // Get branches
       const branchResponse = await send<{ branches: GitBranch[] }>("branches", { repoPath: path });
       dispatch({ type: "SET_BRANCHES", payload: branchResponse.branches });
     } else {
@@ -202,15 +204,7 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
   }, [connect]);
 
   return (
-    <DaemonContext.Provider
-      value={{
-        state,
-        send,
-        setRepoPath,
-        refreshStatus,
-        refreshBranches,
-      }}
-    >
+    <DaemonContext.Provider value={{ state, send, setRepoPath, refreshStatus, refreshBranches }}>
       {children}
     </DaemonContext.Provider>
   );
