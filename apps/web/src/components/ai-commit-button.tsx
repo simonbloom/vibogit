@@ -5,7 +5,6 @@ import { useDaemon } from "@/lib/daemon-context";
 import { getSettings } from "@/lib/settings";
 import { AI_PROVIDERS } from "@/lib/ai-service";
 import { Sparkles, Loader2, AlertCircle } from "lucide-react";
-import { clsx } from "clsx";
 
 interface AICommitButtonProps {
   onMessageGenerated: (message: string) => void;
@@ -107,11 +106,7 @@ export function AICommitButton({ onMessageGenerated, disabled }: AICommitButtonP
       <button
         onClick={handleGenerate}
         disabled={disabled || isGenerating}
-        className={clsx(
-          "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors",
-          "bg-accent/20 text-accent hover:bg-accent/30",
-          "disabled:opacity-50 disabled:cursor-not-allowed"
-        )}
+        className="flex items-center gap-1 px-2 py-1 rounded text-sm bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed"
         title={`Generate with ${provider?.displayName || "AI"}`}
       >
         {isGenerating ? (
@@ -119,11 +114,11 @@ export function AICommitButton({ onMessageGenerated, disabled }: AICommitButtonP
         ) : (
           <Sparkles className="w-4 h-4" />
         )}
-        <span>AI</span>
+        AI
       </button>
 
       {error && (
-        <div className="absolute bottom-full left-0 mb-2 p-2 bg-status-deleted/20 border border-status-deleted/50 rounded-lg text-xs text-status-deleted whitespace-nowrap flex items-center gap-2">
+        <div className="absolute bottom-full left-0 mb-2 p-2 bg-red-100 border border-red-300 rounded text-xs text-red-700 whitespace-nowrap flex items-center gap-2">
           <AlertCircle className="w-3 h-3" />
           {error}
         </div>
