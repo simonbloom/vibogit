@@ -8,6 +8,7 @@ import { AICommitButton } from "@/components/ai-commit-button";
 import { SettingsPanel } from "@/components/settings-panel";
 import { CreatePRDialog } from "@/components/create-pr-dialog";
 import { FileTree } from "@/components/file-tree";
+import { StagedChanges } from "@/components/staged-changes";
 import { getSettings } from "@/lib/settings";
 import {
   ArrowUp,
@@ -21,7 +22,7 @@ import {
   Settings,
   GitPullRequest,
   GitBranch,
-  Plus,
+  FileEdit,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -31,7 +32,7 @@ export function MainInterface() {
   const [isPushing, setIsPushing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [commitMessage, setCommitMessage] = useState("");
-  const [activeView, setActiveView] = useState<"graph" | "tree">("graph");
+  const [activeView, setActiveView] = useState<"graph" | "tree" | "changes">("graph");
   const [showSettings, setShowSettings] = useState(false);
   const [showCreatePR, setShowCreatePR] = useState(false);
   const [showQuickCommit, setShowQuickCommit] = useState(false);
@@ -253,11 +254,28 @@ export function MainInterface() {
           <Folder className="w-3.5 h-3.5" />
           Tree
         </button>
+        <button
+          onClick={() => setActiveView("changes")}
+          className={clsx(
+            "flex items-center gap-1.5 px-3 py-1 text-sm rounded-md",
+            activeView === "changes" ? "bg-muted font-medium" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <FileEdit className="w-3.5 h-3.5" />
+          Changes
+          {totalChanges > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 text-xs bg-primary text-primary-foreground rounded-full">
+              {totalChanges}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
-        {activeView === "graph" ? <CommitHistory repoPath={repoPath} /> : <FileTree repoPath={repoPath} />}
+        {activeView === "graph" && <CommitHistory repoPath={repoPath} />}
+        {activeView === "tree" && <FileTree repoPath={repoPath} />}
+        {activeView === "changes" && <StagedChanges repoPath={repoPath} />}
       </div>
 
       <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />
