@@ -2,7 +2,7 @@
 
 import { useTabs } from "@/lib/tabs-context";
 import { useDaemon } from "@/lib/daemon-context";
-import { X, Plus, Folder } from "lucide-react";
+import { Plus } from "lucide-react";
 import { clsx } from "clsx";
 
 export function TabBar() {
@@ -40,30 +40,27 @@ export function TabBar() {
   if (tabs.length === 0) return null;
 
   return (
-    <div className="flex items-center border-b bg-muted/30 overflow-x-auto">
+    <div className="flex items-center gap-2 px-4 py-3 border-b overflow-x-auto">
       {tabs.map((tab) => (
-        <div
+        <button
           key={tab.id}
-          role="button"
-          tabIndex={0}
           onClick={() => handleTabClick(tab.id, tab.repoPath)}
-          onKeyDown={(e) => e.key === "Enter" && handleTabClick(tab.id, tab.repoPath)}
+          onDoubleClick={(e) => handleCloseTab(e, tab.id)}
           className={clsx(
-            "group flex items-center gap-2 px-3 py-1.5 text-sm border-r cursor-pointer",
-            tab.id === activeTabId ? "bg-background" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            "px-4 py-1.5 text-sm font-medium rounded-full whitespace-nowrap transition-colors",
+            tab.id === activeTabId
+              ? "bg-primary text-primary-foreground"
+              : "border text-foreground hover:bg-muted"
           )}
         >
-          <Folder className="w-3.5 h-3.5" />
-          <span className="truncate max-w-32">{tab.name}</span>
-          <button
-            onClick={(e) => handleCloseTab(e, tab.id)}
-            className={clsx("p-0.5 rounded hover:bg-muted", tab.id === activeTabId ? "opacity-100" : "opacity-0 group-hover:opacity-100")}
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </div>
+          {tab.name}
+        </button>
       ))}
-      <button onClick={handleAddTab} className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted/50" title="Open project">
+      <button
+        onClick={handleAddTab}
+        className="flex items-center justify-center w-8 h-8 border rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+        title="Open project"
+      >
         <Plus className="w-4 h-4" />
       </button>
     </div>
