@@ -143,9 +143,12 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
 
   return (
     <div className="border-t border-border">
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between px-4 py-2 hover:bg-surface-light transition-colors"
+        onKeyDown={(e) => e.key === "Enter" && setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between px-4 py-2 hover:bg-surface-light transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-2">
           {isExpanded ? (
@@ -207,7 +210,7 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
             </button>
           )}
         </div>
-      </button>
+      </div>
 
       {isExpanded && (
         <div className="border-t border-border">
