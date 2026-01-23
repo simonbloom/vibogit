@@ -97,117 +97,121 @@ export function StagedChanges({ repoPath }: StagedChangesProps) {
   }
 
   return (
-    <div className="flex h-full">
-      {/* Left: File cards */}
-      <div className="w-1/2 flex flex-col gap-4 p-4 overflow-auto border-r">
-        {/* Will Commit Card */}
-        <div className="rounded-lg border-2 border-green-200 bg-green-50 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2 bg-green-100 border-b border-green-200">
-            <span className="text-sm font-semibold text-green-800">
-              Will Commit ({filesToCommit.length})
-            </span>
-          </div>
-          {filesToCommit.length === 0 ? (
-            <div className="px-4 py-4 text-sm text-green-700 text-center italic">
-              No files selected
-            </div>
-          ) : (
-            <div className="divide-y divide-green-200 max-h-48 overflow-auto">
-              {filesToCommit.map((file) => (
-                <div
-                  key={file.path}
-                  onClick={() => setSelectedFile({ path: file.path, status: file.status })}
-                  className={`flex items-center gap-2 px-3 py-1.5 hover:bg-green-100/50 cursor-pointer ${
-                    selectedFile?.path === file.path ? "bg-green-200/50" : ""
-                  }`}
-                >
-                  {getStatusIcon(file.status)}
-                  <span className={`text-sm truncate flex-1 ${getStatusColor(file.status)}`}>
-                    {file.path}
-                  </span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); excludeFile(file.path); }}
-                    className="p-1 text-green-600 hover:text-green-800 hover:bg-green-200 rounded"
-                    title="Exclude"
-                  >
-                    <ArrowDown className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          {/* Commit Input */}
-          <div className="px-3 py-2 bg-green-100/50 border-t border-green-200">
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={commitMessage}
-                onChange={(e) => setCommitMessage(e.target.value)}
-                placeholder="Commit message..."
-                className="flex-1 px-2 py-1 text-sm border border-green-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-green-500"
-                onKeyDown={(e) => e.key === "Enter" && handleCommit()}
-              />
-              <AICommitButton
-                onMessageGenerated={setCommitMessage}
-                disabled={filesToCommit.length === 0}
-              />
-              <button
-                onClick={handleCommit}
-                disabled={isCommitting || filesToCommit.length === 0 || !commitMessage.trim()}
-                className="px-3 py-1 text-sm font-medium bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-              >
-                {isCommitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Commit"}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Won't Commit Card */}
-        <div className="rounded-lg border bg-card overflow-hidden">
-          <div className="px-4 py-2 bg-muted border-b">
-            <span className="text-sm font-semibold text-muted-foreground">
-              Won't Commit ({filesExcluded.length})
-            </span>
-          </div>
-          {filesExcluded.length === 0 ? (
-            <div className="px-4 py-4 text-sm text-muted-foreground text-center italic">
-              All files staged
-            </div>
-          ) : (
-            <div className="divide-y max-h-48 overflow-auto">
-              {filesExcluded.map((file) => (
-                <div
-                  key={file.path}
-                  onClick={() => setSelectedFile({ path: file.path, status: file.status })}
-                  className={`flex items-center gap-2 px-3 py-1.5 hover:bg-muted/50 cursor-pointer ${
-                    selectedFile?.path === file.path ? "bg-muted" : ""
-                  }`}
-                >
-                  {getStatusIcon(file.status)}
-                  <span className={`text-sm truncate flex-1 ${getStatusColor(file.status)}`}>
-                    {file.path}
-                  </span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); includeFile(file.path); }}
-                    className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
-                    title="Include"
-                  >
-                    <ArrowUp className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+    <div className="flex flex-col h-full">
+      {/* Commit Input - Above cards */}
+      <div className="px-4 py-3 border-b bg-muted/30">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={commitMessage}
+            onChange={(e) => setCommitMessage(e.target.value)}
+            placeholder="Commit message..."
+            className="flex-1 px-3 py-1.5 text-sm border rounded bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+            onKeyDown={(e) => e.key === "Enter" && handleCommit()}
+          />
+          <AICommitButton
+            onMessageGenerated={setCommitMessage}
+            disabled={filesToCommit.length === 0}
+          />
+          <button
+            onClick={handleCommit}
+            disabled={isCommitting || filesToCommit.length === 0 || !commitMessage.trim()}
+            className="px-4 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
+          >
+            {isCommitting ? <Loader2 className="w-4 h-4 animate-spin" /> : `Commit (${filesToCommit.length})`}
+          </button>
         </div>
       </div>
 
-      {/* Right: File Viewer */}
-      <div className="w-1/2 border-l bg-muted/20">
-        <FileViewer
-          repoPath={repoPath}
-          filePath={selectedFile?.path || null}
-          fileStatus={selectedFile?.status || ""}
-        />
+      {/* Main content */}
+      <div className="flex flex-1 min-h-0">
+        {/* Left: File cards */}
+        <div className="w-1/2 flex flex-col gap-3 p-4 overflow-auto border-r">
+          {/* Will Commit Card */}
+          <div className="rounded-lg border-2 border-green-200 bg-green-50 overflow-hidden">
+            <div className="px-3 py-1.5 bg-green-100 border-b border-green-200">
+              <span className="text-sm font-semibold text-green-800">
+                Will Commit ({filesToCommit.length})
+              </span>
+            </div>
+            {filesToCommit.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-green-700 text-center italic">
+                No files selected
+              </div>
+            ) : (
+              <div className="divide-y divide-green-200 max-h-40 overflow-auto">
+                {filesToCommit.map((file) => (
+                  <div
+                    key={file.path}
+                    onClick={() => setSelectedFile({ path: file.path, status: file.status })}
+                    className={`flex items-center gap-2 px-3 py-1.5 hover:bg-green-100/50 cursor-pointer ${
+                      selectedFile?.path === file.path ? "bg-green-200/50" : ""
+                    }`}
+                  >
+                    {getStatusIcon(file.status)}
+                    <span className={`text-sm truncate flex-1 ${getStatusColor(file.status)}`}>
+                      {file.path}
+                    </span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); excludeFile(file.path); }}
+                      className="p-1 text-green-600 hover:text-green-800 hover:bg-green-200 rounded"
+                      title="Exclude"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Won't Commit Card */}
+          <div className="rounded-lg border bg-card overflow-hidden">
+            <div className="px-3 py-1.5 bg-muted border-b">
+              <span className="text-sm font-semibold text-muted-foreground">
+                Won't Commit ({filesExcluded.length})
+              </span>
+            </div>
+            {filesExcluded.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-muted-foreground text-center italic">
+                All files staged
+              </div>
+            ) : (
+              <div className="divide-y max-h-40 overflow-auto">
+                {filesExcluded.map((file) => (
+                  <div
+                    key={file.path}
+                    onClick={() => setSelectedFile({ path: file.path, status: file.status })}
+                    className={`flex items-center gap-2 px-3 py-1.5 hover:bg-muted/50 cursor-pointer ${
+                      selectedFile?.path === file.path ? "bg-muted" : ""
+                    }`}
+                  >
+                    {getStatusIcon(file.status)}
+                    <span className={`text-sm truncate flex-1 ${getStatusColor(file.status)}`}>
+                      {file.path}
+                    </span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); includeFile(file.path); }}
+                      className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
+                      title="Include"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right: File Viewer */}
+        <div className="w-1/2 bg-muted/20">
+          <FileViewer
+            repoPath={repoPath}
+            filePath={selectedFile?.path || null}
+            fileStatus={selectedFile?.status || ""}
+          />
+        </div>
       </div>
     </div>
   );
