@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { DaemonProvider } from "@/lib/daemon-context";
+import { TabsProvider } from "@/lib/tabs-context";
 
 export const metadata: Metadata = {
   title: "ViboGit",
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        <DaemonProvider>{children}</DaemonProvider>
+        <DaemonProvider>
+          <TabsProvider>{children}</TabsProvider>
+        </DaemonProvider>
       </body>
     </html>
   );

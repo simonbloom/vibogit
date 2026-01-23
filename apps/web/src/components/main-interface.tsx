@@ -6,6 +6,10 @@ import { ChangesPanel } from "@/components/changes-panel";
 import { ChangesDrawer } from "@/components/changes-drawer";
 import { BranchSelector } from "@/components/branch-selector";
 import { CommitHistory } from "@/components/commit-history";
+import { AICommitButton } from "@/components/ai-commit-button";
+import { SettingsPanel } from "@/components/settings-panel";
+import { DevServerPanel } from "@/components/dev-server-panel";
+import { getSettings } from "@/lib/settings";
 import {
   ArrowUp,
   ArrowDown,
@@ -18,6 +22,7 @@ import {
   Loader2,
   History,
   FileText,
+  Settings,
 } from "lucide-react";
 import { clsx } from "clsx";
 import type { GitFile } from "@vibogit/shared";
@@ -29,6 +34,7 @@ export function MainInterface() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [commitMessage, setCommitMessage] = useState("");
   const [activeView, setActiveView] = useState<"changes" | "history">("changes");
+  const [showSettings, setShowSettings] = useState(false);
 
   const { status, branches, repoPath } = state;
   const currentBranch = branches.find((b) => b.current);
@@ -104,9 +110,11 @@ export function MainInterface() {
         case "terminal":
           await send("openTerminal", { path: repoPath });
           break;
-        case "editor":
-          await send("openEditor", { path: repoPath });
+        case "editor": {
+          const settings = getSettings();
+          await send("openEditor", { path: repoPath, editor: settings.editor });
           break;
+        }
         case "browser":
           // Try to get remote URL and open GitHub
           // For now, just log
@@ -126,13 +134,22 @@ export function MainInterface() {
         <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between mb-2">
             <h2 className="font-semibold text-text-primary truncate">{projectName}</h2>
-            <button
-              onClick={() => setRepoPath(null)}
-              className="text-text-muted hover:text-text-secondary transition-colors"
-              title="Close project"
-            >
-              <FolderOpen className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowSettings(true)}
+                className="text-text-muted hover:text-text-secondary transition-colors"
+                title="Settings"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setRepoPath(null)}
+                className="text-text-muted hover:text-text-secondary transition-colors"
+                title="Close project"
+              >
+                <FolderOpen className="w-4 h-4" />
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-2 text-sm text-text-secondary">
             <BranchSelector currentBranch={currentBranch} branches={branches} />
@@ -226,16 +243,27 @@ export function MainInterface() {
           )}
         </div>
 
+        {/* Dev Server Panel */}
+        <DevServerPanel repoPath={repoPath} />
+
         {/* Action Bar */}
         <div className="p-4 border-t border-border space-y-3">
           {/* Commit Message */}
-          <textarea
-            value={commitMessage}
-            onChange={(e) => setCommitMessage(e.target.value)}
-            placeholder="What did you change?"
-            className="w-full p-3 bg-surface border border-border rounded-lg text-text-primary placeholder-text-muted resize-none focus:outline-none focus:border-accent transition-colors"
-            rows={2}
-          />
+          <div className="relative">
+            <textarea
+              value={commitMessage}
+              onChange={(e) => setCommitMessage(e.target.value)}
+              placeholder="What did you change?"
+              className="w-full p-3 pr-16 bg-surface border border-border rounded-lg text-text-primary placeholder-text-muted resize-none focus:outline-none focus:border-accent transition-colors"
+              rows={2}
+            />
+            <div className="absolute right-2 top-2">
+              <AICommitButton
+                onMessageGenerated={setCommitMessage}
+                disabled={totalChanges === 0}
+              />
+            </div>
+          </div>
 
           {/* Action Buttons */}
           <div className="flex gap-2">
@@ -284,6 +312,9 @@ export function MainInterface() {
       <div className="flex-1 overflow-hidden">
         <ChangesDrawer file={selectedFile} repoPath={repoPath} />
       </div>
+
+      {/* Settings Panel */}
+      <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />
     </div>
   );
 }

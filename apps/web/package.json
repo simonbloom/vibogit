@@ -16,6 +16,8 @@
     "react-dom": "^19.0.0",
     "ai": "^4.0.0",
     "@ai-sdk/openai": "^1.0.0",
+    "@ai-sdk/anthropic": "^1.0.0",
+    "@ai-sdk/google": "^1.0.0",
     "convex": "^1.17.0",
     "lucide-react": "^0.460.0",
     "clsx": "^2.1.0"

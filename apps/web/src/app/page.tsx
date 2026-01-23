@@ -1,12 +1,15 @@
 "use client";
 
 import { useDaemon } from "@/lib/daemon-context";
+import { useTabs } from "@/lib/tabs-context";
 import { ConnectionStatus } from "@/components/connection-status";
 import { WelcomeScreen } from "@/components/welcome-screen";
 import { MainInterface } from "@/components/main-interface";
+import { TabBar } from "@/components/tab-bar";
 
 export default function Home() {
   const { state } = useDaemon();
+  const { tabs } = useTabs();
 
   return (
     <main className="min-h-screen bg-background">
@@ -14,6 +17,9 @@ export default function Home() {
         <h1 className="text-xl font-semibold text-text-primary">ViboGit</h1>
         <ConnectionStatus />
       </header>
+
+      {/* Tab Bar - only show when connected and has tabs */}
+      {state.connection === "connected" && tabs.length > 0 && <TabBar />}
 
       {state.connection === "disconnected" && (
         <div className="flex flex-col items-center justify-center p-8 text-center min-h-[calc(100vh-73px)]">
