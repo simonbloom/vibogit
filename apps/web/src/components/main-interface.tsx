@@ -5,13 +5,14 @@ import { useDaemon } from "@/lib/daemon-context";
 import { BranchSelector } from "@/components/branch-selector";
 import { DevServerConnection } from "@/components/dev-server-connection";
 import { CommitHistory } from "@/components/commit-history";
-import { AICommitButton } from "@/components/ai-commit-button";
 import { SettingsPanel } from "@/components/settings-panel";
 import { CreatePRDialog } from "@/components/create-pr-dialog";
 
 import { FileTree } from "@/components/file-tree";
 import { StagedChanges } from "@/components/staged-changes";
 import { PortPromptModal } from "@/components/port-prompt-modal";
+import { PromptBox } from "@/components/prompt-box";
+import type { PromptData } from "@/components/prompt-box";
 import { getSettings } from "@/lib/settings";
 import {
   ArrowUp,
@@ -36,13 +37,12 @@ export function MainInterface() {
   const [isPulling, setIsPulling] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
-  const [commitMessage, setCommitMessage] = useState("");
   const [activeView, setActiveView] = useState<"graph" | "tree" | "changes">("graph");
   const [showSettings, setShowSettings] = useState(false);
   const [showCreatePR, setShowCreatePR] = useState(false);
-  const [showQuickCommit, setShowQuickCommit] = useState(false);
   const [devServerPort, setDevServerPort] = useState<number | null>(null);
   const [showPortPrompt, setShowPortPrompt] = useState(false);
+  const [projectFiles, setProjectFiles] = useState<string[]>([]);
 
   const { status, branches, repoPath } = state;
   const currentBranch = branches.find((b) => b.current);
@@ -52,6 +52,46 @@ export function MainInterface() {
     (status?.staged.length || 0) +
     (status?.unstaged.length || 0) +
     (status?.untracked.length || 0);
+
+  // Fetch project files for PromptBox @ mentions
+  useEffect(() => {
+    interface FileNode {
+      name: string;
+      path: string;
+      type: "file" | "directory";
+      children?: FileNode[];
+    }
+
+    const flattenTree = (nodes: FileNode[]): string[] => {
+      const files: string[] = [];
+      const traverse = (node: FileNode) => {
+        if (node.type === "file") {
+          files.push(node.path);
+        }
+        if (node.children) {
+          node.children.forEach(traverse);
+        }
+      };
+      nodes.forEach(traverse);
+      return files;
+    };
+
+    const fetchProjectFiles = async () => {
+      if (!repoPath) return;
+      try {
+        const result = await send<{ tree: FileNode[] }>("listFiles", { path: repoPath });
+        setProjectFiles(flattenTree(result.tree || []));
+      } catch {
+        setProjectFiles([]);
+      }
+    };
+    fetchProjectFiles();
+  }, [repoPath, send]);
+
+  const handlePromptSubmit = (data: PromptData) => {
+    console.log("Prompt submitted:", data);
+    // TODO: Connect to AI service or other handler
+  };
 
   const handlePull = async () => {
     if (!repoPath) return;
@@ -81,19 +121,77 @@ export function MainInterface() {
   };
 
   const handleQuickCommit = async () => {
-    if (!repoPath || !commitMessage.trim()) return;
-    if ((status?.staged.length || 0) === 0) {
-      console.error("No files staged - use Changes tab to stage files first");
+    if (!repoPath || totalChanges === 0) return;
+    
+    const settings = getSettings();
+    if (!settings.aiApiKey) {
+      console.error("Please configure your AI API key in settings");
       return;
     }
+    
     setIsCommitting(true);
     try {
-      await send("commit", { repoPath, message: commitMessage });
-      setCommitMessage("");
-      setShowQuickCommit(false);
+      // 1. Stage all changed files
+      await send("stageAll", { repoPath });
+      
+      // 2. Get diffs for AI message generation
+      const allFiles = [
+        ...(status?.staged || []).map((f) => f.path),
+        ...(status?.unstaged || []).map((f) => f.path),
+        ...(status?.untracked || []).map((f) => f.path),
+      ];
+      
+      let combinedDiff = "";
+      for (const file of allFiles.slice(0, 10)) {
+        try {
+          const diffResponse = await send<{ diff: { hunks: unknown[]; isBinary: boolean } }>("diff", {
+            repoPath,
+            file,
+            staged: true,
+          });
+          if (diffResponse.diff && !diffResponse.diff.isBinary && diffResponse.diff.hunks.length > 0) {
+            combinedDiff += `\n--- ${file} ---\n`;
+            for (const hunk of diffResponse.diff.hunks as Array<{ lines: Array<{ type: string; content: string }> }>) {
+              for (const line of hunk.lines) {
+                const prefix = line.type === "add" ? "+" : line.type === "delete" ? "-" : " ";
+                combinedDiff += prefix + line.content + "\n";
+              }
+            }
+          }
+        } catch {
+          // Skip files that can't be diffed
+        }
+      }
+      
+      if (!combinedDiff) {
+        combinedDiff = `Changed files:\n${allFiles.map((f) => `- ${f}`).join("\n")}`;
+      }
+      
+      // 3. Generate AI commit message
+      const response = await fetch("/api/ai/commit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          diff: combinedDiff,
+          provider: settings.aiProvider,
+          apiKey: settings.aiApiKey,
+        }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to generate commit message");
+      }
+      
+      const { message } = await response.json();
+      
+      // 4. Commit with generated message
+      await send("commit", { repoPath, message });
+      
+      // 5. Refresh status
       await refreshStatus();
     } catch (error) {
-      console.error("Failed to commit:", error);
+      console.error("Quick commit failed:", error);
     } finally {
       setIsCommitting(false);
     }
@@ -211,15 +309,24 @@ export function MainInterface() {
           Push
         </button>
         <button
-          onClick={() => setShowQuickCommit(!showQuickCommit)}
-          disabled={(status?.staged.length || 0) === 0}
+          onClick={handleQuickCommit}
+          disabled={totalChanges === 0 || isCommitting}
           className={clsx(
             "flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md disabled:opacity-50",
-            (status?.staged.length || 0) > 0 ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+            totalChanges > 0 ? "bg-primary text-primary-foreground" : "hover:bg-muted"
           )}
         >
-          <GitBranch className="w-4 h-4" />
-          Commit {(status?.staged.length || 0) > 0 && `(${status?.staged.length})`}
+          {isCommitting ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Committing...
+            </>
+          ) : (
+            <>
+              <GitBranch className="w-4 h-4" />
+              Quick Commit {totalChanges > 0 && `(${totalChanges})`}
+            </>
+          )}
         </button>
         <button
           onClick={() => setShowCreatePR(true)}
@@ -230,31 +337,18 @@ export function MainInterface() {
         </button>
       </div>
 
-      {/* Quick Commit */}
-      {showQuickCommit && (
-        <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted/30">
-          <input
-            type="text"
-            value={commitMessage}
-            onChange={(e) => setCommitMessage(e.target.value)}
-            placeholder="Commit message..."
-            className="flex-1 px-3 py-1.5 text-sm border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-            onKeyDown={(e) => e.key === "Enter" && handleQuickCommit()}
-            autoFocus
-          />
-          <AICommitButton onMessageGenerated={setCommitMessage} disabled={totalChanges === 0} />
-          <button
-            onClick={handleQuickCommit}
-            disabled={isCommitting || !commitMessage.trim()}
-            className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md disabled:opacity-50"
-          >
-            {isCommitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Commit"}
-          </button>
-          <button onClick={() => setShowQuickCommit(false)} className="px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground">
-            Cancel
-          </button>
-        </div>
-      )}
+      {/* Prompt Box - Always visible */}
+      <div className="px-4 py-2 border-b">
+        <PromptBox
+          projectFiles={projectFiles}
+          uploadEndpoint="/api/upload"
+          imageBasePath={getSettings().imageBasePath}
+          onSubmit={handlePromptSubmit}
+          placeholder="Ask about this project... (use @ to reference files)"
+          maxLength={10000}
+          defaultExpanded
+        />
+      </div>
 
       {/* Tabs */}
       <div className="flex items-center gap-1 px-4 py-1 border-b">

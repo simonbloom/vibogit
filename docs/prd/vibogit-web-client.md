@@ -518,6 +518,7 @@ For users who want more control, these features are accessible but not prominent
 - Stash management
 - Conflict resolution (guided)
 - Git log with full details
+
 - Rebase (with guardrails)
 
 These live in a "⚙️ Advanced" dropdown, not in the main UI.

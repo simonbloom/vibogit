@@ -4,6 +4,7 @@ export type MessageType =
   | "disconnect"
   | "status"
   | "stage"
+  | "stageAll"
   | "unstage"
   | "commit"
   | "push"

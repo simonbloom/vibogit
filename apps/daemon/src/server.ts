@@ -109,6 +109,13 @@ async function handleMessage(
         break;
       }
 
+      case "stageAll": {
+        const { repoPath } = payload as { repoPath: string };
+        await gitService.stage(repoPath, ["."]);
+        response = { success: true };
+        break;
+      }
+
       case "unstage": {
         const { repoPath, files } = payload as { repoPath: string; files: string[] };
         await gitService.unstage(repoPath, files);
