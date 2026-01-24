@@ -39,7 +39,7 @@ export function MainInterface() {
   const [isPulling, setIsPulling] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
-  const [activeView, setActiveView] = useState<"graph" | "tree" | "changes">("graph");
+  const [activeView, setActiveView] = useState<"graph" | "tree" | "changes">("changes");
   const [showSettings, setShowSettings] = useState(false);
   const [showCreatePR, setShowCreatePR] = useState(false);
   const [devServerPort, setDevServerPort] = useState<number | null>(null);
@@ -96,9 +96,25 @@ export function MainInterface() {
     fetchProjectFiles();
   }, [repoPath, send]);
 
-  const handlePromptSubmit = (data: PromptData) => {
-    console.log("Prompt submitted:", data);
-    // TODO: Connect to AI service or other handler
+  const handlePromptSubmit = async (data: PromptData) => {
+    const settings = getSettings();
+    const terminalConfig = TERMINAL_OPTIONS.find((t) => t.id === settings.terminal);
+    const terminalApp = terminalConfig?.appName || "Terminal";
+
+    // Build the full text to send
+    let text = data.text;
+    if (data.files.length > 0) {
+      text += "\n\n---\nReferenced Files:\n";
+      data.files.forEach((file) => {
+        text += `- ${file}\n`;
+      });
+    }
+
+    try {
+      await send("sendToTerminal", { text: text.trim(), terminal: terminalApp });
+    } catch (error) {
+      console.error("Failed to send to terminal:", error);
+    }
   };
 
   const handlePull = async () => {
@@ -387,28 +403,10 @@ export function MainInterface() {
       {/* Tabs */}
       <div className="flex items-center gap-1 px-4 py-1 border-b">
         <Button
-          variant={activeView === "graph" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setActiveView("graph")}
-          className="gap-1.5"
-        >
-          <GitBranch className="w-3.5 h-3.5" />
-          Graph
-        </Button>
-        <Button
-          variant={activeView === "tree" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setActiveView("tree")}
-          className="gap-1.5"
-        >
-          <Folder className="w-3.5 h-3.5" />
-          Tree
-        </Button>
-        <Button
           variant={activeView === "changes" ? "default" : "outline"}
           size="sm"
           onClick={() => setActiveView("changes")}
-          className="gap-1.5"
+          className="gap-1.5 rounded-full"
         >
           <FileEdit className="w-3.5 h-3.5" />
           Changes
@@ -417,6 +415,24 @@ export function MainInterface() {
               {totalChanges}
             </span>
           )}
+        </Button>
+        <Button
+          variant={activeView === "tree" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setActiveView("tree")}
+          className="gap-1.5 rounded-full"
+        >
+          <Folder className="w-3.5 h-3.5" />
+          Tree
+        </Button>
+        <Button
+          variant={activeView === "graph" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setActiveView("graph")}
+          className="gap-1.5 rounded-full"
+        >
+          <GitBranch className="w-3.5 h-3.5" />
+          Graph
         </Button>
       </div>
 

@@ -30,7 +30,7 @@ export function StatusBar({
       : 'text-muted-foreground'
 
   return (
-    <div className="flex items-center justify-between px-3 py-2 border-t border-border text-xs">
+    <div className="flex items-center justify-between px-3 py-2 border-t-2 border-black text-xs">
       <div className="flex items-center gap-3">
         <span className={charColorClass}>
           {charCount.toLocaleString()} chars

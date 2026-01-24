@@ -4,8 +4,7 @@ export { GraphLine } from "./GraphLine";
 export { GraphTooltip } from "./GraphTooltip";
 export { GraphContextMenu } from "./GraphContextMenu";
 export { BranchFilter } from "./BranchFilter";
-export { ViewModeToggle, VIEW_MODE_CONFIG } from "./ViewModeToggle";
-export type { ViewMode } from "./ViewModeToggle";
+export { VIEW_MODE_CONFIG } from "./ViewModeToggle";
 export type { Branch } from "./BranchFilter";
 
 // Utilities

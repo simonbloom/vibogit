@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useDaemon } from "@/lib/daemon-context";
-import { getSettings, saveSettings, EDITOR_OPTIONS } from "@/lib/settings";
+import { getSettings, EDITOR_OPTIONS } from "@/lib/settings";
 import { Button } from "@/components/ui/button";
 import {
   Folder,
@@ -33,7 +33,6 @@ export function FileTree({ repoPath, selectedPath, onFileSelect }: FileTreeProps
   const [tree, setTree] = useState<FileNode[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
-  const [showHidden, setShowHidden] = useState(() => getSettings().showHiddenFiles);
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,12 +71,6 @@ export function FileTree({ repoPath, selectedPath, onFileSelect }: FileTreeProps
     });
   };
 
-  const handleToggleHidden = () => {
-    const newValue = !showHidden;
-    setShowHidden(newValue);
-    saveSettings({ showHiddenFiles: newValue });
-  };
-
   const handleOpenInEditor = async (e: React.MouseEvent, filePath: string) => {
     e.stopPropagation();
     if (!repoPath) return;
@@ -100,56 +93,18 @@ export function FileTree({ repoPath, selectedPath, onFileSelect }: FileTreeProps
     }
   };
 
-  const filterHidden = (nodes: FileNode[]): FileNode[] => {
-    if (showHidden) return nodes;
-    return nodes
-      .filter((node) => !node.name.startsWith("."))
-      .map((node) => ({
-        ...node,
-        children: node.children ? filterHidden(node.children) : undefined,
-      }));
-  };
-
-  const filteredTree = filterHidden(tree);
-
   if (isLoading) {
     return (
-      <div className="flex flex-col h-full">
-        <div className="flex items-center justify-end px-3 py-2 border-b">
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={showHidden}
-              onChange={handleToggleHidden}
-              className="rounded"
-            />
-            Show hidden
-          </label>
-        </div>
-        <div className="flex items-center justify-center flex-1">
-          <Loader2 className="w-6 h-6 animate-spin text-primary" />
-        </div>
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
       </div>
     );
   }
 
-  if (filteredTree.length === 0) {
+  if (tree.length === 0) {
     return (
-      <div className="flex flex-col h-full">
-        <div className="flex items-center justify-end px-3 py-2 border-b">
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={showHidden}
-              onChange={handleToggleHidden}
-              className="rounded"
-            />
-            Show hidden
-          </label>
-        </div>
-        <div className="flex items-center justify-center flex-1 text-muted-foreground">
-          No files to display
-        </div>
+      <div className="flex items-center justify-center h-full text-muted-foreground">
+        No files to display
       </div>
     );
   }
@@ -213,7 +168,7 @@ export function FileTree({ repoPath, selectedPath, onFileSelect }: FileTreeProps
         </div>
         {isDirectory && isExpanded && node.children && (
           <div>
-            {filterHidden(node.children).map((child) => renderNode(child, depth + 1))}
+            {node.children.map((child) => renderNode(child, depth + 1))}
           </div>
         )}
       </div>
@@ -221,21 +176,8 @@ export function FileTree({ repoPath, selectedPath, onFileSelect }: FileTreeProps
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-end px-3 py-2 border-b">
-        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showHidden}
-            onChange={handleToggleHidden}
-            className="rounded"
-          />
-          Show hidden
-        </label>
-      </div>
-      <div className="flex-1 overflow-auto py-2">
-        {filteredTree.map((node) => renderNode(node))}
-      </div>
+    <div className="flex-1 overflow-auto py-2">
+      {tree.map((node) => renderNode(node))}
     </div>
   );
 }

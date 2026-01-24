@@ -452,6 +452,44 @@
     outline: none;
   }
 
+  /* Remove glow from borderless textareas */
+  .matrix textarea.border-0,
+  .matrix textarea.border-0:focus {
+    box-shadow: none !important;
+  }
+
+  /* Bright text for Matrix textareas */
+  .matrix textarea {
+    color: hsl(136 100% 50%) !important;
+  }
+
+  .matrix textarea::placeholder {
+    color: hsl(136 100% 30%) !important;
+  }
+
+  /* Matrix theme for code blocks (shiki) */
+  .matrix pre.shiki,
+  .matrix pre[class*="shiki"] {
+    background-color: hsl(136 100% 2%) !important;
+    border: 1px solid hsl(136 100% 50% / 0.3);
+    box-shadow: 0 0 10px hsl(136 100% 50% / 0.2);
+  }
+
+  .matrix pre.shiki code,
+  .matrix pre[class*="shiki"] code {
+    color: hsl(136 100% 50%) !important;
+  }
+
+  .matrix pre.shiki .line,
+  .matrix pre[class*="shiki"] .line {
+    color: hsl(136 100% 50%) !important;
+  }
+
+  .matrix pre.shiki span,
+  .matrix pre[class*="shiki"] span {
+    color: hsl(136 100% 50%) !important;
+  }
+
   .matrix .border-black,
   .matrix .border-2 {
     border-color: hsl(var(--border)) !important;

@@ -290,6 +290,13 @@ async function handleMessage(
         break;
       }
 
+      case "sendToTerminal": {
+        const { text, terminal } = payload as { text: string; terminal?: string };
+        await systemService.sendToTerminal(text, terminal);
+        response = { success: true };
+        break;
+      }
+
       case "openEditor": {
         const { path, editor, appName } = payload as { path: string; editor?: string; appName?: string };
         await systemService.openInEditor(path, editor, appName);

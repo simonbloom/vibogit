@@ -10,10 +10,8 @@ import {
   GraphTooltip, 
   GraphContextMenu, 
   BranchFilter,
-  ViewModeToggle,
   VIEW_MODE_CONFIG,
   getBranchColorBase,
-  type ViewMode,
   type Branch,
 } from "./graph";
 
@@ -129,7 +127,6 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({ commit: null, x: 0, y: 0 });
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("expanded");
   const [visibleBranches, setVisibleBranches] = useState<Set<string>>(new Set());
   const [branchesInitialized, setBranchesInitialized] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -310,13 +307,13 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
     );
   }
 
-  const config = VIEW_MODE_CONFIG[viewMode];
+  const config = VIEW_MODE_CONFIG.expanded;
   const graphWidth = (maxColumn + 1) * config.colWidth + 24;
 
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-4 px-3 py-2 border-b border-border bg-muted/20">
+      <div className="flex items-center gap-4 px-3 py-2 border-b border-border bg-muted/20">
         <BranchFilter
           branches={branches}
           visibleBranches={visibleBranches}
@@ -324,7 +321,6 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
           onShowAll={handleShowAllBranches}
           onHideAll={handleHideAllBranches}
         />
-        <ViewModeToggle mode={viewMode} onModeChange={setViewMode} />
       </div>
 
       {/* Graph */}
@@ -403,6 +399,7 @@ function CommitRow({
   onContextMenu,
   viewConfig,
 }: CommitRowProps) {
+  const [copied, setCopied] = useState(false);
   const { commit, nodeCol, columnsBefore, columnsAfter, mergeInCols, branchOutCols } = row;
   const formattedDate = formatCommitDate(commit.date);
   const isHead = commit.refs?.some((r) => r.includes("HEAD"));
@@ -554,7 +551,17 @@ function CommitRow({
                 : commit.message}
             </p>
             <div className="flex items-center gap-2 mt-0.5 text-muted-foreground" style={{ fontSize: `${fontSize - 2}px` }}>
-              <span className="font-mono" style={{ color: nodeColor }}>{commit.hashShort}</span>
+              <span 
+                className={`font-mono cursor-pointer transition-all ${copied ? 'opacity-70' : 'hover:underline'}`}
+                style={{ color: nodeColor }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigator.clipboard.writeText(commit.hashShort);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                }}
+                title="Click to copy"
+              >{copied ? '✓ Copied!' : commit.hashShort}</span>
               {showAuthor && <span>{commit.author}</span>}
               <span>{formattedDate}</span>
             </div>
@@ -568,12 +575,12 @@ function CommitRow({
                 return (
                   <span
                     key={i}
-                    className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                    className={`text-xs px-2 py-0.5 rounded-md font-medium ${
                       isTag
-                        ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-700"
+                        ? "bg-muted text-muted-foreground border border-border"
                         : isMain
-                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 border border-blue-200 dark:border-blue-700"
-                        : "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 border border-green-200 dark:border-green-700"
+                        ? "bg-primary/10 text-primary border border-primary/20"
+                        : "bg-muted text-foreground border border-border"
                     }`}
                   >
                     {isTag ? "🏷️ " : ""}{label}

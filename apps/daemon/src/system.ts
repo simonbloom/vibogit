@@ -50,4 +50,45 @@ export class SystemService {
   async openInBrowser(url: string): Promise<void> {
     await $`open ${url}`;
   }
+
+  async sendToTerminal(text: string, terminal: string = "Terminal"): Promise<void> {
+    // Escape text for AppleScript
+    const escapedText = text.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    
+    let script: string;
+    
+    if (terminal === "iTerm" || terminal === "iTerm2") {
+      // iTerm2 has native write text command
+      script = `
+        tell application "iTerm"
+          activate
+          tell current session of current window
+            write text "${escapedText}" without newline
+          end tell
+        end tell
+      `;
+    } else {
+      // Terminal.app, Ghostty, and others - use clipboard + paste
+      const pbcopy = Bun.spawn(["pbcopy"], { stdin: "pipe" });
+      pbcopy.stdin.write(text);
+      pbcopy.stdin.end();
+      await pbcopy.exited;
+      
+      const appName = terminal === "Ghostty" ? "Ghostty" : terminal;
+      
+      script = `
+        tell application "${appName}"
+          activate
+        end tell
+        delay 0.3
+        tell application "System Events"
+          tell process "${appName}"
+            keystroke "v" using command down
+          end tell
+        end tell
+      `;
+    }
+    
+    await $`osascript -e ${script}`;
+  }
 }

@@ -56,7 +56,7 @@ export const VIEW_MODE_CONFIG = {
     rowHeight: 44,
     nodeRadius: 5,
     headNodeRadius: 6,
-    fontSize: 12,
+    fontSize: 14,
     showAuthor: true,
     messageMaxLength: 60,
     colWidth: 20,
