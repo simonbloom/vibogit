@@ -330,7 +330,7 @@ export function MainInterface() {
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b">
+      <div className="flex items-center gap-2 px-4 py-3 border-b">
         <Button
           variant="outline"
           size="sm"
@@ -401,7 +401,7 @@ export function MainInterface() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 px-4 py-1 border-b">
+      <div className="flex items-center gap-2 px-4 py-3 border-b">
         <Button
           variant={activeView === "changes" ? "default" : "outline"}
           size="sm"
