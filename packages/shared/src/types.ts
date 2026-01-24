@@ -23,6 +23,7 @@ export type MessageType =
   | "initGit"
   | "openFinder"
   | "openTerminal"
+  | "sendToTerminal"
   | "openEditor"
   | "openBrowser"
   | "devServerDetect"

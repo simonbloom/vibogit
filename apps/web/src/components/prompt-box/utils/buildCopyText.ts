@@ -23,12 +23,10 @@ export function buildCopyText(state: PromptBoxState, options: BuildCopyTextOptio
     output = output.replace(reference, replacement)
   })
 
-  if (state.files.length > 0) {
-    output += '\n\n---\nReferenced Files:\n'
-    state.files.forEach((file) => {
-      output += `- ${file.path}\n`
-    })
-  }
+  // Replace [filename] references with full paths
+  state.files.forEach((file) => {
+    output = output.replace(file.referenceText, file.path)
+  })
 
   return output.trim()
 }

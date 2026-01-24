@@ -17,13 +17,15 @@ export interface PromptImage {
 /** Single file reference in the prompt */
 export interface PromptFile {
   path: string
+  filename: string // just the filename (e.g., "main-interface.tsx")
+  referenceText: string // the text inserted in prompt (e.g., "[main-interface.tsx]")
   addedAt: Date
 }
 
 /** Data returned on submit */
 export interface PromptData {
   text: string
-  files: string[]
+  files: Array<{ path: string; filename: string; referenceText: string }>
   images: Array<{ id: string; url: string; filename: string; filePath?: string; referenceNumber: number }>
 }
 

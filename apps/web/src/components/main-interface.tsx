@@ -119,12 +119,10 @@ export function MainInterface() {
       text = text.replace(reference, replacement);
     });
 
-    if (data.files.length > 0) {
-      text += "\n\n---\nReferenced Files:\n";
-      data.files.forEach((file) => {
-        text += `- ${file}\n`;
-      });
-    }
+    // Replace [filename] references with full paths
+    data.files.forEach((file) => {
+      text = text.replace(file.referenceText, file.path);
+    });
 
     try {
       await send("sendToTerminal", { text: text.trim(), terminal: terminalApp });

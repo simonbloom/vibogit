@@ -81,14 +81,27 @@ export function PromptBox({
         toast.error('File already added')
         return
       }
-      addFile(path)
+
+      // Find the @mention to replace
+      const cursorPos = textareaRef.current?.selectionStart ?? state.text.length
+      const textBeforeCursor = state.text.slice(0, cursorPos)
+      const atMatch = textBeforeCursor.match(/@[\w.-]*$/)
+      
+      let replaceStart = cursorPos
+      let replaceEnd = cursorPos
+      if (atMatch) {
+        replaceStart = cursorPos - atMatch[0].length
+        replaceEnd = cursorPos
+      }
+
+      addFile(path, replaceStart, replaceEnd)
       addToRecent(path)
       onFileAccess?.(path)
 
       // Focus back on textarea
       textareaRef.current?.focus()
     },
-    [state.files, maxFiles, addFile, addToRecent, onFileAccess]
+    [state.files, state.text, maxFiles, addFile, addToRecent, onFileAccess]
   )
 
   const autocomplete = useAutocomplete({

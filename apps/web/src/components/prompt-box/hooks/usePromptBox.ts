@@ -4,7 +4,7 @@ import type { PromptBoxState, PromptFile, PromptImage, PromptData } from '../Pro
 type Action =
   | { type: 'SET_TEXT'; payload: string }
   | { type: 'SET_CURSOR'; payload: number }
-  | { type: 'ADD_FILE'; payload: PromptFile }
+  | { type: 'ADD_FILE'; payload: { file: PromptFile; replaceStart: number; replaceEnd: number } }
   | { type: 'REMOVE_FILE'; payload: string }
   | { type: 'ADD_IMAGE'; payload: { image: PromptImage; cursorPosition: number } }
   | { type: 'UPDATE_IMAGE'; payload: { id: string; updates: Partial<PromptImage> } }
@@ -42,10 +42,31 @@ function reducer(state: PromptBoxState, action: Action): PromptBoxState {
       return { ...state, text: action.payload }
     case 'SET_CURSOR':
       return { ...state, cursorPosition: action.payload }
-    case 'ADD_FILE':
-      return { ...state, files: [...state.files, action.payload] }
-    case 'REMOVE_FILE':
-      return { ...state, files: state.files.filter((f) => f.path !== action.payload) }
+    case 'ADD_FILE': {
+      const { file, replaceStart, replaceEnd } = action.payload
+      // Replace @search with [filename]
+      const newText =
+        state.text.slice(0, replaceStart) + file.referenceText + state.text.slice(replaceEnd)
+      const newCursor = replaceStart + file.referenceText.length
+      return {
+        ...state,
+        text: newText,
+        cursorPosition: newCursor,
+        files: [...state.files, file],
+      }
+    }
+    case 'REMOVE_FILE': {
+      const fileToRemove = state.files.find((f) => f.path === action.payload)
+      let newText = state.text
+      if (fileToRemove) {
+        newText = state.text.replace(fileToRemove.referenceText, '')
+      }
+      return {
+        ...state,
+        text: newText,
+        files: state.files.filter((f) => f.path !== action.payload),
+      }
+    }
     case 'ADD_IMAGE': {
       const { image, cursorPosition } = action.payload
       const reference = `[image ${image.referenceNumber}]`
@@ -145,8 +166,16 @@ export function usePromptBox({ defaultValue = '', defaultExpanded = false }: Use
     dispatch({ type: 'SET_CURSOR', payload: position })
   }, [])
 
-  const addFile = useCallback((path: string) => {
-    dispatch({ type: 'ADD_FILE', payload: { path, addedAt: new Date() } })
+  const addFile = useCallback((path: string, replaceStart: number, replaceEnd: number) => {
+    const filename = path.split('/').pop() || path
+    const referenceText = `[${filename}]`
+    const file: PromptFile = {
+      path,
+      filename,
+      referenceText,
+      addedAt: new Date(),
+    }
+    dispatch({ type: 'ADD_FILE', payload: { file, replaceStart, replaceEnd } })
   }, [])
 
   const removeFile = useCallback((path: string) => {
@@ -188,7 +217,11 @@ export function usePromptBox({ defaultValue = '', defaultExpanded = false }: Use
   const getPromptData = useCallback((): PromptData => {
     return {
       text: state.text,
-      files: state.files.map((f) => f.path),
+      files: state.files.map((f) => ({
+        path: f.path,
+        filename: f.filename,
+        referenceText: f.referenceText,
+      })),
       images: state.images
         .filter((img) => img.status === 'uploaded' && img.url)
         .map((img) => ({
