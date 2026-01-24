@@ -5,6 +5,7 @@ export interface Settings {
   aiApiKey: string;
   editor: string;
   theme: "dark" | "light";
+  imageBasePath: string;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -12,6 +13,7 @@ const DEFAULT_SETTINGS: Settings = {
   aiApiKey: "",
   editor: "code",
   theme: "dark",
+  imageBasePath: "",
 };
 
 const SETTINGS_KEY = "vibogit-settings";

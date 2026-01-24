@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { BranchSelector } from "@/components/branch-selector";
 import { DevServerConnection } from "@/components/dev-server-connection";
@@ -8,6 +8,7 @@ import { CommitHistory } from "@/components/commit-history";
 import { AICommitButton } from "@/components/ai-commit-button";
 import { SettingsPanel } from "@/components/settings-panel";
 import { CreatePRDialog } from "@/components/create-pr-dialog";
+
 import { FileTree } from "@/components/file-tree";
 import { StagedChanges } from "@/components/staged-changes";
 import { PortPromptModal } from "@/components/port-prompt-modal";

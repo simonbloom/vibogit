@@ -2,8 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useDaemon } from "@/lib/daemon-context";
+import { getSettings } from "@/lib/settings";
 import { AICommitButton } from "@/components/ai-commit-button";
 import { FileViewer } from "@/components/file-viewer";
+import { PromptBox } from "@/components/prompt-box";
+import type { PromptData } from "@/components/prompt-box";
 import { Check, FileText, FilePlus, FileX, ArrowUp, ArrowDown, Loader2 } from "lucide-react";
 
 interface StagedChangesProps {
@@ -17,6 +20,47 @@ export function StagedChanges({ repoPath }: StagedChangesProps) {
   const [commitMessage, setCommitMessage] = useState("");
   const [isCommitting, setIsCommitting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<{ path: string; status: string } | null>(null);
+  const [projectFiles, setProjectFiles] = useState<string[]>([]);
+
+  // Fetch project files for PromptBox @ mentions
+  useEffect(() => {
+    interface FileNode {
+      name: string;
+      path: string;
+      type: "file" | "directory";
+      children?: FileNode[];
+    }
+
+    const flattenTree = (nodes: FileNode[]): string[] => {
+      const files: string[] = [];
+      const traverse = (node: FileNode) => {
+        if (node.type === "file") {
+          files.push(node.path);
+        }
+        if (node.children) {
+          node.children.forEach(traverse);
+        }
+      };
+      nodes.forEach(traverse);
+      return files;
+    };
+
+    const fetchProjectFiles = async () => {
+      if (!repoPath) return;
+      try {
+        const result = await send<{ tree: FileNode[] }>("listFiles", { path: repoPath });
+        setProjectFiles(flattenTree(result.tree || []));
+      } catch {
+        setProjectFiles([]);
+      }
+    };
+    fetchProjectFiles();
+  }, [repoPath, send]);
+
+  const handlePromptSubmit = (data: PromptData) => {
+    console.log("Prompt submitted:", data);
+    // TODO: Connect to AI service or other handler
+  };
 
   const allFiles = [
     ...(status?.staged || []),
@@ -121,6 +165,19 @@ export function StagedChanges({ repoPath }: StagedChangesProps) {
             {isCommitting ? <Loader2 className="w-4 h-4 animate-spin" /> : `Commit (${filesToCommit.length})`}
           </button>
         </div>
+      </div>
+
+      {/* Prompt Box */}
+      <div className="px-4 py-2 border-b">
+        <PromptBox
+          projectFiles={projectFiles}
+          uploadEndpoint="/api/upload"
+          imageBasePath={getSettings().imageBasePath}
+          onSubmit={handlePromptSubmit}
+          placeholder="Ask about this project... (use @ to reference files)"
+          maxLength={10000}
+          defaultExpanded
+        />
       </div>
 
       {/* Main content */}

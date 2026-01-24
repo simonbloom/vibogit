@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import { Toaster } from "sonner";
 import "./globals.css";
 import { DaemonProvider } from "@/lib/daemon-context";
 import { TabsProvider } from "@/lib/tabs-context";
@@ -31,6 +32,7 @@ export default function RootLayout({
           <TabsProvider>{children}</TabsProvider>
         </DaemonProvider>
         <AgentationWrapper />
+        <Toaster position="bottom-right" theme="dark" />
       </body>
     </html>
   );

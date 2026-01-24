@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { getSettings, saveSettings, type Settings } from "@/lib/settings";
 import { AI_PROVIDERS } from "@/lib/ai-service";
+import { PathSelector } from "@/components/path-selector";
 import { X, Eye, EyeOff, ExternalLink } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -31,8 +32,8 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
   const selectedProvider = AI_PROVIDERS.find((p) => p.id === settings.aiProvider);
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-surface border border-border rounded-xl w-full max-w-md shadow-xl">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white border border-neutral-200 rounded-xl w-full max-w-lg shadow-xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-lg font-semibold text-text-primary">Settings</h2>
           <button
@@ -43,7 +44,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
           </button>
         </div>
 
-        <div className="p-4 space-y-6">
+        <div className="p-4 space-y-6 overflow-y-auto flex-1">
           {/* AI Provider */}
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-2">
@@ -115,6 +116,17 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
             <p className="mt-1 text-xs text-text-muted">
               Command to open your editor (e.g., code, cursor, zed)
             </p>
+          </div>
+
+          {/* Image Base Path */}
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-3">
+              Screenshot Folder Path
+            </label>
+            <PathSelector
+              value={settings.imageBasePath}
+              onChange={(path) => handleSave({ imageBasePath: path })}
+            />
           </div>
         </div>
 
