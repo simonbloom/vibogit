@@ -24,7 +24,7 @@ export interface PromptFile {
 export interface PromptData {
   text: string
   files: string[]
-  images: Array<{ id: string; url: string; filename: string }>
+  images: Array<{ id: string; url: string; filename: string; filePath?: string; referenceNumber: number }>
 }
 
 /** Autocomplete state */

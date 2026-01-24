@@ -195,6 +195,8 @@ export function usePromptBox({ defaultValue = '', defaultExpanded = false }: Use
           id: img.id,
           url: img.url!,
           filename: img.filename,
+          filePath: img.filePath,
+          referenceNumber: img.referenceNumber,
         })),
     }
   }, [state.text, state.files, state.images])

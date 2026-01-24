@@ -103,6 +103,22 @@ export function MainInterface() {
 
     // Build the full text to send
     let text = data.text;
+
+    // Replace [image N] references with file paths
+    data.images.forEach((img) => {
+      const reference = `[image ${img.referenceNumber}]`;
+      let replacement = img.filename;
+      if (img.filePath) {
+        replacement = img.filePath;
+      } else if (settings.imageBasePath) {
+        const basePath = settings.imageBasePath.endsWith("/")
+          ? settings.imageBasePath
+          : settings.imageBasePath + "/";
+        replacement = basePath + img.filename;
+      }
+      text = text.replace(reference, replacement);
+    });
+
     if (data.files.length > 0) {
       text += "\n\n---\nReferenced Files:\n";
       data.files.forEach((file) => {
