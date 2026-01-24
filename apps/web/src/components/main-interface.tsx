@@ -13,7 +13,7 @@ import { StagedChanges } from "@/components/staged-changes";
 import { PortPromptModal } from "@/components/port-prompt-modal";
 import { PromptBox } from "@/components/prompt-box";
 import type { PromptData } from "@/components/prompt-box";
-import { getSettings } from "@/lib/settings";
+import { getSettings, TERMINAL_OPTIONS, EDITOR_OPTIONS } from "@/lib/settings";
 import {
   ArrowUp,
   ArrowDown,
@@ -204,12 +204,35 @@ export function MainInterface() {
         case "finder":
           await send("openFinder", { path: repoPath });
           break;
-        case "terminal":
-          await send("openTerminal", { path: repoPath });
+        case "terminal": {
+          const settings = getSettings();
+          const terminalConfig = TERMINAL_OPTIONS.find((t) => t.id === settings.terminal);
+          const terminalApp = terminalConfig?.appName || "Terminal";
+          await send("openTerminal", { path: repoPath, terminal: terminalApp });
           break;
+        }
         case "editor": {
           const settings = getSettings();
-          await send("openEditor", { path: repoPath, editor: settings.editor });
+          const editorConfig = EDITOR_OPTIONS.find((e) => e.id === settings.editor);
+          
+          if (settings.editor === "custom") {
+            const command = settings.customEditorCommand;
+            if (!command) {
+              console.error("No custom editor command configured");
+              return;
+            }
+            try {
+              await send("openEditor", { path: repoPath, editor: command });
+            } catch (error) {
+              console.error("Failed to open editor:", error);
+            }
+          } else if (editorConfig?.appName) {
+            try {
+              await send("openEditor", { path: repoPath, appName: editorConfig.appName });
+            } catch (error) {
+              console.error("Failed to open editor:", error);
+            }
+          }
           break;
         }
         case "browser":

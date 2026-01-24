@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getSettings, saveSettings, type Settings } from "@/lib/settings";
+import { getSettings, saveSettings, type Settings, TERMINAL_OPTIONS, EDITOR_OPTIONS } from "@/lib/settings";
 import { AI_PROVIDERS } from "@/lib/ai-service";
 import { PathSelector } from "@/components/path-selector";
 import { X, Eye, EyeOff, ExternalLink } from "lucide-react";
@@ -104,18 +104,56 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
           {/* Editor */}
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-2">
-              Editor Command
+              Editor
             </label>
-            <input
-              type="text"
+            <select
               value={settings.editor}
-              onChange={(e) => handleSave({ editor: e.target.value })}
-              placeholder="code"
-              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent font-mono text-sm"
-            />
-            <p className="mt-1 text-xs text-text-muted">
-              Command to open your editor (e.g., code, cursor, zed)
-            </p>
+              onChange={(e) => handleSave({ editor: e.target.value as Settings["editor"] })}
+              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:border-accent"
+            >
+              {EDITOR_OPTIONS.map((editor) => (
+                <option key={editor.id} value={editor.id}>
+                  {editor.displayName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Custom Editor Command (only shown when "custom" is selected) */}
+          {settings.editor === "custom" && (
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                Custom Editor Command
+              </label>
+              <input
+                type="text"
+                value={settings.customEditorCommand || ""}
+                onChange={(e) => handleSave({ customEditorCommand: e.target.value })}
+                placeholder="/path/to/editor or command"
+                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent font-mono text-sm"
+              />
+              <p className="mt-1 text-xs text-text-muted">
+                Enter the CLI command to launch your editor
+              </p>
+            </div>
+          )}
+
+          {/* Terminal */}
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-2">
+              Terminal App
+            </label>
+            <select
+              value={settings.terminal}
+              onChange={(e) => handleSave({ terminal: e.target.value as Settings["terminal"] })}
+              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:border-accent"
+            >
+              {TERMINAL_OPTIONS.map((terminal) => (
+                <option key={terminal.id} value={terminal.id}>
+                  {terminal.displayName}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Image Base Path */}

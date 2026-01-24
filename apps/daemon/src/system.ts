@@ -33,12 +33,18 @@ export class SystemService {
     await $`open ${path}`;
   }
 
-  async openInTerminal(path: string): Promise<void> {
-    await $`open -a Terminal ${path}`;
+  async openInTerminal(path: string, terminal: string = "Terminal"): Promise<void> {
+    await $`open -a ${terminal} ${path}`;
   }
 
-  async openInEditor(path: string, editor: string = "code"): Promise<void> {
-    await $`${editor} ${path}`;
+  async openInEditor(path: string, editor?: string, appName?: string): Promise<void> {
+    if (appName) {
+      await $`open -a ${appName} ${path}`;
+    } else if (editor) {
+      await $`${editor} ${path}`;
+    } else {
+      await $`open -a Cursor ${path}`;
+    }
   }
 
   async openInBrowser(url: string): Promise<void> {

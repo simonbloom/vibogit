@@ -285,15 +285,15 @@ async function handleMessage(
       }
 
       case "openTerminal": {
-        const { path } = payload as { path: string };
-        await systemService.openInTerminal(path);
+        const { path, terminal } = payload as { path: string; terminal?: string };
+        await systemService.openInTerminal(path, terminal);
         response = { success: true };
         break;
       }
 
       case "openEditor": {
-        const { path, editor } = payload as { path: string; editor?: string };
-        await systemService.openInEditor(path, editor);
+        const { path, editor, appName } = payload as { path: string; editor?: string; appName?: string };
+        await systemService.openInEditor(path, editor, appName);
         response = { success: true };
         break;
       }

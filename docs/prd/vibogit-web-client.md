@@ -508,6 +508,7 @@ They never have to think about git. They just code.
 
 ---
 
+
 ## Appendix: Advanced Features (Hidden by Default)
 
 For users who want more control, these features are accessible but not prominent:
