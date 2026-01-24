@@ -290,7 +290,7 @@ export function MainInterface() {
           className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted disabled:opacity-50"
         >
           {isPulling ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowDown className="w-4 h-4" />}
-          Pull
+          Pull {(status?.behind || 0) > 0 && `(${status?.behind})`}
         </button>
         <button
           onClick={handlePull}
@@ -306,7 +306,7 @@ export function MainInterface() {
           className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted disabled:opacity-50"
         >
           {isPushing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4" />}
-          Push
+          Push {(status?.ahead || 0) > 0 && `(${status?.ahead})`}
         </button>
         <button
           onClick={handleQuickCommit}
