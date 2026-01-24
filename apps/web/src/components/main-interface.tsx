@@ -9,6 +9,7 @@ import { SettingsPanel } from "@/components/settings-panel";
 import { CreatePRDialog } from "@/components/create-pr-dialog";
 
 import { FileTree } from "@/components/file-tree";
+import { CodeViewer } from "@/components/code-viewer";
 import { StagedChanges } from "@/components/staged-changes";
 import { PortPromptModal } from "@/components/port-prompt-modal";
 import { PromptBox } from "@/components/prompt-box";
@@ -43,6 +44,7 @@ export function MainInterface() {
   const [devServerPort, setDevServerPort] = useState<number | null>(null);
   const [showPortPrompt, setShowPortPrompt] = useState(false);
   const [projectFiles, setProjectFiles] = useState<string[]>([]);
+  const [selectedFile, setSelectedFile] = useState<{ path: string; name: string } | null>(null);
 
   const { status, branches, repoPath } = state;
   const currentBranch = branches.find((b) => b.current);
@@ -52,6 +54,11 @@ export function MainInterface() {
     (status?.staged.length || 0) +
     (status?.unstaged.length || 0) +
     (status?.untracked.length || 0);
+
+  // Clear selected file when repo changes
+  useEffect(() => {
+    setSelectedFile(null);
+  }, [repoPath]);
 
   // Fetch project files for PromptBox @ mentions
   useEffect(() => {
@@ -413,10 +420,35 @@ export function MainInterface() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto">
-        {activeView === "graph" && <CommitHistory repoPath={repoPath} />}
-        {activeView === "tree" && <FileTree repoPath={repoPath} />}
-        {activeView === "changes" && <StagedChanges repoPath={repoPath} />}
+      <div className="flex-1 overflow-hidden">
+        {activeView === "graph" && (
+          <div className="h-full overflow-auto">
+            <CommitHistory repoPath={repoPath} />
+          </div>
+        )}
+        {activeView === "tree" && (
+          <div className="flex h-full">
+            <div className="w-2/5 border-r overflow-hidden">
+              <FileTree
+                repoPath={repoPath}
+                selectedPath={selectedFile?.path}
+                onFileSelect={setSelectedFile}
+              />
+            </div>
+            <div className="w-3/5 overflow-hidden">
+              <CodeViewer
+                filePath={selectedFile?.path ?? null}
+                fileName={selectedFile?.name ?? ""}
+                repoPath={repoPath}
+              />
+            </div>
+          </div>
+        )}
+        {activeView === "changes" && (
+          <div className="h-full overflow-auto">
+            <StagedChanges repoPath={repoPath} />
+          </div>
+        )}
       </div>
 
       <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />

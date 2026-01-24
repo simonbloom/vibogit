@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useDaemon } from "@/lib/daemon-context";
+import { getSettings, saveSettings, EDITOR_OPTIONS } from "@/lib/settings";
 import {
   Folder,
   FolderOpen,
@@ -9,6 +10,7 @@ import {
   ChevronRight,
   ChevronDown,
   Loader2,
+  Code,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -21,13 +23,17 @@ interface FileNode {
 
 interface FileTreeProps {
   repoPath: string | null;
+  selectedPath?: string;
+  onFileSelect?: (file: { path: string; name: string }) => void;
 }
 
-export function FileTree({ repoPath }: FileTreeProps) {
+export function FileTree({ repoPath, selectedPath, onFileSelect }: FileTreeProps) {
   const { send } = useDaemon();
   const [tree, setTree] = useState<FileNode[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const [showHidden, setShowHidden] = useState(() => getSettings().showHiddenFiles);
+  const [hoveredPath, setHoveredPath] = useState<string | null>(null);
 
   useEffect(() => {
     if (!repoPath) {
@@ -65,18 +71,84 @@ export function FileTree({ repoPath }: FileTreeProps) {
     });
   };
 
+  const handleToggleHidden = () => {
+    const newValue = !showHidden;
+    setShowHidden(newValue);
+    saveSettings({ showHiddenFiles: newValue });
+  };
+
+  const handleOpenInEditor = async (e: React.MouseEvent, filePath: string) => {
+    e.stopPropagation();
+    if (!repoPath) return;
+
+    const settings = getSettings();
+    const editorConfig = EDITOR_OPTIONS.find((ed) => ed.id === settings.editor);
+    const fullPath = `${repoPath}/${filePath}`;
+
+    try {
+      if (settings.editor === "custom") {
+        const command = settings.customEditorCommand;
+        if (command) {
+          await send("openEditor", { path: fullPath, editor: command });
+        }
+      } else if (editorConfig?.appName) {
+        await send("openEditor", { path: fullPath, appName: editorConfig.appName });
+      }
+    } catch (error) {
+      console.error("Failed to open in editor:", error);
+    }
+  };
+
+  const filterHidden = (nodes: FileNode[]): FileNode[] => {
+    if (showHidden) return nodes;
+    return nodes
+      .filter((node) => !node.name.startsWith("."))
+      .map((node) => ({
+        ...node,
+        children: node.children ? filterHidden(node.children) : undefined,
+      }));
+  };
+
+  const filteredTree = filterHidden(tree);
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-end px-3 py-2 border-b">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={showHidden}
+              onChange={handleToggleHidden}
+              className="rounded"
+            />
+            Show hidden
+          </label>
+        </div>
+        <div className="flex items-center justify-center flex-1">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+        </div>
       </div>
     );
   }
 
-  if (tree.length === 0) {
+  if (filteredTree.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 text-muted-foreground">
-        No files to display
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-end px-3 py-2 border-b">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={showHidden}
+              onChange={handleToggleHidden}
+              className="rounded"
+            />
+            Show hidden
+          </label>
+        </div>
+        <div className="flex items-center justify-center flex-1 text-muted-foreground">
+          No files to display
+        </div>
       </div>
     );
   }
@@ -84,16 +156,27 @@ export function FileTree({ repoPath }: FileTreeProps) {
   const renderNode = (node: FileNode, depth: number = 0) => {
     const isExpanded = expandedPaths.has(node.path);
     const isDirectory = node.type === "directory";
+    const isSelected = selectedPath === node.path;
+    const isHovered = hoveredPath === node.path;
 
     return (
       <div key={node.path}>
-        <button
-          onClick={() => isDirectory && toggleExpanded(node.path)}
+        <div
           className={clsx(
-            "w-full flex items-center gap-2 px-3 py-1.5 hover:bg-muted/50 transition-colors text-left",
-            isDirectory ? "cursor-pointer" : "cursor-default"
+            "group w-full flex items-center gap-2 px-3 py-1.5 hover:bg-muted/50 transition-colors text-left relative",
+            isDirectory ? "cursor-pointer" : "cursor-pointer",
+            isSelected && !isDirectory && "bg-muted"
           )}
           style={{ paddingLeft: `${depth * 16 + 12}px` }}
+          onClick={() => {
+            if (isDirectory) {
+              toggleExpanded(node.path);
+            } else if (onFileSelect) {
+              onFileSelect({ path: node.path, name: node.name });
+            }
+          }}
+          onMouseEnter={() => !isDirectory && setHoveredPath(node.path)}
+          onMouseLeave={() => setHoveredPath(null)}
         >
           {isDirectory ? (
             <>
@@ -114,11 +197,20 @@ export function FileTree({ repoPath }: FileTreeProps) {
               <FileText className="w-4 h-4 text-muted-foreground" />
             </>
           )}
-          <span className="text-sm truncate">{node.name}</span>
-        </button>
+          <span className="text-sm truncate flex-1">{node.name}</span>
+          {!isDirectory && isHovered && (
+            <button
+              onClick={(e) => handleOpenInEditor(e, node.path)}
+              className="p-1 text-muted-foreground hover:text-foreground rounded hover:bg-muted"
+              title="Open in editor"
+            >
+              <Code className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
         {isDirectory && isExpanded && node.children && (
           <div>
-            {node.children.map((child) => renderNode(child, depth + 1))}
+            {filterHidden(node.children).map((child) => renderNode(child, depth + 1))}
           </div>
         )}
       </div>
@@ -126,8 +218,21 @@ export function FileTree({ repoPath }: FileTreeProps) {
   };
 
   return (
-    <div className="py-2">
-      {tree.map((node) => renderNode(node))}
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-end px-3 py-2 border-b">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showHidden}
+            onChange={handleToggleHidden}
+            className="rounded"
+          />
+          Show hidden
+        </label>
+      </div>
+      <div className="flex-1 overflow-auto py-2">
+        {filteredTree.map((node) => renderNode(node))}
+      </div>
     </div>
   );
 }

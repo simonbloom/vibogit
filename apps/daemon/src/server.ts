@@ -26,7 +26,6 @@ async function listFilesRecursive(basePath: string, currentPath: string, maxDept
     const entries = readdirSync(currentPath, { withFileTypes: true });
     
     for (const entry of entries) {
-      if (entry.name.startsWith(".") && entry.name !== ".env") continue;
       if (ignoreDirs.has(entry.name)) continue;
       
       const fullPath = join(currentPath, entry.name);

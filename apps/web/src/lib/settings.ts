@@ -41,6 +41,7 @@ export interface Settings {
   terminal: TerminalOption;
   theme: "dark" | "light";
   imageBasePath: string;
+  showHiddenFiles: boolean;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -50,6 +51,7 @@ const DEFAULT_SETTINGS: Settings = {
   terminal: "Terminal",
   theme: "dark",
   imageBasePath: "",
+  showHiddenFiles: false,
 };
 
 const SETTINGS_KEY = "vibogit-settings";
