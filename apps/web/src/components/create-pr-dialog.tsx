@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { getSettings } from "@/lib/settings";
+import { Button } from "@/components/ui/button";
 import { X, Sparkles, Loader2, ExternalLink, GitPullRequest } from "lucide-react";
-import { clsx } from "clsx";
 import type { GitCommit, GitBranch } from "@vibogit/shared";
 
 interface CreatePRDialogProps {
@@ -144,12 +144,9 @@ export function CreatePRDialog({
             <GitPullRequest className="w-5 h-5 text-accent" />
             <h2 className="text-lg font-semibold text-text-primary">Create Pull Request</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="text-text-muted hover:text-text-primary transition-colors"
-          >
+          <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
 
         <div className="p-4 space-y-4 overflow-y-auto flex-1">
@@ -170,10 +167,12 @@ export function CreatePRDialog({
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm font-medium text-text-secondary">Title</label>
-              <button
+              <Button
+                variant="link"
+                size="sm"
                 onClick={handleGenerateWithAI}
                 disabled={isGenerating}
-                className="flex items-center gap-1 text-xs text-accent hover:underline disabled:opacity-50"
+                className="h-auto p-0 text-xs"
               >
                 {isGenerating ? (
                   <Loader2 className="w-3 h-3 animate-spin" />
@@ -181,7 +180,7 @@ export function CreatePRDialog({
                   <Sparkles className="w-3 h-3" />
                 )}
                 Generate with AI
-              </button>
+              </Button>
             </div>
             <input
               type="text"
@@ -214,24 +213,13 @@ export function CreatePRDialog({
         </div>
 
         <div className="p-4 border-t border-border flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-surface-light text-text-secondary rounded-lg hover:text-text-primary transition-colors"
-          >
+          <Button variant="secondary" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            onClick={handleCreatePR}
-            disabled={!title.trim()}
-            className={clsx(
-              "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors",
-              "bg-accent text-background hover:bg-accent/90",
-              "disabled:opacity-50 disabled:cursor-not-allowed"
-            )}
-          >
+          </Button>
+          <Button onClick={handleCreatePR} disabled={!title.trim()}>
             <ExternalLink className="w-4 h-4" />
             Open on GitHub
-          </button>
+          </Button>
         </div>
       </div>
     </div>

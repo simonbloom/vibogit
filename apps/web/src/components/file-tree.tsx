@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { getSettings, saveSettings, EDITOR_OPTIONS } from "@/lib/settings";
+import { Button } from "@/components/ui/button";
 import {
   Folder,
   FolderOpen,
@@ -199,13 +200,15 @@ export function FileTree({ repoPath, selectedPath, onFileSelect }: FileTreeProps
           )}
           <span className="text-sm truncate flex-1">{node.name}</span>
           {!isDirectory && isHovered && (
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
               onClick={(e) => handleOpenInEditor(e, node.path)}
-              className="p-1 text-muted-foreground hover:text-foreground rounded hover:bg-muted"
               title="Open in editor"
             >
               <Code className="w-3.5 h-3.5" />
-            </button>
+            </Button>
           )}
         </div>
         {isDirectory && isExpanded && node.children && (

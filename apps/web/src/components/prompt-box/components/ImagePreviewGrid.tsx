@@ -11,7 +11,7 @@ export function ImagePreviewGrid({ images, onRemove, onRetry }: ImagePreviewGrid
   if (images.length === 0) return null
 
   return (
-    <div className="flex flex-wrap gap-2 p-2 border-t border-neutral-700">
+    <div className="flex flex-wrap gap-2 p-2 border-t border-border">
       {images.map((image) => (
         <ImageThumbnail
           key={image.id}

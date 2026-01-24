@@ -110,7 +110,7 @@ export const RichTextarea = forwardRef<RichTextareaRef, RichTextareaProps>(
         maxLength={maxLength}
         disabled={disabled}
         aria-label={ariaLabel}
-        className="w-full bg-transparent text-neutral-200 placeholder-neutral-500 resize-none outline-none"
+        className="w-full bg-transparent text-foreground placeholder:text-muted-foreground resize-none outline-none"
         style={{ minHeight, maxHeight }}
       />
     )

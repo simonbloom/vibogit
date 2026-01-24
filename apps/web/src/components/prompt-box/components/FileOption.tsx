@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import { FileText, Clock } from 'lucide-react'
 
 interface FileOptionProps {
@@ -12,21 +13,21 @@ export function FileOption({ path, isRecent, isHighlighted, onSelect }: FileOpti
   const directory = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : ''
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
       role="option"
       aria-selected={isHighlighted}
       onClick={onSelect}
-      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
-        isHighlighted ? 'bg-blue-500/20 text-blue-300' : 'text-neutral-300 hover:bg-neutral-800'
+      className={`flex w-full items-center justify-start gap-2 px-3 py-1.5 h-auto rounded-none ${
+        isHighlighted ? 'bg-primary/20 text-primary' : ''
       }`}
     >
-      <FileText className="h-4 w-4 flex-shrink-0 text-neutral-500" />
-      <span className="flex-1 truncate">
-        {directory && <span className="text-neutral-500">{directory}/</span>}
+      <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+      <span className="flex-1 truncate text-left">
+        {directory && <span className="text-muted-foreground">{directory}/</span>}
         <span className="font-medium">{filename}</span>
       </span>
-      {isRecent && <Clock className="h-3 w-3 text-neutral-500" />}
-    </button>
+      {isRecent && <Clock className="h-3 w-3 text-muted-foreground" />}
+    </Button>
   )
 }

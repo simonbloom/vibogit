@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import { X, FileText, AlertTriangle } from 'lucide-react'
 
 interface FileChipProps {
@@ -33,17 +34,18 @@ export function FileChip({ path, onRemove, onClick, hasWarning }: FileChipProps)
       >
         {filename}
       </span>
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-4 w-4 p-0 hover:text-destructive"
         onClick={(e) => {
           e.stopPropagation()
           onRemove()
         }}
-        className="hover:text-red-400 transition-colors"
         aria-label={`Remove ${filename}`}
       >
         <X className="h-3 w-3" />
-      </button>
+      </Button>
     </span>
   )
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useState, useMemo } from "react";
+import { Button } from "@/components/ui/button";
 import { ChevronDown, Check, Eye, EyeOff } from "lucide-react";
 import { getBranchColorBase } from "./utils/colors";
 
@@ -41,9 +42,11 @@ export const BranchFilter = memo(function BranchFilter({
 
   return (
     <div className="relative">
-      <button
+      <Button
+        variant="secondary"
+        size="sm"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-muted/50 hover:bg-muted rounded-md border border-border transition-colors"
+        className="gap-2"
       >
         <Eye className="w-4 h-4 text-muted-foreground" />
         <span>
@@ -54,7 +57,7 @@ export const BranchFilter = memo(function BranchFilter({
             isOpen ? "rotate-180" : ""
           }`}
         />
-      </button>
+      </Button>
 
       {isOpen && (
         <>
@@ -72,18 +75,12 @@ export const BranchFilter = memo(function BranchFilter({
                 Filter Branches
               </span>
               <div className="flex gap-2">
-                <button
-                  onClick={onShowAll}
-                  className="text-sm px-3 py-1 rounded hover:bg-muted transition-colors"
-                >
+                <Button variant="ghost" size="sm" onClick={onShowAll}>
                   All
-                </button>
-                <button
-                  onClick={onHideAll}
-                  className="text-sm px-3 py-1 rounded hover:bg-muted transition-colors"
-                >
+                </Button>
+                <Button variant="ghost" size="sm" onClick={onHideAll}>
                   None
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -140,16 +137,17 @@ function BranchItem({ branch, isVisible, onToggle }: BranchItemProps) {
   const color = getBranchColorBase(branch.colorIndex);
 
   return (
-    <button
+    <Button
+      variant="ghost"
       onClick={onToggle}
-      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left"
+      className="w-full flex items-center justify-start gap-3 px-4 py-2.5 h-auto rounded-none"
     >
       <div
         className="w-4 h-4 rounded-full flex-shrink-0"
         style={{ backgroundColor: color }}
       />
       <span
-        className={`flex-1 text-base truncate ${
+        className={`flex-1 text-base truncate text-left ${
           isVisible ? "text-foreground" : "text-muted-foreground line-through"
         }`}
       >
@@ -160,6 +158,6 @@ function BranchItem({ branch, isVisible, onToggle }: BranchItemProps) {
       ) : (
         <EyeOff className="w-5 h-5 text-muted-foreground flex-shrink-0" />
       )}
-    </button>
+    </Button>
   );
 }

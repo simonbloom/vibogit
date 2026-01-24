@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useDaemon } from "@/lib/daemon-context";
+import { Button } from "@/components/ui/button";
 import { clsx } from "clsx";
 import {
   GitBranch,
@@ -119,14 +120,15 @@ export function BranchSelector({ currentBranch, branches }: BranchSelectorProps)
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <button
+      <Button
+        variant="secondary"
+        size="sm"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors bg-secondary hover:bg-secondary/80 border"
       >
         <GitBranch className="w-4 h-4 text-primary" />
-        <span className="text-sm">{currentBranch?.name || "No branch"}</span>
+        <span>{currentBranch?.name || "No branch"}</span>
         <ChevronDown className={clsx("w-4 h-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
-      </button>
+      </Button>
 
       {isOpen && (
         <div className="absolute top-full left-0 mt-2 w-64 bg-popover border rounded-lg shadow-xl z-50 overflow-hidden">
@@ -142,29 +144,31 @@ export function BranchSelector({ currentBranch, branches }: BranchSelectorProps)
                 </div>
               </div>
               <div className="flex flex-col gap-2">
-                <button
+                <Button
+                  className="w-full"
                   onClick={handleStashAndSwitch}
                   disabled={isLoading}
-                  className="w-full px-3 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Stash & Switch"}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="w-full"
                   onClick={() => switchBranch(pendingBranch!)}
                   disabled={isLoading}
-                  className="w-full px-3 py-2 bg-secondary text-secondary-foreground text-sm rounded-lg hover:bg-secondary/80 transition-colors disabled:opacity-50"
                 >
                   Switch anyway (discard changes)
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full"
                   onClick={() => {
                     setShowUnsavedWarning(false);
                     setPendingBranch(null);
                   }}
-                  className="w-full px-3 py-2 text-muted-foreground text-sm hover:text-foreground transition-colors"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             </div>
           ) : showNewBranch ? (
@@ -182,49 +186,52 @@ export function BranchSelector({ currentBranch, branches }: BranchSelectorProps)
                 }}
               />
               <div className="flex gap-2 mt-2">
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="flex-1"
                   onClick={() => setShowNewBranch(false)}
-                  className="flex-1 px-3 py-1.5 bg-secondary text-secondary-foreground text-sm rounded-lg hover:bg-secondary/80 transition-colors"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  size="sm"
+                  className="flex-1"
                   onClick={handleCreateBranch}
                   disabled={isLoading || !newBranchName.trim()}
-                  className="flex-1 px-3 py-1.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Create"}
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
             <>
               <div className="max-h-64 overflow-y-auto">
                 {localBranches.map((branch) => (
-                  <button
+                  <Button
                     key={branch.name}
+                    variant="ghost"
                     onClick={() => handleBranchSelect(branch.name)}
                     disabled={isLoading}
                     className={clsx(
-                      "w-full flex items-center gap-3 px-3 py-2 text-left transition-colors",
-                      branch.current
-                        ? "bg-primary/10 text-primary"
-                        : "hover:bg-muted"
+                      "w-full justify-start gap-3 rounded-none",
+                      branch.current && "bg-primary/10 text-primary"
                     )}
                   >
                     {branch.current ? <Check className="w-4 h-4" /> : <div className="w-4" />}
-                    <span className="text-sm truncate flex-1">{branch.name}</span>
-                  </button>
+                    <span className="truncate flex-1 text-left">{branch.name}</span>
+                  </Button>
                 ))}
               </div>
               <div className="border-t">
-                <button
+                <Button
+                  variant="ghost"
                   onClick={() => setShowNewBranch(true)}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-left text-primary hover:bg-muted transition-colors"
+                  className="w-full justify-start gap-3 rounded-none text-primary"
                 >
                   <Plus className="w-4 h-4" />
-                  <span className="text-sm">New timeline</span>
-                </button>
+                  <span>New timeline</span>
+                </Button>
               </div>
             </>
           )}

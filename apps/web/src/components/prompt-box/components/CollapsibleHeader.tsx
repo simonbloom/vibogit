@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import { ChevronDown } from 'lucide-react'
 
 interface CollapsibleHeaderProps {
@@ -12,10 +13,10 @@ export function CollapsibleHeader({
   label = 'Prompt',
 }: CollapsibleHeaderProps) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
       onClick={onToggle}
-      className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-neutral-200 hover:bg-neutral-800/50 transition-colors"
+      className="flex w-full items-center justify-start gap-2 px-3 py-2 h-auto rounded-none"
       aria-expanded={isExpanded}
     >
       <ChevronDown
@@ -24,6 +25,6 @@ export function CollapsibleHeader({
         }`}
       />
       <span>{label}</span>
-    </button>
+    </Button>
   )
 }

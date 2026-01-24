@@ -1,6 +1,7 @@
 "use client";
 
 import { memo } from "react";
+import { Button } from "@/components/ui/button";
 import { Maximize2, Minimize2 } from "lucide-react";
 
 export type ViewMode = "compact" | "expanded";
@@ -16,30 +17,26 @@ export const ViewModeToggle = memo(function ViewModeToggle({
 }: ViewModeToggleProps) {
   return (
     <div className="flex items-center bg-muted/50 rounded-md border border-border p-0.5">
-      <button
+      <Button
+        variant={mode === "compact" ? "secondary" : "ghost"}
+        size="sm"
         onClick={() => onModeChange("compact")}
-        className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors ${
-          mode === "compact"
-            ? "bg-background text-foreground shadow-sm"
-            : "text-muted-foreground hover:text-foreground"
-        }`}
+        className="h-7 px-2 gap-1.5"
         title="Compact view"
       >
         <Minimize2 className="w-3.5 h-3.5" />
         <span>Compact</span>
-      </button>
-      <button
+      </Button>
+      <Button
+        variant={mode === "expanded" ? "secondary" : "ghost"}
+        size="sm"
         onClick={() => onModeChange("expanded")}
-        className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors ${
-          mode === "expanded"
-            ? "bg-background text-foreground shadow-sm"
-            : "text-muted-foreground hover:text-foreground"
-        }`}
+        className="h-7 px-2 gap-1.5"
         title="Expanded view"
       >
         <Maximize2 className="w-3.5 h-3.5" />
         <span>Expanded</span>
-      </button>
+      </Button>
     </div>
   );
 });

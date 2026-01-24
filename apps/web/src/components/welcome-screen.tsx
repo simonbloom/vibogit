@@ -4,8 +4,8 @@ import { useState, useCallback } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { useTabs } from "@/lib/tabs-context";
 import { useRecentProjects } from "@/lib/use-recent-projects";
+import { Button } from "@/components/ui/button";
 import { FolderOpen, Loader2 } from "lucide-react";
-import { clsx } from "clsx";
 import type { RecentProject } from "@vibogit/shared";
 
 export function WelcomeScreen() {
@@ -75,12 +75,12 @@ export function WelcomeScreen() {
           <h2 className="font-semibold mb-1">{pendingPath.split("/").pop()}</h2>
           <p className="text-sm text-muted-foreground mb-4">This folder isn&apos;t a git repository.</p>
           <div className="flex gap-2">
-            <button onClick={() => { setShowInitDialog(false); setPendingPath(null); }} className="flex-1 px-3 py-1.5 text-sm border rounded-md hover:bg-muted">
+            <Button variant="outline" className="flex-1" onClick={() => { setShowInitDialog(false); setPendingPath(null); }}>
               Cancel
-            </button>
-            <button onClick={handleInitGit} disabled={isLoading} className="flex-1 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md disabled:opacity-50">
+            </Button>
+            <Button className="flex-1" onClick={handleInitGit} disabled={isLoading}>
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Initialize Git"}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -92,28 +92,29 @@ export function WelcomeScreen() {
       <h1 className="text-2xl font-bold mb-1">ViboGit</h1>
       <p className="text-muted-foreground mb-6">Git for the Vibe Coder</p>
 
-      <button
+      <Button
+        size="lg"
         onClick={handleOpenProject}
         disabled={isLoading || state.connection !== "connected"}
-        className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 disabled:opacity-50"
       >
         {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <FolderOpen className="w-5 h-5" />}
         Open Project
-      </button>
+      </Button>
 
       {recentProjects.length > 0 && (
         <div className="mt-8 w-full max-w-sm">
           <h3 className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Recent</h3>
           <div className="border rounded-lg divide-y">
             {recentProjects.map((project) => (
-              <button
+              <Button
                 key={project.path}
+                variant="ghost"
                 onClick={() => handleRecentProjectClick(project)}
-                className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-muted/50 text-sm"
+                className="w-full justify-start gap-3 rounded-none first:rounded-t-lg last:rounded-b-lg"
               >
                 <FolderOpen className="w-4 h-4 text-muted-foreground" />
                 <span className="truncate">{project.name}</span>
-              </button>
+              </Button>
             ))}
           </div>
         </div>

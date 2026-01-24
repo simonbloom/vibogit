@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useDaemon } from "@/lib/daemon-context";
+import { Button } from "@/components/ui/button";
 import { Loader2, RefreshCw, X, AlertTriangle } from "lucide-react";
 import { clsx } from "clsx";
 import type { DevServerState, DevServerConfig } from "@vibogit/shared";
@@ -249,12 +250,9 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
   // Disconnected state
   if (status === "disconnected") {
     return (
-      <button
-        onClick={handleConnect}
-        className="flex items-center gap-1.5 px-3 py-1 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
-      >
+      <Button variant="destructive" size="sm" onClick={handleConnect}>
         Connect
-      </button>
+      </Button>
     );
   }
 
@@ -286,20 +284,24 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
           <span className="w-2 h-2 rounded-full bg-white" />
           :{port}
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
           onClick={handleRestart}
-          className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
           title="Restart server"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 hover:text-destructive"
           onClick={handleDisconnect}
-          className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
           title="Stop server"
         >
           <X className="w-3.5 h-3.5" />
-        </button>
+        </Button>
       </div>
     );
   }
@@ -308,16 +310,13 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
   if (status === "error") {
     return (
       <div className="flex items-center gap-1.5">
-        <div className="flex items-center gap-1.5 px-2 py-1 text-sm text-red-500">
+        <div className="flex items-center gap-1.5 px-2 py-1 text-sm text-destructive">
           <AlertTriangle className="w-3.5 h-3.5" />
           Failed
         </div>
-        <button
-          onClick={handleConnect}
-          className="px-2 py-1 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"
-        >
+        <Button variant="ghost" size="sm" className="text-destructive" onClick={handleConnect}>
           Retry
-        </button>
+        </Button>
       </div>
     );
   }

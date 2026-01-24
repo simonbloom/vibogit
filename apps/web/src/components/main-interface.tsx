@@ -14,6 +14,7 @@ import { StagedChanges } from "@/components/staged-changes";
 import { PortPromptModal } from "@/components/port-prompt-modal";
 import { PromptBox } from "@/components/prompt-box";
 import type { PromptData } from "@/components/prompt-box";
+import { Button } from "@/components/ui/button";
 import { getSettings, TERMINAL_OPTIONS, EDITOR_OPTIONS } from "@/lib/settings";
 import {
   ArrowUp,
@@ -291,60 +292,62 @@ export function MainInterface() {
           <DevServerConnection repoPath={repoPath} onPortChange={setDevServerPort} onRequestPortPrompt={() => setShowPortPrompt(true)} />
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={() => handleQuickLink("finder")} className="p-2 text-muted-foreground hover:text-foreground rounded hover:bg-muted" title="Finder">
-            <Folder className="w-4 h-4" />
-          </button>
-          <button onClick={() => handleQuickLink("browser")} className="p-2 text-muted-foreground hover:text-foreground rounded hover:bg-muted" title="Open in browser">
-            <ExternalLink className="w-4 h-4" />
-          </button>
-          <button onClick={() => handleQuickLink("github")} className="p-2 text-muted-foreground hover:text-foreground rounded hover:bg-muted" title="GitHub">
-            <Github className="w-4 h-4" />
-          </button>
-          <button onClick={() => handleQuickLink("terminal")} className="p-2 text-muted-foreground hover:text-foreground rounded hover:bg-muted" title="Terminal">
-            <Terminal className="w-4 h-4" />
-          </button>
-          <button onClick={() => handleQuickLink("editor")} className="p-2 text-muted-foreground hover:text-foreground rounded hover:bg-muted" title="Editor">
-            <Code className="w-4 h-4" />
-          </button>
-          <button onClick={() => setShowSettings(true)} className="p-2 text-muted-foreground hover:text-foreground rounded hover:bg-muted" title="Settings">
-            <Settings className="w-4 h-4" />
-          </button>
+          <Button variant="ghost" size="icon" onClick={() => handleQuickLink("finder")} title="Finder">
+            <Folder className="w-6 h-6 text-nav-icon-subscriptions" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => handleQuickLink("browser")} title="Open in browser">
+            <ExternalLink className="w-6 h-6 text-nav-icon-inputs" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => handleQuickLink("github")} title="GitHub">
+            <Github className="w-6 h-6 text-nav-icon-spaces" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => handleQuickLink("terminal")} title="Terminal">
+            <Terminal className="w-6 h-6 text-nav-icon-coding" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => handleQuickLink("editor")} title="Editor">
+            <Code className="w-6 h-6 text-nav-icon-knowledge" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => setShowSettings(true)} title="Settings">
+            <Settings className="w-6 h-6 text-nav-icon-settings" />
+          </Button>
         </div>
       </div>
 
       {/* Actions */}
       <div className="flex items-center gap-2 px-4 py-2 border-b">
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={handlePull}
           disabled={isPulling}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted disabled:opacity-50"
         >
           {isPulling ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowDown className="w-4 h-4" />}
           Pull {(status?.behind || 0) > 0 && `(${status?.behind})`}
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
           onClick={handlePull}
           disabled={isPulling}
-          className="p-1.5 border rounded-md hover:bg-muted disabled:opacity-50"
           title="Fetch"
+          className="h-9 w-9"
         >
           <RefreshCw className={clsx("w-4 h-4", isPulling && "animate-spin")} />
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={handlePush}
           disabled={isPushing || (status?.ahead || 0) === 0}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted disabled:opacity-50"
         >
           {isPushing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4" />}
           Push {(status?.ahead || 0) > 0 && `(${status?.ahead})`}
-        </button>
-        <button
+        </Button>
+        <Button
+          variant={totalChanges > 0 ? "default" : "outline"}
+          size="sm"
           onClick={handleQuickCommit}
           disabled={totalChanges === 0 || isCommitting}
-          className={clsx(
-            "flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md disabled:opacity-50",
-            totalChanges > 0 ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-          )}
         >
           {isCommitting ? (
             <>
@@ -357,14 +360,15 @@ export function MainInterface() {
               Quick Commit {totalChanges > 0 && `(${totalChanges})`}
             </>
           )}
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => setShowCreatePR(true)}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted"
         >
           <GitPullRequest className="w-4 h-4" />
           PR
-        </button>
+        </Button>
       </div>
 
       {/* Prompt Box - Always visible */}
@@ -382,32 +386,29 @@ export function MainInterface() {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 px-4 py-1 border-b">
-        <button
+        <Button
+          variant={activeView === "graph" ? "default" : "outline"}
+          size="sm"
           onClick={() => setActiveView("graph")}
-          className={clsx(
-            "flex items-center gap-1.5 px-3 py-1 text-sm rounded-md",
-            activeView === "graph" ? "bg-muted font-medium" : "text-muted-foreground hover:text-foreground"
-          )}
+          className="gap-1.5"
         >
           <GitBranch className="w-3.5 h-3.5" />
           Graph
-        </button>
-        <button
+        </Button>
+        <Button
+          variant={activeView === "tree" ? "default" : "outline"}
+          size="sm"
           onClick={() => setActiveView("tree")}
-          className={clsx(
-            "flex items-center gap-1.5 px-3 py-1 text-sm rounded-md",
-            activeView === "tree" ? "bg-muted font-medium" : "text-muted-foreground hover:text-foreground"
-          )}
+          className="gap-1.5"
         >
           <Folder className="w-3.5 h-3.5" />
           Tree
-        </button>
-        <button
+        </Button>
+        <Button
+          variant={activeView === "changes" ? "default" : "outline"}
+          size="sm"
           onClick={() => setActiveView("changes")}
-          className={clsx(
-            "flex items-center gap-1.5 px-3 py-1 text-sm rounded-md",
-            activeView === "changes" ? "bg-muted font-medium" : "text-muted-foreground hover:text-foreground"
-          )}
+          className="gap-1.5"
         >
           <FileEdit className="w-3.5 h-3.5" />
           Changes
@@ -416,7 +417,7 @@ export function MainInterface() {
               {totalChanges}
             </span>
           )}
-        </button>
+        </Button>
       </div>
 
       {/* Content */}

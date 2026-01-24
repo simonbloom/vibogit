@@ -1,0 +1,585 @@
+/* Font imports FIRST */
+@import "./fonts/inter.css";
+@import "./fonts/overpass.css";
+@import "./fonts/vt323.css";
+
+/* Tailwind v4 */
+@import "tailwindcss";
+
+@config "../tailwind.config.ts";
+
+@layer base {
+  :root {
+    /* Page Layout Padding Variables */
+    --page-padding: 1.5rem;
+    --page-padding-compact: 1rem;
+    --page-padding-auth: 1rem;
+
+    /* Text Colors */
+    --text-dark: 214 16% 9%;
+
+    /* Theme Colors */
+    --background: 210 20% 98%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 225 95% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 225 95% 95%;
+    --accent-foreground: 225 95% 60%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 225 95% 60%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 225 95% 60%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 225 95% 95%;
+    --sidebar-accent-foreground: 225 95% 60%;
+    --sidebar-border: 225 20% 90%;
+    --sidebar-ring: 265 89% 63%;
+    
+    /* Nav Icon Colors */
+    --nav-icon-dashboard: 0 84% 60%;
+    --nav-icon-knowledge: 217 91% 60%;
+    --nav-icon-tasks: 158 64% 52%;
+    --nav-icon-calendar: 332 87% 62%;
+    --nav-icon-inputs: 199 89% 48%;
+    --nav-icon-subscriptions: 25 95% 53%;
+    --nav-icon-playlists: 238 84% 67%;
+    --nav-icon-coding: 160 84% 40%;
+    --nav-icon-team: 187 92% 46%;
+    --nav-icon-spaces: 271 91% 65%;
+    --nav-icon-settings: 215 19% 35%;
+    --nav-icon-analytics: 238 84% 67%;
+    
+    /* Z-Index Layer System */
+    --z-base: 0;
+    --z-dropdown: 50;
+    --z-sticky: 100;
+    --z-fixed: 200;
+    --z-navigation: 250;
+    --z-overlay: 300;
+    --z-modal-backdrop: 400;
+    --z-modal: 500;
+    --z-modal-content: 510;
+    --z-popover: 600;
+    --z-select-portal: 610;
+    --z-dropdown-portal: 620;
+    --z-command-palette: 650;
+    --z-tooltip: 700;
+    --z-toast: 800;
+    --z-tour: 900;
+    --z-dev-tools: 950;
+    --z-max: 999;
+  }
+
+  .dark {
+    --text-dark: 210 40% 98%;
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 13%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 13%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 225 95% 65%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 33% 20%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 222 47% 13%;
+    --input: 217 33% 20%;
+    --ring: 225 95% 65%;
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 225 95% 65%;
+    --sidebar-primary-foreground: 222 47% 11%;
+    --sidebar-accent: 217 33% 17%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217 33% 17%;
+    --sidebar-ring: 265 89% 70%;
+  }
+
+  .ember {
+    --text-dark: 0 0% 50%;
+    --background: 0 0% 10%;
+    --foreground: 0 0% 50%;
+    --card: 0 0% 13%;
+    --card-foreground: 0 0% 90%;
+    --popover: 0 0% 13%;
+    --popover-foreground: 0 0% 90%;
+    --primary: 30 75% 60%;
+    --primary-foreground: 0 0% 10%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 13%;
+    --muted-foreground: 0 0% 50%;
+    --accent: 0 0% 18%;
+    --accent-foreground: 0 0% 90%;
+    --destructive: 0 56% 65%;
+    --destructive-foreground: 0 0% 90%;
+    --border: 0 0% 25%;
+    --input: 0 0% 25%;
+    --ring: 30 75% 60%;
+    --sidebar-background: 0 0% 10%;
+    --sidebar-foreground: 0 0% 50%;
+    --sidebar-primary: 30 75% 60%;
+    --sidebar-primary-foreground: 0 0% 10%;
+    --sidebar-accent: 0 0% 18%;
+    --sidebar-accent-foreground: 0 0% 50%;
+    --sidebar-border: 0 0% 25%;
+    --sidebar-ring: 30 75% 60%;
+  }
+
+  .matrix {
+    --text-dark: 136 100% 50%;
+    --background: 0 0% 5%;
+    --foreground: 136 100% 50%;
+    --card: 120 33% 7%;
+    --card-foreground: 136 100% 50%;
+    --popover: 120 33% 7%;
+    --popover-foreground: 136 100% 50%;
+    --primary: 136 100% 50%;
+    --primary-foreground: 0 0% 5%;
+    --secondary: 120 33% 7%;
+    --secondary-foreground: 136 100% 50%;
+    --muted: 120 47% 11%;
+    --muted-foreground: 136 100% 27%;
+    --accent: 120 47% 11%;
+    --accent-foreground: 136 100% 50%;
+    --destructive: 345 100% 50%;
+    --destructive-foreground: 0 0% 5%;
+    --border: 136 100% 50% / 0.2;
+    --input: 136 100% 50% / 0.2;
+    --ring: 136 100% 50%;
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 136 100% 50%;
+    --sidebar-primary: 136 100% 50%;
+    --sidebar-primary-foreground: 0 0% 5%;
+    --sidebar-accent: 120 47% 11%;
+    --sidebar-accent-foreground: 136 100% 50%;
+    --sidebar-border: 136 100% 50% / 0.2;
+    --sidebar-ring: 136 100% 50%;
+
+    /* Matrix nav icons = all green variants */
+    --nav-icon-dashboard: 136 100% 50%;
+    --nav-icon-knowledge: 136 100% 45%;
+    --nav-icon-tasks: 136 100% 40%;
+    --nav-icon-calendar: 136 100% 50%;
+    --nav-icon-inputs: 136 100% 45%;
+    --nav-icon-subscriptions: 136 100% 40%;
+    --nav-icon-playlists: 136 100% 50%;
+    --nav-icon-coding: 136 100% 45%;
+    --nav-icon-team: 136 100% 40%;
+    --nav-icon-spaces: 136 100% 50%;
+    --nav-icon-settings: 136 100% 35%;
+    --nav-icon-analytics: 136 100% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground overflow-hidden w-full text-base;
+    font-family: "Overpass", system-ui, -apple-system, sans-serif;
+  }
+
+  html {
+    @apply overflow-hidden w-full h-full;
+  }
+
+  /* Ember theme backgrounds */
+  html.ember,
+  html.ember body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+
+  html.ember [data-sidebar="sidebar"],
+  html.ember .bg-sidebar {
+    background-color: hsl(var(--sidebar-background)) !important;
+  }
+
+  /* Matrix theme backgrounds */
+  html.matrix {
+    background-color: #0D0D0D !important;
+    color: hsl(var(--foreground));
+  }
+  
+  html.matrix body {
+    background-color: transparent !important;
+  }
+
+  html.matrix [data-sidebar="sidebar"],
+  html.matrix .bg-sidebar {
+    background-color: rgba(13, 13, 13, 0.85) !important;
+  }
+
+  html.matrix main,
+  html.matrix .bg-background {
+    background-color: #0D0D0D !important;
+  }
+
+  html.matrix .bg-card,
+  html.matrix [data-slot="card"] {
+    background-color: #0A1A0A !important;
+  }
+
+  html.matrix #root {
+    background-color: transparent !important;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Matrix tables */
+  html.matrix table {
+    background-color: #0D0D0D !important;
+    position: relative;
+    z-index: 2;
+  }
+  
+  html.matrix thead {
+    background-color: #0A1A0A !important;
+  }
+  
+  html.matrix tbody tr {
+    background-color: #0D0D0D !important;
+  }
+  
+  html.matrix tbody tr:nth-child(even) {
+    background-color: #0F1A0F !important;
+  }
+  
+  html.matrix tbody tr:hover {
+    background-color: #1A2F1A !important;
+  }
+
+  /* Matrix popovers/dropdowns */
+  html.matrix [data-radix-menu-content],
+  html.matrix [role="menu"],
+  html.matrix [role="listbox"],
+  html.matrix .bg-popover {
+    background-color: rgba(10, 26, 10, 0.95) !important;
+    border: 1px solid rgba(0, 255, 65, 0.3) !important;
+  }
+
+  /* Matrix headings use VT323 font */
+  html.matrix h1,
+  html.matrix h2,
+  html.matrix h3,
+  html.matrix h4,
+  html.matrix h5,
+  html.matrix h6 {
+    font-family: 'VT323', 'Courier New', monospace;
+    text-shadow: 0 0 10px hsl(136 100% 50% / 0.5), 0 0 20px hsl(136 100% 50% / 0.3);
+  }
+
+  /* Matrix color overrides - force all colors to green */
+  html.matrix .text-slate-500,
+  html.matrix .text-slate-600,
+  html.matrix .text-gray-400,
+  html.matrix .text-gray-500,
+  html.matrix .text-gray-600 {
+    color: hsl(136 100% 35%) !important;
+  }
+
+  /* Matrix active states */
+  html.matrix .bg-foreground {
+    background-color: #00FF41 !important;
+    box-shadow: 0 0 10px rgba(0, 255, 65, 0.5), 0 0 20px rgba(0, 255, 65, 0.3);
+  }
+
+  html.matrix .text-background {
+    color: #0D0D0D !important;
+  }
+
+  html.matrix .border-border {
+    border-color: rgba(0, 255, 65, 0.3) !important;
+  }
+
+  /* Matrix: Override ALL colored badges to green */
+  /* Red variants */
+  html.matrix .bg-red-50,
+  html.matrix .bg-red-100 {
+    background-color: rgba(0, 255, 65, 0.1) !important;
+  }
+  html.matrix .text-red-400,
+  html.matrix .text-red-500,
+  html.matrix .text-red-600 {
+    color: #00FF41 !important;
+  }
+
+  /* Yellow/Orange variants */
+  html.matrix .bg-yellow-50,
+  html.matrix .bg-yellow-100,
+  html.matrix .bg-orange-50,
+  html.matrix .bg-amber-50 {
+    background-color: rgba(0, 255, 65, 0.1) !important;
+  }
+  html.matrix .text-yellow-500,
+  html.matrix .text-orange-500,
+  html.matrix .text-amber-500 {
+    color: #00CC33 !important;
+  }
+
+  /* Blue variants */
+  html.matrix .bg-blue-50,
+  html.matrix .bg-blue-100,
+  html.matrix .bg-sky-50,
+  html.matrix .bg-cyan-50 {
+    background-color: rgba(0, 255, 65, 0.1) !important;
+  }
+  html.matrix .text-blue-500,
+  html.matrix .text-blue-600,
+  html.matrix .text-sky-500,
+  html.matrix .text-cyan-500 {
+    color: #00FF41 !important;
+  }
+
+  /* Green variants */
+  html.matrix .bg-green-50,
+  html.matrix .bg-green-100,
+  html.matrix .bg-emerald-50 {
+    background-color: rgba(0, 255, 65, 0.15) !important;
+  }
+  html.matrix .text-green-500,
+  html.matrix .text-emerald-500 {
+    color: #00FF41 !important;
+  }
+
+  /* Purple/Violet/Pink variants */
+  html.matrix .bg-purple-50,
+  html.matrix .bg-violet-50,
+  html.matrix .bg-pink-50,
+  html.matrix .bg-indigo-50 {
+    background-color: rgba(0, 255, 65, 0.1) !important;
+  }
+  html.matrix .text-purple-500,
+  html.matrix .text-violet-500,
+  html.matrix .text-pink-500,
+  html.matrix .text-indigo-500 {
+    color: #00DD33 !important;
+  }
+
+  /* Headings */
+  h1 { @apply font-heading text-4xl font-bold mb-3 mt-6; }
+  h2 { @apply font-heading text-3xl font-semibold mb-3 mt-6; }
+  h3 { @apply font-heading text-2xl font-semibold mb-3 mt-6; }
+  h4 { @apply font-heading text-xl font-medium mb-3 mt-6; }
+  h5 { @apply font-heading text-lg font-medium mb-3 mt-6; }
+  h6 { @apply font-heading text-base font-medium mb-3 mt-6; }
+
+  /* Form elements - Light mode default (2px black border) */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select {
+    @apply border-2 border-black rounded-lg;
+  }
+
+  /* Dark mode borders (1px subtle) */
+  .dark input[type="text"],
+  .dark input[type="email"],
+  .dark input[type="password"],
+  .dark textarea,
+  .dark select {
+    @apply border border-border;
+  }
+
+  .dark .border-black,
+  .dark .border-2 {
+    border-color: hsl(var(--border)) !important;
+    border-width: 1px !important;
+  }
+
+  /* Ember mode borders */
+  .ember input[type="text"],
+  .ember input[type="email"],
+  .ember input[type="password"],
+  .ember textarea,
+  .ember select {
+    @apply border border-border;
+  }
+
+  .ember .border-black,
+  .ember .border-2 {
+    border-color: hsl(var(--border)) !important;
+    border-width: 1px !important;
+  }
+
+  /* Matrix mode borders with glow */
+  .matrix input[type="text"],
+  .matrix input[type="email"],
+  .matrix input[type="password"],
+  .matrix textarea,
+  .matrix select {
+    @apply border border-border;
+    box-shadow: 0 0 5px hsl(136 100% 50% / 0.3);
+  }
+
+  .matrix input:focus,
+  .matrix textarea:focus,
+  .matrix select:focus {
+    box-shadow: 0 0 10px hsl(136 100% 50% / 0.5), 0 0 20px hsl(136 100% 50% / 0.3);
+    outline: none;
+  }
+
+  .matrix .border-black,
+  .matrix .border-2 {
+    border-color: hsl(var(--border)) !important;
+    border-width: 1px !important;
+  }
+}
+
+@layer components {
+  /* Z-Index Layer Utility Classes */
+  .layer-base { z-index: var(--z-base); }
+  .layer-dropdown { z-index: var(--z-dropdown); }
+  .layer-sticky { z-index: var(--z-sticky); }
+  .layer-fixed { z-index: var(--z-fixed); }
+  .layer-navigation { z-index: var(--z-navigation); }
+  .layer-overlay { z-index: var(--z-overlay); }
+  .layer-modal-backdrop { z-index: var(--z-modal-backdrop); }
+  .layer-modal { z-index: var(--z-modal); }
+  .layer-modal-content { z-index: var(--z-modal-content); }
+  .layer-popover { z-index: var(--z-popover); }
+  .layer-select-portal { z-index: var(--z-select-portal); }
+  .layer-dropdown-portal { z-index: var(--z-dropdown-portal); }
+  .layer-command-palette { z-index: var(--z-command-palette); }
+  .layer-tooltip { z-index: var(--z-tooltip); }
+  .layer-toast { z-index: var(--z-toast); }
+  .layer-tour { z-index: var(--z-tour); }
+  .layer-dev-tools { z-index: var(--z-dev-tools); }
+  .layer-max { z-index: var(--z-max); }
+
+  .card-hover {
+    @apply transition-all duration-200 hover:shadow-md hover:-translate-y-1;
+  }
+
+  .card-active {
+    border-left-width: 4px;
+    border-color: hsl(var(--primary));
+  }
+
+  /* Hide scrollbar utility */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Mobile-specific improvements */
+  @media (max-width: 768px) {
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    body {
+      overflow-x: hidden;
+    }
+    
+    input, textarea, select {
+      font-size: 16px; /* Prevents zoom on iOS */
+    }
+  }
+}
+
+@layer utilities {
+  .border-border {
+    border-color: hsl(var(--border));
+  }
+
+  /* Radial gradient for glow effects */
+  .bg-gradient-radial {
+    background-image: radial-gradient(ellipse at center, var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to));
+  }
+
+  /* Matrix button glow on hover */
+  .matrix button:hover,
+  .matrix [role="button"]:hover {
+    box-shadow: 0 0 10px hsl(136 100% 50% / 0.4);
+  }
+
+  /* Matrix card glow */
+  .matrix .card,
+  .matrix [data-slot="card"] {
+    box-shadow: 0 0 5px hsl(136 100% 50% / 0.2);
+  }
+
+  .matrix .card:hover,
+  .matrix [data-slot="card"]:hover {
+    box-shadow: 0 0 15px hsl(136 100% 50% / 0.3);
+  }
+
+  /* Matrix links */
+  .matrix a {
+    color: hsl(136 100% 50%);
+  }
+
+  .matrix a:hover {
+    color: hsl(136 100% 65%);
+    text-shadow: 0 0 5px hsl(136 100% 50% / 0.5);
+  }
+
+  /* Matrix muted text */
+  .matrix .text-muted-foreground,
+  .matrix [class*="muted"] {
+    color: hsl(136 100% 30%) !important;
+  }
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.04); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.45); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.65); }
+* { scrollbar-width: thin; scrollbar-color: rgba(100, 116, 139, 0.45) rgba(0, 0, 0, 0.04); }
+
+/* Dark scrollbar */
+.dark ::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.02); }
+.dark ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.3); }
+.dark ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.5); }
+.dark { scrollbar-color: rgba(148, 163, 184, 0.3) rgba(255, 255, 255, 0.02); }
+
+/* Ember scrollbar */
+.ember ::-webkit-scrollbar-track { background: rgba(33, 33, 33, 0.5); }
+.ember ::-webkit-scrollbar-thumb { background: rgba(64, 64, 64, 0.8); }
+.ember ::-webkit-scrollbar-thumb:hover { background: rgba(128, 128, 128, 0.8); }
+.ember { scrollbar-color: rgba(64, 64, 64, 0.8) rgba(33, 33, 33, 0.5); }
+
+/* Matrix scrollbar with glow */
+.matrix ::-webkit-scrollbar-track { background: rgba(0, 255, 65, 0.05); }
+.matrix ::-webkit-scrollbar-thumb { background: rgba(0, 255, 65, 0.3); box-shadow: 0 0 5px rgba(0, 255, 65, 0.5); }
+.matrix ::-webkit-scrollbar-thumb:hover { background: rgba(0, 255, 65, 0.5); box-shadow: 0 0 10px rgba(0, 255, 65, 0.7); }
+.matrix { scrollbar-color: rgba(0, 255, 65, 0.3) rgba(0, 255, 65, 0.05); }

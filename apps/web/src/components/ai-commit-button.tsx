@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { getSettings } from "@/lib/settings";
 import { AI_PROVIDERS } from "@/lib/ai-service";
+import { Button } from "@/components/ui/button";
 import { Sparkles, Loader2, AlertCircle } from "lucide-react";
 
 interface AICommitButtonProps {
@@ -103,11 +104,13 @@ export function AICommitButton({ onMessageGenerated, disabled }: AICommitButtonP
 
   return (
     <div className="relative">
-      <button
+      <Button
+        variant="secondary"
+        size="sm"
         onClick={handleGenerate}
         disabled={disabled || isGenerating}
-        className="flex items-center gap-1 px-2 py-1 rounded text-sm bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed"
         title={`Generate with ${provider?.displayName || "AI"}`}
+        className="gap-1"
       >
         {isGenerating ? (
           <Loader2 className="w-4 h-4 animate-spin" />
@@ -115,10 +118,10 @@ export function AICommitButton({ onMessageGenerated, disabled }: AICommitButtonP
           <Sparkles className="w-4 h-4" />
         )}
         AI
-      </button>
+      </Button>
 
       {error && (
-        <div className="absolute bottom-full left-0 mb-2 p-2 bg-red-100 border border-red-300 rounded text-xs text-red-700 whitespace-nowrap flex items-center gap-2">
+        <div className="absolute bottom-full left-0 mb-2 p-2 bg-destructive/10 border border-destructive/30 rounded text-xs text-destructive whitespace-nowrap flex items-center gap-2">
           <AlertCircle className="w-3 h-3" />
           {error}
         </div>

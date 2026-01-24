@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { getSettings, EDITOR_OPTIONS } from "@/lib/settings";
+import { Button } from "@/components/ui/button";
 import { Copy, Code, FileText, Loader2, Check } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -195,23 +196,21 @@ export function CodeViewer({ filePath, fileName, repoPath }: CodeViewerProps) {
       <div className="flex flex-col h-full">
         <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
           <span className="text-sm font-medium truncate">{fileName}</span>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={handleOpenInEditor}
-            className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-muted"
             title="Open in editor"
           >
             <Code className="w-4 h-4" />
-          </button>
+          </Button>
         </div>
         <div className="flex flex-col items-center justify-center flex-1 text-muted-foreground">
           <FileText className="w-12 h-12 mb-4 opacity-50" />
           <p>{error}</p>
-          <button
-            onClick={handleOpenInEditor}
-            className="mt-4 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-          >
+          <Button className="mt-4" onClick={handleOpenInEditor}>
             Open in IDE
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -222,32 +221,32 @@ export function CodeViewer({ filePath, fileName, repoPath }: CodeViewerProps) {
       <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
         <span className="text-sm font-medium truncate">{fileName}</span>
         <div className="flex items-center gap-1">
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={handleCopy}
-            className={clsx(
-              "p-1.5 rounded hover:bg-muted transition-colors",
-              copied ? "text-green-500" : "text-muted-foreground hover:text-foreground"
-            )}
+            className={copied ? "text-green-500" : ""}
             title={copied ? "Copied!" : "Copy code"}
           >
             {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={handleOpenInEditor}
-            className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-muted"
             title="Open in editor"
           >
             <Code className="w-4 h-4" />
-          </button>
+          </Button>
         </div>
       </div>
       <div className="flex-1 overflow-auto">
         {isTruncated && (
           <div className="px-4 py-2 bg-yellow-500/10 border-b border-yellow-500/20 text-yellow-600 text-sm">
             File truncated to {MAX_LINES.toLocaleString()} lines.{" "}
-            <button onClick={handleOpenInEditor} className="underline hover:no-underline">
+            <Button variant="link" className="h-auto p-0 text-yellow-600" onClick={handleOpenInEditor}>
               Open in IDE
-            </button>{" "}
+            </Button>{" "}
             to view full content.
           </div>
         )}

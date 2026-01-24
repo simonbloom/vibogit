@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useRef } from "react";
 import type { GitCommit } from "@vibogit/shared";
+import { Button } from "@/components/ui/button";
 import { Copy, GitBranch, Eye, RotateCcw, CherryIcon } from "lucide-react";
 
 export interface ContextMenuAction {
@@ -89,23 +90,22 @@ export const GraphContextMenu = memo(function GraphContextMenu({
         }
 
         return (
-          <button
+          <Button
             key={action.id}
+            variant="ghost"
             onClick={() => handleAction(action.id)}
             disabled={action.disabled}
-            className={`
-              w-full px-3 py-1.5 text-sm text-left flex items-center gap-2
-              hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed
-              ${action.danger ? "text-destructive hover:bg-destructive/10" : ""}
-            `}
+            className={`w-full justify-start px-3 py-1.5 h-auto rounded-none gap-2 ${
+              action.danger ? "text-destructive hover:bg-destructive/10" : ""
+            }`}
             role="menuitem"
           >
             <span className="flex-shrink-0 text-muted-foreground">{action.icon}</span>
-            <span className="flex-1">{action.label}</span>
+            <span className="flex-1 text-left">{action.label}</span>
             {action.shortcut && (
               <span className="text-xs text-muted-foreground">{action.shortcut}</span>
             )}
-          </button>
+          </Button>
         );
       })}
     </div>

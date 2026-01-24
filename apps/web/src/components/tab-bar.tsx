@@ -2,8 +2,8 @@
 
 import { useTabs } from "@/lib/tabs-context";
 import { useDaemon } from "@/lib/daemon-context";
+import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import { clsx } from "clsx";
 
 export function TabBar() {
   const { tabs, activeTabId, setActiveTab, removeTab, addTab } = useTabs();
@@ -42,27 +42,26 @@ export function TabBar() {
   return (
     <div className="flex items-center gap-2 px-4 py-3 border-b overflow-x-auto">
       {tabs.map((tab) => (
-        <button
+        <Button
           key={tab.id}
+          variant={tab.id === activeTabId ? "default" : "outline"}
+          size="sm"
           onClick={() => handleTabClick(tab.id, tab.repoPath)}
           onDoubleClick={(e) => handleCloseTab(e, tab.id)}
-          className={clsx(
-            "px-4 py-1.5 text-sm font-medium rounded-full whitespace-nowrap transition-colors",
-            tab.id === activeTabId
-              ? "bg-primary text-primary-foreground"
-              : "border text-foreground hover:bg-muted"
-          )}
+          className="rounded-full whitespace-nowrap"
         >
           {tab.name}
-        </button>
+        </Button>
       ))}
-      <button
+      <Button
+        variant="outline"
+        size="icon"
         onClick={handleAddTab}
-        className="flex items-center justify-center w-8 h-8 border rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+        className="rounded-full"
         title="Open project"
       >
         <Plus className="w-4 h-4" />
-      </button>
+      </Button>
     </div>
   );
 }

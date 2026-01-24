@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useDaemon } from "@/lib/daemon-context";
+import { Button } from "@/components/ui/button";
 import { clsx } from "clsx";
 import type { DevServerState } from "@vibogit/shared";
 
@@ -57,13 +58,15 @@ export function ConnectionStatus() {
         </span>
       </div>
       {devServer?.running && devServer.port && (
-        <button
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={handlePortClick}
-          className="px-2 py-0.5 bg-green-100 text-green-700 rounded font-mono text-xs hover:bg-green-200 transition-colors"
+          className="h-auto px-2 py-0.5 font-mono text-xs"
           title="Open in browser"
         >
           :{devServer.port}
-        </button>
+        </Button>
       )}
     </div>
   );

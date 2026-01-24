@@ -42,12 +42,12 @@ export function AutocompletePanel({
       ref={panelRef}
       role="listbox"
       aria-label="File suggestions"
-      className="absolute z-50 w-72 max-h-64 overflow-auto rounded-md border border-neutral-700 bg-neutral-900 shadow-lg"
+      className="absolute z-50 w-72 max-h-64 overflow-auto rounded-md border border-border bg-popover shadow-lg"
       style={{ top: position.y, left: position.x }}
     >
       {recentFiles.length > 0 && (
         <>
-          <div className="px-3 py-1.5 text-xs font-medium text-neutral-500 uppercase tracking-wider">
+          <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
             Recent Files
           </div>
           {recentFiles.map((result, idx) => (
@@ -63,7 +63,7 @@ export function AutocompletePanel({
       )}
       {otherFiles.length > 0 && (
         <>
-          <div className="px-3 py-1.5 text-xs font-medium text-neutral-500 uppercase tracking-wider border-t border-neutral-700">
+          <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider border-t border-border">
             All Matches
           </div>
           {otherFiles.map((result, idx) => {

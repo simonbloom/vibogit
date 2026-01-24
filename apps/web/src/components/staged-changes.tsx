@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { AICommitButton } from "@/components/ai-commit-button";
 import { FileViewer } from "@/components/file-viewer";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Check, FileText, FilePlus, FileX, ArrowUp, ArrowDown, Loader2 } from "lucide-react";
 
 interface StagedChangesProps {
@@ -101,25 +103,25 @@ export function StagedChanges({ repoPath }: StagedChangesProps) {
       {/* Commit Input - Above cards */}
       <div className="px-4 py-3 border-b bg-muted/30">
         <div className="flex items-center gap-2">
-          <input
+          <Input
             type="text"
             value={commitMessage}
             onChange={(e) => setCommitMessage(e.target.value)}
             placeholder="Commit message..."
-            className="flex-1 px-3 py-1.5 text-sm border rounded bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+            className="flex-1 h-11 text-base"
             onKeyDown={(e) => e.key === "Enter" && handleCommit()}
           />
           <AICommitButton
             onMessageGenerated={setCommitMessage}
             disabled={filesToCommit.length === 0}
           />
-          <button
+          <Button
+            size="sm"
             onClick={handleCommit}
             disabled={isCommitting || filesToCommit.length === 0 || !commitMessage.trim()}
-            className="px-4 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
           >
             {isCommitting ? <Loader2 className="w-4 h-4 animate-spin" /> : `Commit (${filesToCommit.length})`}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -128,37 +130,39 @@ export function StagedChanges({ repoPath }: StagedChangesProps) {
         {/* Left: File cards */}
         <div className="w-1/2 flex flex-col gap-3 p-4 overflow-auto border-r">
           {/* Will Commit Card */}
-          <div className="rounded-lg border-2 border-green-200 bg-green-50 overflow-hidden">
-            <div className="px-3 py-1.5 bg-green-100 border-b border-green-200">
-              <span className="text-sm font-semibold text-green-800">
+          <div className="rounded-lg border-2 border-black bg-card overflow-hidden">
+            <div className="px-3 py-1.5 bg-primary/10 border-b border-black">
+              <span className="text-sm font-semibold text-primary">
                 Will Commit ({filesToCommit.length})
               </span>
             </div>
             {filesToCommit.length === 0 ? (
-              <div className="px-4 py-3 text-sm text-green-700 text-center italic">
+              <div className="px-4 py-3 text-sm text-muted-foreground text-center italic">
                 No files selected
               </div>
             ) : (
-              <div className="divide-y divide-green-200 max-h-40 overflow-auto">
+              <div className="divide-y divide-border max-h-40 overflow-auto">
                 {filesToCommit.map((file) => (
                   <div
                     key={file.path}
                     onClick={() => setSelectedFile({ path: file.path, status: file.status })}
-                    className={`flex items-center gap-2 px-3 py-1.5 hover:bg-green-100/50 cursor-pointer ${
-                      selectedFile?.path === file.path ? "bg-green-200/50" : ""
+                    className={`flex items-center gap-2 px-3 py-1.5 hover:bg-muted/50 cursor-pointer ${
+                      selectedFile?.path === file.path ? "bg-muted" : ""
                     }`}
                   >
-                    {getStatusIcon(file.status)}
-                    <span className={`text-sm truncate flex-1 ${getStatusColor(file.status)}`}>
+                    <span className="text-foreground">{getStatusIcon(file.status)}</span>
+                    <span className="text-sm truncate flex-1 text-foreground">
                       {file.path}
                     </span>
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-foreground hover:text-muted-foreground"
                       onClick={(e) => { e.stopPropagation(); excludeFile(file.path); }}
-                      className="p-1 text-green-600 hover:text-green-800 hover:bg-green-200 rounded"
                       title="Exclude"
                     >
                       <ArrowDown className="w-3.5 h-3.5" />
-                    </button>
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -166,8 +170,8 @@ export function StagedChanges({ repoPath }: StagedChangesProps) {
           </div>
 
           {/* Won't Commit Card */}
-          <div className="rounded-lg border bg-card overflow-hidden">
-            <div className="px-3 py-1.5 bg-muted border-b">
+          <div className="rounded-lg border-2 border-black bg-card overflow-hidden">
+            <div className="px-3 py-1.5 bg-muted border-b border-black">
               <span className="text-sm font-semibold text-muted-foreground">
                 Won't Commit ({filesExcluded.length})
               </span>
@@ -190,13 +194,15 @@ export function StagedChanges({ repoPath }: StagedChangesProps) {
                     <span className={`text-sm truncate flex-1 ${getStatusColor(file.status)}`}>
                       {file.path}
                     </span>
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
                       onClick={(e) => { e.stopPropagation(); includeFile(file.path); }}
-                      className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
                       title="Include"
                     >
                       <ArrowUp className="w-3.5 h-3.5" />
-                    </button>
+                    </Button>
                   </div>
                 ))}
               </div>

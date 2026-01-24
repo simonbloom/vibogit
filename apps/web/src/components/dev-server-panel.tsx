@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useDaemon } from "@/lib/daemon-context";
+import { Button } from "@/components/ui/button";
 import { clsx } from "clsx";
 import {
   Play,
@@ -138,21 +139,25 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
         </div>
         {state.running && (
           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={handleOpenBrowser}
-              className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
+              className="h-8 w-8"
               title="Open in browser"
             >
               <ExternalLink className="w-4 h-4" />
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={handleStop}
               disabled={isLoading}
-              className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+              className="h-8 w-8 hover:text-destructive"
               title="Stop"
             >
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-4 h-4" />}
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -170,14 +175,15 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
                 <span className="text-muted-foreground">Command: </span>
                 <span className="font-mono">{config.command} {config.args.join(" ")}</span>
               </div>
-              <button
+              <Button
+                size="sm"
                 onClick={() => handleStart()}
                 disabled={isLoading}
-                className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                className="gap-1"
               >
                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
                 Start
-              </button>
+              </Button>
             </div>
           ) : null}
 
@@ -216,20 +222,22 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
               </div>
             </div>
             <div className="flex gap-2 mt-3">
-              <button
+              <Button
+                size="sm"
                 onClick={handleAddServer}
                 disabled={isLoading || !newServer.command.trim()}
-                className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                className="gap-1"
               >
                 <Plus className="w-4 h-4" />
                 Add
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setNewServer({ command: "bun run dev", port: 3000 })}
-                className="px-3 py-1.5 text-muted-foreground hover:text-foreground text-sm transition-colors"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </div>

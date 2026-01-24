@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import { Toaster } from "sonner";
 import "./globals.css";
+import { ThemeProvider } from "@/providers/ThemeProvider";
+import { MatrixRain, CRTOverlay } from "@/components/effects";
+import { MatrixVideoFilter, DarkModeVideoFilter, EmberVideoFilter } from "@/components/ui/video-filters";
 import { DaemonProvider } from "@/lib/daemon-context";
 import { TabsProvider } from "@/lib/tabs-context";
 import { AgentationWrapper } from "@/components/agentation-wrapper";
@@ -17,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         {process.env.NODE_ENV === "development" && (
           <Script
@@ -28,11 +31,18 @@ export default function RootLayout({
         )}
       </head>
       <body className="antialiased min-h-screen">
-        <DaemonProvider>
-          <TabsProvider>{children}</TabsProvider>
-        </DaemonProvider>
-        <AgentationWrapper />
-        <Toaster position="bottom-right" theme="dark" />
+        <ThemeProvider>
+          <MatrixRain />
+          <DaemonProvider>
+            <TabsProvider>{children}</TabsProvider>
+          </DaemonProvider>
+          <AgentationWrapper />
+          <CRTOverlay />
+          <MatrixVideoFilter />
+          <DarkModeVideoFilter />
+          <EmberVideoFilter />
+          <Toaster position="bottom-right" />
+        </ThemeProvider>
       </body>
     </html>
   );

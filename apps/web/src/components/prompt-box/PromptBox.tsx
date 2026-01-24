@@ -264,7 +264,7 @@ export function PromptBox({
   return (
     <div
       ref={containerRef}
-      className="relative rounded-md border border-neutral-700 bg-neutral-900"
+      className="relative rounded-lg border-[3px] border-black bg-card"
       {...dropzone.handlers}
     >
       <CollapsibleHeader
@@ -304,7 +304,7 @@ export function PromptBox({
                   placeholder={placeholder}
                   maxLength={maxLength}
                   aria-label={ariaLabel}
-                  className="w-full bg-transparent text-neutral-200 placeholder-neutral-500 resize-none outline-none"
+                  className="w-full bg-transparent text-foreground placeholder:text-muted-foreground resize-none outline-none border-0"
                   style={{ minHeight, maxHeight }}
                 />
 

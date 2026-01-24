@@ -1,6 +1,7 @@
 "use client";
 
 import { useDaemon } from "@/lib/daemon-context";
+import { Button } from "@/components/ui/button";
 import { clsx } from "clsx";
 import { File, Plus, Minus, Edit3, HelpCircle, ChevronDown, ChevronRight } from "lucide-react";
 import type { GitStatus, GitFile } from "@vibogit/shared";
@@ -89,12 +90,9 @@ export function ChangesPanel({ status, selectedFile, onSelectFile }: ChangesPane
           Changes ({totalChanges})
         </span>
         {(status.unstaged.length > 0 || status.untracked.length > 0) && (
-          <button
-            onClick={handleStageAll}
-            className="text-xs text-accent hover:underline"
-          >
+          <Button variant="link" size="sm" className="h-auto p-0" onClick={handleStageAll}>
             Stage all
-          </button>
+          </Button>
         )}
       </div>
 
@@ -176,9 +174,10 @@ function FileSection({
 }: FileSectionProps) {
   return (
     <div className="border-b border-border">
-      <button
+      <Button
+        variant="ghost"
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-3 py-2 hover:bg-surface-light transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2 h-auto rounded-none"
       >
         <div className="flex items-center gap-2">
           {expanded ? (
@@ -190,17 +189,19 @@ function FileSection({
           <span className="text-xs text-text-muted">({count})</span>
         </div>
         {onActionAll && (
-          <button
+          <Button
+            variant="link"
+            size="sm"
+            className="h-auto p-0"
             onClick={(e) => {
               e.stopPropagation();
               onActionAll();
             }}
-            className="text-xs text-accent hover:underline"
           >
             {actionLabel} all
-          </button>
+          </Button>
         )}
-      </button>
+      </Button>
 
       {expanded && (
         <div className="pb-2">
@@ -260,15 +261,17 @@ function FileItem({ file, isSelected, onSelect, actionLabel, onAction }: FileIte
           <p className="text-xs text-text-muted truncate">{filePath}</p>
         )}
       </div>
-      <button
+      <Button
+        variant="link"
+        size="sm"
+        className="h-auto p-0 opacity-0 group-hover:opacity-100 transition-opacity"
         onClick={(e) => {
           e.stopPropagation();
           onAction();
         }}
-        className="opacity-0 group-hover:opacity-100 text-xs text-accent hover:underline transition-opacity"
       >
         {actionLabel}
-      </button>
+      </Button>
     </div>
   );
 }

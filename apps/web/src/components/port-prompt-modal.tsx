@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { X, AlertCircle } from "lucide-react";
 
 interface Props {
@@ -58,12 +59,9 @@ export function PortPromptModal({ isOpen, onClose, onSubmit, defaultPort = 3000 
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Dev Server Port</h2>
-          <button
-            onClick={onClose}
-            className="p-1 text-muted-foreground hover:text-foreground rounded hover:bg-muted transition-colors"
-          >
+          <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
 
         {/* Description */}
@@ -89,7 +87,7 @@ export function PortPromptModal({ isOpen, onClose, onSubmit, defaultPort = 3000 
               autoFocus
             />
             {error && (
-              <div className="flex items-center gap-1.5 mt-2 text-sm text-red-500">
+              <div className="flex items-center gap-1.5 mt-2 text-sm text-destructive">
                 <AlertCircle className="w-4 h-4" />
                 {error}
               </div>
@@ -102,26 +100,19 @@ export function PortPromptModal({ isOpen, onClose, onSubmit, defaultPort = 3000 
               type="checkbox"
               checked={saveToConfig}
               onChange={(e) => setSaveToConfig(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+              className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
             />
             <span className="text-sm">Save port to agents.md for future use</span>
           </label>
 
           {/* Actions */}
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm border rounded-md hover:bg-muted transition-colors"
-            >
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-            >
+            </Button>
+            <Button type="submit">
               Connect
-            </button>
+            </Button>
           </div>
         </form>
 
