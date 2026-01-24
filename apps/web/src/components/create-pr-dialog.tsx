@@ -34,17 +34,31 @@ export function CreatePRDialog({
 
     const getRemote = async () => {
       try {
-        // Try to get remote URL from git config
-        // For now, we'll construct it from the branch tracking info
-        // This is a simplified implementation
-        setRemoteUrl(null);
+        const response = await send<{ remotes: Array<{ name: string; refs: { fetch: string; push: string } }> }>(
+          "getRemotes",
+          { repoPath }
+        );
+        const origin = response.remotes.find((r) => r.name === "origin");
+        if (origin?.refs?.push) {
+          // Convert git URL to GitHub web URL
+          let url = origin.refs.push;
+          // Handle SSH format: git@github.com:user/repo.git
+          if (url.startsWith("git@github.com:")) {
+            url = url.replace("git@github.com:", "https://github.com/").replace(/\.git$/, "");
+          }
+          // Handle HTTPS format: https://github.com/user/repo.git
+          if (url.endsWith(".git")) {
+            url = url.replace(/\.git$/, "");
+          }
+          setRemoteUrl(url);
+        }
       } catch {
         setRemoteUrl(null);
       }
     };
 
     getRemote();
-  }, [isOpen, repoPath]);
+  }, [isOpen, repoPath, send]);
 
   const handleGenerateWithAI = async () => {
     if (!repoPath || !currentBranch) return;
@@ -106,14 +120,16 @@ export function CreatePRDialog({
   };
 
   const handleCreatePR = () => {
-    // For now, open GitHub's PR creation page
-    // This would need the remote URL to work properly
+    if (!remoteUrl) {
+      setError("Could not determine remote repository URL");
+      return;
+    }
+    
     const encodedTitle = encodeURIComponent(title);
     const encodedBody = encodeURIComponent(description);
     const branch = currentBranch?.name || "feature";
 
-    // Generic GitHub URL pattern - user would need to replace with their repo
-    const url = `https://github.com/OWNER/REPO/compare/${baseBranch}...${branch}?expand=1&title=${encodedTitle}&body=${encodedBody}`;
+    const url = `${remoteUrl}/compare/${baseBranch}...${branch}?expand=1&title=${encodedTitle}&body=${encodedBody}`;
 
     window.open(url, "_blank");
   };
