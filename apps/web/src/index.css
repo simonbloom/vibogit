@@ -590,6 +590,28 @@
     text-shadow: 0 0 5px hsl(136 100% 50% / 0.5);
   }
 
+  /* Matrix graph colors - force all to green */
+  .matrix svg line {
+    stroke: #00FF41 !important;
+    filter: drop-shadow(0 0 3px rgba(0, 255, 65, 0.6)) !important;
+  }
+  
+  .matrix svg path {
+    stroke: #00FF41 !important;
+    filter: drop-shadow(0 0 3px rgba(0, 255, 65, 0.6)) !important;
+  }
+  
+  .matrix svg circle {
+    stroke: #00FF41 !important;
+    fill: #00FF41 !important;
+    filter: drop-shadow(0 0 4px rgba(0, 255, 65, 0.8)) !important;
+  }
+
+  /* Matrix commit hash colors - override inline styles */
+  .matrix .font-mono[style*="color"] {
+    color: #00FF41 !important;
+  }
+
   /* Matrix muted text */
   .matrix .text-muted-foreground,
   .matrix [class*="muted"] {

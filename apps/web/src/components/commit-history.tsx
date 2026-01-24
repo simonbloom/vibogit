@@ -408,7 +408,7 @@ function CommitRow({
   const nodeColor = getBranchColorBase(nodeCol);
   
   const { rowHeight: ROW_HEIGHT, colWidth: COL_WIDTH, showAuthor, messageMaxLength, fontSize } = viewConfig;
-  const OFFSET = 14;
+  const OFFSET = 24;
   const midY = ROW_HEIGHT / 2;
   const nodeX = OFFSET + nodeCol * COL_WIDTH;
 
