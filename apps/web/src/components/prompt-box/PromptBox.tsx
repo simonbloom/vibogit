@@ -74,6 +74,25 @@ export function PromptBox({
     }
   }, [state.cursorPosition])
 
+  // Auto-resize textarea based on content
+  const adjustHeight = useCallback(() => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+
+    // Reset height to auto to measure true scrollHeight
+    textarea.style.height = 'auto'
+    const newHeight = Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight))
+    textarea.style.height = `${newHeight}px`
+
+    // Enable scroll only when at max height
+    textarea.style.overflowY = newHeight >= maxHeight ? 'auto' : 'hidden'
+  }, [minHeight, maxHeight])
+
+  // Adjust height on mount and when text changes
+  useEffect(() => {
+    adjustHeight()
+  }, [state.text, adjustHeight])
+
   const handleFileSelect = useCallback(
     (path: string) => {
       if (state.files.length >= maxFiles) {
@@ -392,8 +411,8 @@ export function PromptBox({
                   placeholder={placeholder}
                   maxLength={maxLength}
                   aria-label={ariaLabel}
-                  className="w-full bg-transparent text-foreground placeholder:text-muted-foreground resize-none outline-none border-0"
-                  style={{ minHeight, maxHeight }}
+                  className="w-full bg-transparent text-foreground placeholder:text-muted-foreground resize-none outline-none border-0 transition-[height] duration-150 ease-out"
+                  style={{ minHeight, overflowY: 'hidden' }}
                 />
 
                 <AutocompletePanel
