@@ -7,7 +7,7 @@
 - Use `bun add <package>` to add dependencies
 
 ## Development
-- Dev server port: 4512
+- Dev server port: 3002
 - Run dev: `bun run dev`
 - Build: `bun run build`
 - Typecheck: `bun run typecheck`
