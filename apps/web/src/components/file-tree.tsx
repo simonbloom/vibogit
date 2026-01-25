@@ -176,7 +176,7 @@ export function FileTree({ repoPath, selectedPath, onFileSelect }: FileTreeProps
   };
 
   return (
-    <div className="flex-1 overflow-auto py-2">
+    <div className="flex-1 overflow-auto py-2 min-h-0">
       {tree.map((node) => renderNode(node))}
     </div>
   );
