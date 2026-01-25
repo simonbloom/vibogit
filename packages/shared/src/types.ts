@@ -294,9 +294,15 @@ export interface RecentProject {
 
 // Config Types
 export type AiProvider = "anthropic" | "openai" | "gemini";
-export type ThemeOption = "dark" | "light";
+export type ThemeOption = "light" | "dark" | "ember" | "matrix" | "system";
 export type TerminalOption = "Terminal" | "iTerm" | "Ghostty" | "Warp" | "kitty";
 export type EditorOption = "cursor" | "antigravity" | "code" | "zed" | "custom";
+
+export interface ConfigTab {
+  id: string;
+  repoPath: string;
+  name: string;
+}
 
 export interface Config {
   computerName: string;
@@ -308,6 +314,8 @@ export interface Config {
   theme: ThemeOption;
   imageBasePath: string;
   showHiddenFiles: boolean;
+  recentTabs: ConfigTab[];
+  activeTabId: string | null;
 }
 
 export const DEFAULT_CONFIG: Config = {
@@ -320,6 +328,8 @@ export const DEFAULT_CONFIG: Config = {
   theme: "dark",
   imageBasePath: "",
   showHiddenFiles: false,
+  recentTabs: [],
+  activeTabId: null,
 };
 
 // Config WebSocket Messages

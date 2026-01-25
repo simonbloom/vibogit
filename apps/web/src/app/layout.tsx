@@ -8,6 +8,7 @@ import { MatrixVideoFilter, DarkModeVideoFilter, EmberVideoFilter } from "@/comp
 import { DaemonProvider } from "@/lib/daemon-context";
 import { ConfigProvider } from "@/lib/config-context";
 import { TabsProvider } from "@/lib/tabs-context";
+import { ThemeSync } from "@/components/theme-sync";
 import { AgentationWrapper } from "@/components/agentation-wrapper";
 
 export const metadata: Metadata = {
@@ -36,6 +37,7 @@ export default function RootLayout({
           <MatrixRain />
           <DaemonProvider>
             <ConfigProvider>
+              <ThemeSync />
               <TabsProvider>{children}</TabsProvider>
             </ConfigProvider>
           </DaemonProvider>

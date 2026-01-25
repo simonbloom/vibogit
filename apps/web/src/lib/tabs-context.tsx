@@ -6,17 +6,14 @@ import {
   useState,
   useCallback,
   useEffect,
+  useRef,
   type ReactNode,
 } from "react";
-import type { Tab } from "@vibogit/shared";
+import type { Tab, ConfigTab } from "@vibogit/shared";
+import { useConfig } from "./config-context";
+import { useDaemon } from "./daemon-context";
 
-const STORAGE_KEY = "vibogit-projects";
 const MAX_TABS = 20;
-
-interface StoredData {
-  tabs: Tab[];
-  activeTabId: string | null;
-}
 
 interface TabsContextValue {
   tabs: Tab[];
@@ -37,62 +34,52 @@ function getProjectName(path: string): string {
   return path.split("/").pop() || path;
 }
 
-function loadFromStorage(): StoredData {
-  if (typeof window === "undefined") {
-    return { tabs: [], activeTabId: null };
-  }
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const data = JSON.parse(stored) as StoredData;
-      return {
-        tabs: data.tabs?.slice(0, MAX_TABS) || [],
-        activeTabId: data.activeTabId || null,
-      };
-    }
-  } catch (e) {
-    console.error("Failed to load tabs from localStorage:", e);
-  }
-  return { tabs: [], activeTabId: null };
-}
-
-function saveToStorage(data: StoredData): void {
-  if (typeof window === "undefined") return;
-  try {
-    const toSave: StoredData = {
-      tabs: data.tabs.slice(0, MAX_TABS),
-      activeTabId: data.activeTabId,
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-  } catch (e) {
-    console.error("Failed to save tabs to localStorage:", e);
-  }
-}
-
 export function TabsProvider({ children }: { children: ReactNode }) {
+  const { config, setConfig, isLoading: configLoading } = useConfig();
+  const { state } = useDaemon();
   const [tabs, setTabs] = useState<Tab[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [activeTabId, setActiveTabIdState] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const isInitialSync = useRef(true);
+  const lastSyncedTabs = useRef<string>("");
 
-  // Load from localStorage on mount
+  // Load from config when daemon connects
   useEffect(() => {
-    const stored = loadFromStorage();
-    setTabs(stored.tabs);
-    setActiveTabId(stored.activeTabId);
-    setIsLoaded(true);
-  }, []);
-
-  // Save to localStorage whenever tabs or activeTabId changes
-  useEffect(() => {
-    if (isLoaded) {
-      saveToStorage({ tabs, activeTabId });
+    if (configLoading) return;
+    
+    if (state.connection === "connected" && isInitialSync.current) {
+      const configTabs = config.recentTabs || [];
+      setTabs(configTabs as Tab[]);
+      setActiveTabIdState(config.activeTabId);
+      lastSyncedTabs.current = JSON.stringify({ tabs: configTabs, activeTabId: config.activeTabId });
+      isInitialSync.current = false;
+      setIsLoaded(true);
+    } else if (state.connection !== "connected" && isInitialSync.current) {
+      // Fallback: load from config's cached localStorage data
+      const configTabs = config.recentTabs || [];
+      setTabs(configTabs as Tab[]);
+      setActiveTabIdState(config.activeTabId);
+      isInitialSync.current = false;
+      setIsLoaded(true);
     }
-  }, [tabs, activeTabId, isLoaded]);
+  }, [state.connection, config.recentTabs, config.activeTabId, configLoading]);
+
+  // Save to config when tabs change (debounced)
+  useEffect(() => {
+    if (!isLoaded || isInitialSync.current) return;
+    
+    const currentState = JSON.stringify({ tabs, activeTabId });
+    if (currentState === lastSyncedTabs.current) return;
+    
+    lastSyncedTabs.current = currentState;
+    const configTabs: ConfigTab[] = tabs.map(t => ({ id: t.id, repoPath: t.repoPath, name: t.name }));
+    setConfig({ recentTabs: configTabs, activeTabId });
+  }, [tabs, activeTabId, isLoaded, setConfig]);
 
   const addTab = useCallback((repoPath: string): Tab => {
     const existingTab = tabs.find((t) => t.repoPath === repoPath);
     if (existingTab) {
-      setActiveTabId(existingTab.id);
+      setActiveTabIdState(existingTab.id);
       return existingTab;
     }
 
@@ -110,7 +97,7 @@ export function TabsProvider({ children }: { children: ReactNode }) {
       }
       return updated;
     });
-    setActiveTabId(newTab.id);
+    setActiveTabIdState(newTab.id);
     return newTab;
   }, [tabs]);
 
@@ -121,9 +108,9 @@ export function TabsProvider({ children }: { children: ReactNode }) {
       if (activeTabId === tabId && newTabs.length > 0) {
         const index = prev.findIndex((t) => t.id === tabId);
         const newIndex = Math.max(0, index - 1);
-        setActiveTabId(newTabs[newIndex]?.id || null);
+        setActiveTabIdState(newTabs[newIndex]?.id || null);
       } else if (newTabs.length === 0) {
-        setActiveTabId(null);
+        setActiveTabIdState(null);
       }
       
       return newTabs;
@@ -131,7 +118,7 @@ export function TabsProvider({ children }: { children: ReactNode }) {
   }, [activeTabId]);
 
   const setActiveTab = useCallback((tabId: string) => {
-    setActiveTabId(tabId);
+    setActiveTabIdState(tabId);
   }, []);
 
   const getActiveTab = useCallback(() => {
