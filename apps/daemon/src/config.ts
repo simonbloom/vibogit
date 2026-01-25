@@ -24,8 +24,9 @@ export class ConfigService {
     if (existsSync(CONFIG_FILE)) {
       await this.loadConfig();
     } else {
-      // Auto-detect computer name on first run
+      // Auto-detect values on first run
       this.config.computerName = await this.detectComputerName();
+      this.config.imageBasePath = this.getDefaultImagePath();
       await this.saveConfig();
     }
 
@@ -70,6 +71,10 @@ export class ConfigService {
         return "";
       }
     }
+  }
+
+  private getDefaultImagePath(): string {
+    return join(homedir(), "Desktop");
   }
 
   getConfig(): Config {
