@@ -49,7 +49,8 @@ export type MessageType =
   | "setConfig"
   | "configChanged"
   | "list-skills"
-  | "skills-list";
+  | "skills-list"
+  | "getFavicon";
 
 export interface WebSocketMessage<T = unknown> {
   type: MessageType;
@@ -364,4 +365,14 @@ export interface SkillsListRequest {
 
 export interface SkillsListResponse {
   skills: Skill[];
+}
+
+// Favicon Types
+export interface GetFaviconRequest {
+  path: string;
+}
+
+export interface GetFaviconResponse {
+  favicon: string | null;
+  mimeType: string | null;
 }

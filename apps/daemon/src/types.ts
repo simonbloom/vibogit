@@ -48,7 +48,10 @@ export type MessageType =
   | "killPort"
   | "getConfig"
   | "setConfig"
-  | "configChanged";
+  | "configChanged"
+  | "list-skills"
+  | "skills-list"
+  | "getFavicon";
 
 export interface WebSocketMessage<T = unknown> {
   type: MessageType;

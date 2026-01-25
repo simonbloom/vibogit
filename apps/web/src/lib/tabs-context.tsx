@@ -9,9 +9,14 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import type { Tab, ConfigTab } from "@vibogit/shared";
+import type { Tab as BaseTab, ConfigTab, GetFaviconResponse } from "@vibogit/shared";
 import { useConfig } from "./config-context";
 import { useDaemon } from "./daemon-context";
+
+interface Tab extends BaseTab {
+  favicon?: string | null;
+  faviconMimeType?: string | null;
+}
 
 const MAX_TABS = 20;
 
@@ -36,24 +41,49 @@ function getProjectName(path: string): string {
 
 export function TabsProvider({ children }: { children: ReactNode }) {
   const { config, setConfig, isLoading: configLoading } = useConfig();
-  const { state } = useDaemon();
+  const { state, send } = useDaemon();
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabIdState] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const isInitialSync = useRef(true);
   const lastSyncedTabs = useRef<string>("");
 
+  const fetchFavicon = useCallback(async (tabId: string, repoPath: string) => {
+    try {
+      const response = await send<GetFaviconResponse>("getFavicon", { path: repoPath });
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === tabId
+            ? { ...t, favicon: response.favicon, faviconMimeType: response.mimeType }
+            : t
+        )
+      );
+    } catch {
+      // Silently fail - no favicon will be shown
+      setTabs((prev) =>
+        prev.map((t) => (t.id === tabId ? { ...t, favicon: null, faviconMimeType: null } : t))
+      );
+    }
+  }, [send]);
+
   // Load from config when daemon connects
   useEffect(() => {
     if (configLoading) return;
     
     if (state.connection === "connected" && isInitialSync.current) {
-      const configTabs = config.recentTabs || [];
-      setTabs(configTabs as Tab[]);
+      const configTabs = (config.recentTabs || []) as Tab[];
+      setTabs(configTabs);
       setActiveTabIdState(config.activeTabId);
       lastSyncedTabs.current = JSON.stringify({ tabs: configTabs, activeTabId: config.activeTabId });
       isInitialSync.current = false;
       setIsLoaded(true);
+      
+      // Fetch favicons for all loaded tabs
+      configTabs.forEach((tab) => {
+        if (tab.favicon === undefined) {
+          fetchFavicon(tab.id, tab.repoPath);
+        }
+      });
     } else if (state.connection !== "connected" && isInitialSync.current) {
       // Fallback: load from config's cached localStorage data
       const configTabs = config.recentTabs || [];
@@ -62,7 +92,7 @@ export function TabsProvider({ children }: { children: ReactNode }) {
       isInitialSync.current = false;
       setIsLoaded(true);
     }
-  }, [state.connection, config.recentTabs, config.activeTabId, configLoading]);
+  }, [state.connection, config.recentTabs, config.activeTabId, configLoading, fetchFavicon]);
 
   // Save to config when tabs change (debounced)
   useEffect(() => {
@@ -98,8 +128,12 @@ export function TabsProvider({ children }: { children: ReactNode }) {
       return updated;
     });
     setActiveTabIdState(newTab.id);
+    
+    // Fetch favicon asynchronously
+    fetchFavicon(newTab.id, repoPath);
+    
     return newTab;
-  }, [tabs]);
+  }, [tabs, fetchFavicon]);
 
   const removeTab = useCallback((tabId: string) => {
     setTabs((prev) => {

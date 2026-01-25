@@ -49,8 +49,17 @@ export function TabBar() {
           variant={tab.id === activeTabId ? "default" : "outline"}
           size="sm"
           onClick={() => handleTabClick(tab.id, tab.repoPath)}
-          className="rounded-full whitespace-nowrap pl-3 pr-2 gap-2"
+          className="rounded-full whitespace-nowrap pl-2 pr-2 gap-2"
         >
+          {tab.favicon && tab.faviconMimeType && (
+            <img
+              src={`data:${tab.faviconMimeType};base64,${tab.favicon}`}
+              alt=""
+              width={21}
+              height={21}
+              className="shrink-0"
+            />
+          )}
           {tab.name}
           <span
             onClick={(e) => handleCloseTab(e, tab.id)}

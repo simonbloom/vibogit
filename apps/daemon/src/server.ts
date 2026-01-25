@@ -579,6 +579,41 @@ async function handleMessage(
         break;
       }
 
+      case "getFavicon": {
+        const { path: projectPath } = payload as { path: string };
+        const MAX_SIZE = 100 * 1024; // 100KB
+        
+        const candidates = [
+          { file: "favicon.svg", mimeType: "image/svg+xml" },
+          { file: "public/favicon.svg", mimeType: "image/svg+xml" },
+          { file: "favicon.ico", mimeType: "image/x-icon" },
+          { file: "public/favicon.ico", mimeType: "image/x-icon" },
+        ];
+        
+        let favicon: string | null = null;
+        let mimeType: string | null = null;
+        
+        for (const candidate of candidates) {
+          const fullPath = join(projectPath, candidate.file);
+          if (existsSync(fullPath)) {
+            try {
+              const stats = statSync(fullPath);
+              if (stats.size <= MAX_SIZE) {
+                const content = readFileSync(fullPath);
+                favicon = content.toString("base64");
+                mimeType = candidate.mimeType;
+                break;
+              }
+            } catch {
+              // Skip unreadable files
+            }
+          }
+        }
+        
+        response = { favicon, mimeType };
+        break;
+      }
+
       default:
         throw new Error(`Unknown message type: ${type}`);
     }
