@@ -2,7 +2,6 @@
 
 import { useDaemon } from "@/lib/daemon-context";
 import { useTabs } from "@/lib/tabs-context";
-import { ConnectionStatus } from "@/components/connection-status";
 import { WelcomeScreen } from "@/components/welcome-screen";
 import { MainInterface } from "@/components/main-interface";
 import { TabBar } from "@/components/tab-bar";
@@ -14,18 +13,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen">
-      <header className="flex items-center justify-between px-4 py-3 border-b">
-        <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold">ViboGit</h1>
-          {state.connection === "disconnected" && (
-            <code className="px-2 py-1 bg-muted rounded text-xs font-mono text-muted-foreground">
-              npx vibogit-daemon
-            </code>
-          )}
-        </div>
-        <ConnectionStatus />
-      </header>
-
       {state.connection === "connected" && tabs.length > 0 && <TabBar />}
 
       {state.connection === "disconnected" && (

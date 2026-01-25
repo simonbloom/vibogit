@@ -3,6 +3,7 @@
 import { useTabs } from "@/lib/tabs-context";
 import { useDaemon } from "@/lib/daemon-context";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/logo";
 import { Plus } from "lucide-react";
 
 export function TabBar() {
@@ -41,6 +42,7 @@ export function TabBar() {
 
   return (
     <div className="flex items-center gap-2 px-4 py-3 border-b overflow-x-auto">
+      <Logo size={48} />
       {tabs.map((tab) => (
         <Button
           key={tab.id}

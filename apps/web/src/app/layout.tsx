@@ -14,6 +14,9 @@ import { AgentationWrapper } from "@/components/agentation-wrapper";
 export const metadata: Metadata = {
   title: "ViboGit",
   description: "Web-based Git client with local daemon",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
