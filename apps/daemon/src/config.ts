@@ -82,6 +82,8 @@ export class ConfigService {
   }
 
   async setConfig(partial: Partial<Config>): Promise<Config> {
+    // Re-read from file first to pick up any manual edits
+    await this.loadConfig();
     this.config = { ...this.config, ...partial };
     await this.saveConfig();
     return this.getConfig();
