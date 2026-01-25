@@ -1,6 +1,6 @@
 {
   "name": "vibogit-daemon",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Local daemon for ViboGit - Web-based Git client",
   "author": "Simon Bloom",
   "license": "MIT",
@@ -25,11 +25,7 @@
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
-  "dependencies": {
-    "@vibogit/shared": "workspace:*",
-    "simple-git": "^3.24.0",
-    "chokidar": "^4.0.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/bun": "latest",
     "typescript": "^5.4.0"
