@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/providers/ThemeProvider";
 import { MatrixRain, CRTOverlay } from "@/components/effects";
 import { MatrixVideoFilter, DarkModeVideoFilter, EmberVideoFilter } from "@/components/ui/video-filters";
 import { DaemonProvider } from "@/lib/daemon-context";
+import { ConfigProvider } from "@/lib/config-context";
 import { TabsProvider } from "@/lib/tabs-context";
 import { AgentationWrapper } from "@/components/agentation-wrapper";
 
@@ -34,7 +35,9 @@ export default function RootLayout({
         <ThemeProvider>
           <MatrixRain />
           <DaemonProvider>
-            <TabsProvider>{children}</TabsProvider>
+            <ConfigProvider>
+              <TabsProvider>{children}</TabsProvider>
+            </ConfigProvider>
           </DaemonProvider>
           <AgentationWrapper />
           <CRTOverlay />

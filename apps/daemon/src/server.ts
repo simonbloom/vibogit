@@ -1,10 +1,12 @@
 import type { ServerWebSocket } from "bun";
 import type { WebSocketMessage, DevServerConfig } from "./types";
+import type { Config } from "@vibogit/shared";
 import { GitService } from "./git";
 import { FileWatcher } from "./watch";
 import { SystemService } from "./system";
 import { DevServerManager } from "./devserver";
 import { SecureStorage } from "./keychain";
+import { ConfigService } from "./config";
 import { readAgentsConfig, updateAgentsConfig } from "./agents-config";
 import { readdirSync, statSync } from "fs";
 import { join, relative } from "path";
@@ -68,7 +70,13 @@ const fileWatcher = new FileWatcher();
 const systemService = new SystemService();
 const devServerManager = new DevServerManager();
 const secureStorage = new SecureStorage();
+const configService = new ConfigService();
 const clients = new Map<ServerWebSocket<ClientData>, ClientData>();
+
+// Initialize config service
+configService.init().catch((err) => {
+  console.error("[Config] Failed to initialize:", err);
+});
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 15);
@@ -480,6 +488,28 @@ async function handleMessage(
           console.log("[killPort] Error:", error);
           response = { success: false, killed: false, error: String(error) };
         }
+        break;
+      }
+
+      case "getConfig": {
+        const config = configService.getConfig();
+        response = { config };
+        break;
+      }
+
+      case "setConfig": {
+        const { config: partialConfig } = payload as { config: Partial<Config> };
+        const updatedConfig = await configService.setConfig(partialConfig);
+        response = { config: updatedConfig };
+        // Broadcast config change to all other clients
+        broadcast(
+          {
+            type: "configChanged",
+            id: generateId(),
+            payload: { config: updatedConfig },
+          },
+          (data) => data.id !== clientData?.id
+        );
         break;
       }
 

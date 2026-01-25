@@ -44,7 +44,10 @@ export type MessageType =
   | "readFile"
   | "readAgentsConfig"
   | "updateAgentsConfig"
-  | "killPort";
+  | "killPort"
+  | "getConfig"
+  | "setConfig"
+  | "configChanged";
 
 export interface WebSocketMessage<T = unknown> {
   type: MessageType;
@@ -287,4 +290,51 @@ export interface RecentProject {
   path: string;
   name: string;
   lastOpenedAt: string;
+}
+
+// Config Types
+export type AiProvider = "anthropic" | "openai" | "gemini";
+export type ThemeOption = "dark" | "light";
+export type TerminalOption = "Terminal" | "iTerm" | "Ghostty" | "Warp" | "kitty";
+export type EditorOption = "cursor" | "antigravity" | "code" | "zed" | "custom";
+
+export interface Config {
+  computerName: string;
+  aiProvider: AiProvider;
+  aiApiKey: string;
+  editor: EditorOption;
+  customEditorCommand: string;
+  terminal: TerminalOption;
+  theme: ThemeOption;
+  imageBasePath: string;
+  showHiddenFiles: boolean;
+}
+
+export const DEFAULT_CONFIG: Config = {
+  computerName: "",
+  aiProvider: "anthropic",
+  aiApiKey: "",
+  editor: "cursor",
+  customEditorCommand: "",
+  terminal: "Terminal",
+  theme: "dark",
+  imageBasePath: "",
+  showHiddenFiles: false,
+};
+
+// Config WebSocket Messages
+export interface GetConfigResponse {
+  config: Config;
+}
+
+export interface SetConfigRequest {
+  config: Partial<Config>;
+}
+
+export interface SetConfigResponse {
+  config: Config;
+}
+
+export interface ConfigChangedEvent {
+  config: Config;
 }

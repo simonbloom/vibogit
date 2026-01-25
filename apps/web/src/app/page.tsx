@@ -15,7 +15,14 @@ export default function Home() {
   return (
     <main className="min-h-screen">
       <header className="flex items-center justify-between px-4 py-3 border-b">
-        <h1 className="text-lg font-semibold">ViboGit</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-lg font-semibold">ViboGit</h1>
+          {state.connection === "disconnected" && (
+            <code className="px-2 py-1 bg-muted rounded text-xs font-mono text-muted-foreground">
+              npx vibogit-daemon
+            </code>
+          )}
+        </div>
         <ConnectionStatus />
       </header>
 
@@ -25,7 +32,7 @@ export default function Home() {
         <div className="flex flex-col items-center justify-center p-12 text-center min-h-[calc(100vh-57px)]">
           <h2 className="text-xl font-semibold mb-2">Start the daemon</h2>
           <p className="text-muted-foreground mb-4">Run this command in your terminal:</p>
-          <code className="px-4 py-2 bg-muted rounded-md font-mono text-sm">bun run daemon</code>
+          <code className="px-4 py-2 bg-muted rounded-md font-mono text-sm">npx vibogit-daemon</code>
         </div>
       )}
 

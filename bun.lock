@@ -16,6 +16,7 @@
         "vibogit-daemon": "./bin/vibogit-daemon.js",
       },
       "dependencies": {
+        "@vibogit/shared": "workspace:*",
         "chokidar": "^4.0.0",
         "simple-git": "^3.24.0",
       },

@@ -26,6 +26,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
+    "@vibogit/shared": "workspace:*",
     "simple-git": "^3.24.0",
     "chokidar": "^4.0.0"
   },

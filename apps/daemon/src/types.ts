@@ -45,7 +45,10 @@ export type MessageType =
   | "readFile"
   | "readAgentsConfig"
   | "updateAgentsConfig"
-  | "killPort";
+  | "killPort"
+  | "getConfig"
+  | "setConfig"
+  | "configChanged";
 
 export interface WebSocketMessage<T = unknown> {
   type: MessageType;
