@@ -4,7 +4,7 @@ import { useTabs } from "@/lib/tabs-context";
 import { useDaemon } from "@/lib/daemon-context";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 export function TabBar() {
   const { tabs, activeTabId, setActiveTab, removeTab, addTab } = useTabs();
@@ -49,10 +49,16 @@ export function TabBar() {
           variant={tab.id === activeTabId ? "default" : "outline"}
           size="sm"
           onClick={() => handleTabClick(tab.id, tab.repoPath)}
-          onDoubleClick={(e) => handleCloseTab(e, tab.id)}
-          className="rounded-full whitespace-nowrap"
+          className="rounded-full whitespace-nowrap pl-3 pr-2 gap-2"
         >
           {tab.name}
+          <span
+            onClick={(e) => handleCloseTab(e, tab.id)}
+            className="hover:bg-foreground/20 rounded-full p-0.5"
+            title="Close project"
+          >
+            <X className="w-3 h-3" />
+          </span>
         </Button>
       ))}
       <Button
