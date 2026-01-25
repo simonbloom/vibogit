@@ -16,3 +16,5 @@
 - `/apps/web` - Next.js 15 web application
 - `/apps/daemon` - Bun-based local daemon (WebSocket server on port 9111)
 - `/packages/shared` - Shared TypeScript types
+
+
