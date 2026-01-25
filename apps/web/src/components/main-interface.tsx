@@ -46,6 +46,7 @@ export function MainInterface() {
   const [showPortPrompt, setShowPortPrompt] = useState(false);
   const [projectFiles, setProjectFiles] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<{ path: string; name: string } | null>(null);
+  const [graphRefreshKey, setGraphRefreshKey] = useState(0);
 
   const { status, branches, repoPath } = state;
   const currentBranch = branches.find((b) => b.current);
@@ -138,6 +139,7 @@ export function MainInterface() {
       await send("pull", { repoPath });
       await refreshStatus();
       await refreshBranches();
+      setGraphRefreshKey((k) => k + 1);
     } catch (error) {
       console.error("Failed to pull:", error);
     } finally {
@@ -454,7 +456,7 @@ export function MainInterface() {
       <div className="flex-1 overflow-hidden">
         {activeView === "graph" && (
           <div className="h-full overflow-auto">
-            <CommitHistory repoPath={repoPath} />
+            <CommitHistory repoPath={repoPath} refreshKey={graphRefreshKey} />
           </div>
         )}
         {activeView === "tree" && (

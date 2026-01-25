@@ -18,6 +18,7 @@ import {
 interface CommitHistoryProps {
   repoPath: string | null;
   limit?: number;
+  refreshKey?: number;
 }
 
 interface GraphRow {
@@ -116,7 +117,7 @@ interface ContextMenuState {
   y: number;
 }
 
-export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
+export function CommitHistory({ repoPath, limit = 50, refreshKey }: CommitHistoryProps) {
   const { send } = useDaemon();
   const [commits, setCommits] = useState<GitCommitType[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -210,7 +211,7 @@ export function CommitHistory({ repoPath, limit = 50 }: CommitHistoryProps) {
     };
 
     loadCommits();
-  }, [repoPath, limit, send]);
+  }, [repoPath, limit, send, refreshKey]);
 
   const graphRows = useMemo(() => buildGraph(commits), [commits]);
   const maxColumn = useMemo(() => {
