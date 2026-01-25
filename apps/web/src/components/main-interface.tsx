@@ -461,7 +461,7 @@ export function MainInterface() {
         )}
         {activeView === "tree" && (
           <div className="flex h-full">
-            <div className="w-2/5 border-r overflow-hidden">
+            <div className="w-2/5 border-r overflow-hidden flex flex-col">
               <FileTree
                 repoPath={repoPath}
                 selectedPath={selectedFile?.path}
