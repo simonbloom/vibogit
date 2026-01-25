@@ -46,21 +46,24 @@ export function readAgentsConfig(repoPath: string): AgentsConfig {
 
 function parsePort(content: string): number | undefined {
   // Pattern 1: "Dev server port: 5557" or "dev server port: 5557"
-  const devServerPortMatch = content.match(/dev\s*server\s*port[:\s]+(\d+)/i);
-  if (devServerPortMatch) {
-    return parseInt(devServerPortMatch[1], 10);
+  const devServerPortMatches = [...content.matchAll(/dev\s*server\s*port[:\s]+(\d+)/gi)];
+  if (devServerPortMatches.length > 0) {
+    const lastMatch = devServerPortMatches[devServerPortMatches.length - 1];
+    return parseInt(lastMatch[1], 10);
   }
   
   // Pattern 2: "Port: 3000" or "port: 3000"
-  const portMatch = content.match(/(?:^|\n)\s*-?\s*port[:\s]+(\d+)/im);
-  if (portMatch) {
-    return parseInt(portMatch[1], 10);
+  const portMatches = [...content.matchAll(/(?:^|\n)\s*-?\s*port[:\s]+(\d+)/gim)];
+  if (portMatches.length > 0) {
+    const lastMatch = portMatches[portMatches.length - 1];
+    return parseInt(lastMatch[1], 10);
   }
   
   // Pattern 3: "PORT=8080"
-  const envMatch = content.match(/PORT\s*=\s*(\d+)/);
-  if (envMatch) {
-    return parseInt(envMatch[1], 10);
+  const envMatches = [...content.matchAll(/PORT\s*=\s*(\d+)/g)];
+  if (envMatches.length > 0) {
+    const lastMatch = envMatches[envMatches.length - 1];
+    return parseInt(lastMatch[1], 10);
   }
   
   return undefined;

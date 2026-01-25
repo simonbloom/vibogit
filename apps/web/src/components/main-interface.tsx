@@ -489,6 +489,7 @@ export function MainInterface() {
       <PortPromptModal
         isOpen={showPortPrompt}
         onClose={() => setShowPortPrompt(false)}
+        defaultPort={devServerPort || 3000}
         onSubmit={async (port, saveToConfig) => {
           if (saveToConfig && repoPath) {
             try {

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, X, AlertTriangle } from "lucide-react";
+import { Loader2, RefreshCw, X, AlertTriangle, Pencil } from "lucide-react";
 import { clsx } from "clsx";
 import type { DevServerState, DevServerConfig } from "@vibogit/shared";
 
@@ -284,6 +284,15 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
           <span className="w-2 h-2 rounded-full bg-white" />
           :{port}
         </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={onRequestPortPrompt}
+          title="Change port"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </Button>
         <Button
           variant="ghost"
           size="icon"

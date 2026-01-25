@@ -20,6 +20,7 @@ export class DevServerManager {
   private processes: Map<string, Subprocess> = new Map();
   private logs: Map<string, string[]> = new Map();
   private callbacks: Map<string, Set<LogCallback>> = new Map();
+  private ports: Map<string, number> = new Map();
 
   async detectCommand(repoPath: string): Promise<DevServerConfig | null> {
     // Check package.json for scripts
@@ -109,6 +110,12 @@ export class DevServerManager {
     console.log(`[DevServer] Starting: ${config.command} ${config.args.join(" ")}`);
     addLog(`> ${config.command} ${config.args.join(" ")}`);
 
+    if (config.port) {
+      this.ports.set(repoPath, config.port);
+    } else {
+      this.ports.delete(repoPath);
+    }
+
     const proc = spawn({
       cmd: [config.command, ...config.args],
       cwd: repoPath,
@@ -118,6 +125,7 @@ export class DevServerManager {
         ...process.env,
         FORCE_COLOR: "1",
         NODE_ENV: "development",
+        ...(config.port ? { PORT: String(config.port) } : {}),
       },
     });
 
@@ -159,6 +167,7 @@ export class DevServerManager {
     proc.exited.then((code) => {
       addLog(`> Process exited with code ${code}`);
       this.processes.delete(repoPath);
+      this.ports.delete(repoPath);
     });
   }
 
@@ -168,6 +177,7 @@ export class DevServerManager {
       console.log(`[DevServer] Stopping process for: ${repoPath}`);
       proc.kill();
       this.processes.delete(repoPath);
+      this.ports.delete(repoPath);
     }
   }
 
@@ -191,6 +201,10 @@ export class DevServerManager {
       if (portMatch) {
         port = parseInt(portMatch[1], 10);
       }
+    }
+
+    if (!port) {
+      port = this.ports.get(repoPath);
     }
 
     return {
