@@ -8,8 +8,68 @@ import { DevServerManager } from "./devserver";
 import { SecureStorage } from "./keychain";
 import { ConfigService } from "./config";
 import { readAgentsConfig, updateAgentsConfig } from "./agents-config";
-import { readdirSync, statSync } from "fs";
+import { readdirSync, statSync, existsSync, readFileSync } from "fs";
 import { join, relative } from "path";
+import { homedir } from "os";
+
+interface Skill {
+  name: string;
+  description: string;
+  path: string;
+}
+
+function parseSkillFrontmatter(content: string): { name?: string; description?: string } {
+  const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
+  if (!frontmatterMatch) return {};
+  
+  const frontmatter = frontmatterMatch[1];
+  const nameMatch = frontmatter.match(/^name:\s*["']?(.+?)["']?\s*$/m);
+  const descMatch = frontmatter.match(/^description:\s*["']?(.+?)["']?\s*$/m);
+  
+  return {
+    name: nameMatch?.[1]?.trim(),
+    description: descMatch?.[1]?.trim(),
+  };
+}
+
+function listSkills(): Skill[] {
+  const skillsPath = join(homedir(), ".factory", "skills");
+  const skills: Skill[] = [];
+  
+  if (!existsSync(skillsPath)) {
+    return skills;
+  }
+  
+  try {
+    const entries = readdirSync(skillsPath, { withFileTypes: true });
+    
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      
+      const skillDir = join(skillsPath, entry.name);
+      const skillFile = join(skillDir, "SKILL.md");
+      
+      if (!existsSync(skillFile)) continue;
+      
+      try {
+        const content = readFileSync(skillFile, "utf-8");
+        const { name, description } = parseSkillFrontmatter(content);
+        
+        skills.push({
+          name: name || entry.name,
+          description: description || "",
+          path: skillDir,
+        });
+      } catch {
+        // Skip malformed skill files
+      }
+    }
+  } catch {
+    // Skills directory not readable
+  }
+  
+  return skills;
+}
 
 interface FileNode {
   name: string;
@@ -510,6 +570,12 @@ async function handleMessage(
           },
           (data) => data.id !== clientData?.id
         );
+        break;
+      }
+
+      case "list-skills": {
+        const skills = listSkills();
+        response = { skills };
         break;
       }
 

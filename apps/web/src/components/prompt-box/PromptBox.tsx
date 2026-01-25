@@ -5,17 +5,20 @@ import { toast } from 'sonner'
 import { CollapsibleHeader } from './components/CollapsibleHeader'
 import { FileChip } from './components/FileChip'
 import { AutocompletePanel } from './components/AutocompletePanel'
+import { SkillAutocompletePanel } from './components/SkillAutocompletePanel'
 import { DropzoneOverlay } from './components/DropzoneOverlay'
 import { ImagePreviewGrid } from './components/ImagePreviewGrid'
 import { StatusBar } from './components/StatusBar'
 import { usePromptBox } from './hooks/usePromptBox'
 import { useAutocomplete } from './hooks/useAutocomplete'
+import { useSkillAutocomplete } from './hooks/useSkillAutocomplete'
 import { useDropzone } from './hooks/useDropzone'
 import { useImageUpload } from './hooks/useImageUpload'
 import { useClipboardPaste } from './hooks/useClipboardPaste'
 import { useRecentFiles } from './hooks/useRecentFiles'
 import { buildCopyText } from './utils/buildCopyText'
 import type { PromptBoxProps, PromptImage } from './PromptBox.types'
+import type { Skill } from '@vibogit/shared'
 
 const DEFAULT_MAX_LENGTH = 10000
 const DEFAULT_MAX_FILES = 10
@@ -24,7 +27,7 @@ const DEFAULT_MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB
 
 export function PromptBox({
   defaultValue,
-  placeholder = 'Draft your prompt here... (use @ to reference files)',
+  placeholder = 'Draft your prompt here... (use @ for files, / for skills)',
   maxLength = DEFAULT_MAX_LENGTH,
   projectFiles = [],
   recentFiles: externalRecentFiles,
@@ -110,6 +113,42 @@ export function PromptBox({
     onSelect: handleFileSelect,
   })
 
+  const handleSkillSelect = useCallback(
+    (skill: Skill) => {
+      // Find the /mention to replace
+      const cursorPos = textareaRef.current?.selectionStart ?? state.text.length
+      const textBeforeCursor = state.text.slice(0, cursorPos)
+      const slashMatch = textBeforeCursor.match(/\/[\w-]*$/)
+
+      let replaceStart = cursorPos
+      let replaceEnd = cursorPos
+      if (slashMatch) {
+        replaceStart = cursorPos - slashMatch[0].length
+        replaceEnd = cursorPos
+      }
+
+      // Insert the skill reference phrase
+      const insertText = `Please use ${skill.name} skill to `
+      const newText =
+        state.text.slice(0, replaceStart) + insertText + state.text.slice(replaceEnd)
+      setText(newText)
+
+      // Set cursor position after inserted text
+      const newCursorPos = replaceStart + insertText.length
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.setSelectionRange(newCursorPos, newCursorPos)
+          textareaRef.current.focus()
+        }
+      }, 0)
+    },
+    [state.text, setText]
+  )
+
+  const skillAutocomplete = useSkillAutocomplete({
+    onSelect: handleSkillSelect,
+  })
+
   const getNextReferenceNumber = useCallback(() => {
     const maxRef = state.images.reduce((max, img) => Math.max(max, img.referenceNumber), 0)
     return maxRef + 1
@@ -156,24 +195,36 @@ export function PromptBox({
       const value = e.target.value
       setText(value)
 
-      // Check for @ mention trigger
       const cursorPos = e.target.selectionStart
       const textBeforeCursor = value.slice(0, cursorPos)
-      const match = textBeforeCursor.match(/@(\w*)$/)
+      const rect = e.target.getBoundingClientRect()
 
-      if (match) {
-        const rect = e.target.getBoundingClientRect()
-        autocomplete.open(match[1], { x: 0, y: rect.height })
+      // Check for @ mention trigger (files)
+      const atMatch = textBeforeCursor.match(/@(\w*)$/)
+      if (atMatch) {
+        autocomplete.open(atMatch[1], { x: 0, y: rect.height })
+        if (skillAutocomplete.isOpen) skillAutocomplete.close()
+        return
       } else if (autocomplete.isOpen) {
         autocomplete.close()
       }
+
+      // Check for / mention trigger (skills)
+      const slashMatch = textBeforeCursor.match(/\/([\w-]*)$/)
+      if (slashMatch) {
+        skillAutocomplete.open(slashMatch[1], { x: 0, y: rect.height })
+        if (autocomplete.isOpen) autocomplete.close()
+        return
+      } else if (skillAutocomplete.isOpen) {
+        skillAutocomplete.close()
+      }
     },
-    [setText, autocomplete]
+    [setText, autocomplete, skillAutocomplete]
   )
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      // Autocomplete navigation
+      // File autocomplete navigation
       if (autocomplete.isOpen) {
         if (e.key === 'ArrowDown') {
           e.preventDefault()
@@ -193,6 +244,30 @@ export function PromptBox({
         if (e.key === 'Escape') {
           e.preventDefault()
           autocomplete.close()
+          return
+        }
+      }
+
+      // Skill autocomplete navigation
+      if (skillAutocomplete.isOpen) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault()
+          skillAutocomplete.moveDown()
+          return
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault()
+          skillAutocomplete.moveUp()
+          return
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          skillAutocomplete.selectCurrent()
+          return
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          skillAutocomplete.close()
           return
         }
       }
@@ -219,12 +294,12 @@ export function PromptBox({
       }
 
       // Escape to collapse
-      if (e.key === 'Escape' && !autocomplete.isOpen) {
+      if (e.key === 'Escape' && !autocomplete.isOpen && !skillAutocomplete.isOpen) {
         setExpanded(false)
         textareaRef.current?.blur()
       }
     },
-    [autocomplete, setExpanded]
+    [autocomplete, skillAutocomplete, setExpanded]
   )
 
   const handleSend = useCallback(() => {
@@ -327,6 +402,15 @@ export function PromptBox({
                   selectedIndex={autocomplete.selectedIndex}
                   position={autocomplete.position}
                   onSelect={autocomplete.selectItem}
+                />
+
+                <SkillAutocompletePanel
+                  isOpen={skillAutocomplete.isOpen}
+                  isConnected={skillAutocomplete.isConnected}
+                  results={skillAutocomplete.results}
+                  selectedIndex={skillAutocomplete.selectedIndex}
+                  position={skillAutocomplete.position}
+                  onSelect={skillAutocomplete.selectItem}
                 />
               </div>
             </div>

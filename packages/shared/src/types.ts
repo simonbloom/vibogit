@@ -47,7 +47,9 @@ export type MessageType =
   | "killPort"
   | "getConfig"
   | "setConfig"
-  | "configChanged";
+  | "configChanged"
+  | "list-skills"
+  | "skills-list";
 
 export interface WebSocketMessage<T = unknown> {
   type: MessageType;
@@ -347,4 +349,19 @@ export interface SetConfigResponse {
 
 export interface ConfigChangedEvent {
   config: Config;
+}
+
+// Skill Types
+export interface Skill {
+  name: string;
+  description: string;
+  path: string;
+}
+
+export interface SkillsListRequest {
+  type: "list-skills";
+}
+
+export interface SkillsListResponse {
+  skills: Skill[];
 }
