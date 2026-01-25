@@ -582,31 +582,84 @@ async function handleMessage(
       case "getFavicon": {
         const { path: projectPath } = payload as { path: string };
         const MAX_SIZE = 100 * 1024; // 100KB
+        const IGNORE_DIRS = new Set(["node_modules", ".next", ".git", "dist", "build", ".turbo", ".cache", ".output"]);
         
-        const candidates = [
-          { file: "favicon.svg", mimeType: "image/svg+xml" },
-          { file: "public/favicon.svg", mimeType: "image/svg+xml" },
-          { file: "favicon.ico", mimeType: "image/x-icon" },
-          { file: "public/favicon.ico", mimeType: "image/x-icon" },
-        ];
+        const getMimeType = (file: string): string | null => {
+          if (file.endsWith(".svg")) return "image/svg+xml";
+          if (file.endsWith(".ico")) return "image/x-icon";
+          if (file.endsWith(".png")) return "image/png";
+          return null;
+        };
+        
+        // Search for favicon/icon files recursively (max 4 levels deep)
+        const findIcons = (dir: string, depth = 0): string[] => {
+          if (depth > 4) return [];
+          const results: string[] = [];
+          
+          try {
+            const entries = readdirSync(dir, { withFileTypes: true });
+            for (const entry of entries) {
+              if (entry.isDirectory()) {
+                if (!IGNORE_DIRS.has(entry.name) && !entry.name.startsWith(".")) {
+                  results.push(...findIcons(join(dir, entry.name), depth + 1));
+                }
+              } else if (entry.isFile()) {
+                const name = entry.name.toLowerCase();
+                // Match favicon.*, icon.*, logo.*, or *-icon.* patterns
+                if (
+                  (name.startsWith("favicon.") || name.startsWith("icon.") || name.startsWith("logo.") || name.includes("-icon.")) &&
+                  (name.endsWith(".svg") || name.endsWith(".ico") || name.endsWith(".png"))
+                ) {
+                  results.push(join(dir, entry.name));
+                }
+              }
+            }
+          } catch {
+            // Skip unreadable directories
+          }
+          
+          return results;
+        };
+        
+        const iconFiles = findIcons(projectPath);
+        
+        // Sort by priority: favicon > icon > logo, then svg > ico > png, then shorter path
+        iconFiles.sort((a, b) => {
+          const nameA = a.toLowerCase();
+          const nameB = b.toLowerCase();
+          
+          // Prioritize "favicon" in name
+          const aFavicon = nameA.includes("favicon");
+          const bFavicon = nameB.includes("favicon");
+          if (aFavicon && !bFavicon) return -1;
+          if (!aFavicon && bFavicon) return 1;
+          
+          // Prioritize SVG > ICO > PNG
+          const extOrder = (p: string) => p.endsWith(".svg") ? 0 : p.endsWith(".ico") ? 1 : 2;
+          const extDiff = extOrder(nameA) - extOrder(nameB);
+          if (extDiff !== 0) return extDiff;
+          
+          // Prioritize shorter paths (closer to root)
+          return a.length - b.length;
+        });
         
         let favicon: string | null = null;
         let mimeType: string | null = null;
         
-        for (const candidate of candidates) {
-          const fullPath = join(projectPath, candidate.file);
-          if (existsSync(fullPath)) {
-            try {
-              const stats = statSync(fullPath);
-              if (stats.size <= MAX_SIZE) {
-                const content = readFileSync(fullPath);
+        for (const iconPath of iconFiles) {
+          try {
+            const stats = statSync(iconPath);
+            if (stats.size <= MAX_SIZE) {
+              const mime = getMimeType(iconPath);
+              if (mime) {
+                const content = readFileSync(iconPath);
                 favicon = content.toString("base64");
-                mimeType = candidate.mimeType;
+                mimeType = mime;
                 break;
               }
-            } catch {
-              // Skip unreadable files
             }
+          } catch {
+            // Skip unreadable files
           }
         }
         

@@ -106,6 +106,17 @@ export function TabsProvider({ children }: { children: ReactNode }) {
     setConfig({ recentTabs: configTabs, activeTabId });
   }, [tabs, activeTabId, isLoaded, setConfig]);
 
+  // Fetch favicons for tabs that don't have them
+  useEffect(() => {
+    if (state.connection !== "connected") return;
+    
+    tabs.forEach((tab) => {
+      if (tab.favicon === undefined) {
+        fetchFavicon(tab.id, tab.repoPath);
+      }
+    });
+  }, [tabs, state.connection, fetchFavicon]);
+
   const addTab = useCallback((repoPath: string): Tab => {
     const existingTab = tabs.find((t) => t.repoPath === repoPath);
     if (existingTab) {
