@@ -28,7 +28,20 @@ export function useSkillAutocomplete({ onSelect }: UseSkillAutocompleteProps) {
       try {
         const response = await send<{ skills: Skill[] }>('list-skills')
         setSkills(response.skills || [])
+        return
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        if (message.includes('Unknown message type: list-skills')) {
+          try {
+            const response = await send<{ skills: Skill[] }>('skills-list')
+            setSkills(response.skills || [])
+            return
+          } catch (fallbackError) {
+            console.error('[Skills] Failed to fetch skills:', fallbackError)
+            setSkills([])
+            return
+          }
+        }
         console.error('[Skills] Failed to fetch skills:', err)
         setSkills([])
       }
