@@ -173,7 +173,7 @@ export function StagedChanges({ repoPath }: StagedChangesProps) {
           <div className="rounded-lg border-2 border-black bg-card overflow-hidden">
             <div className="px-3 py-1.5 bg-muted border-b border-black">
               <span className="text-sm font-semibold text-muted-foreground">
-                Won't Commit ({filesExcluded.length})
+                Won&apos;t Commit ({filesExcluded.length})
               </span>
             </div>
             {filesExcluded.length === 0 ? (

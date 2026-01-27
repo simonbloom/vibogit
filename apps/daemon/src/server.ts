@@ -19,7 +19,7 @@ interface Skill {
 }
 
 function parseSkillFrontmatter(content: string): { name?: string; description?: string } {
-  const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
+  const frontmatterMatch = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
   if (!frontmatterMatch) return {};
   
   const frontmatter = frontmatterMatch[1];
@@ -32,43 +32,68 @@ function parseSkillFrontmatter(content: string): { name?: string; description?: 
   };
 }
 
+function getSkillsDirectories(): string[] {
+  const paths = new Set<string>();
+
+  const factorySkillsPath = process.env.FACTORY_SKILLS_PATH;
+  if (factorySkillsPath) {
+    paths.add(factorySkillsPath);
+  }
+
+  const factoryHome = process.env.FACTORY_HOME;
+  if (factoryHome) {
+    paths.add(join(factoryHome, "skills"));
+  }
+
+  const homeCandidates = new Set(
+    [process.env.HOME, homedir(), process.env.USER ? join("/Users", process.env.USER) : null].filter(
+      (value): value is string => Boolean(value)
+    )
+  );
+
+  for (const home of homeCandidates) {
+    paths.add(join(home, ".factory", "skills"));
+  }
+
+  return Array.from(paths);
+}
+
 function listSkills(): Skill[] {
-  const skillsPath = join(homedir(), ".factory", "skills");
-  const skills: Skill[] = [];
-  
-  if (!existsSync(skillsPath)) {
-    return skills;
-  }
-  
-  try {
-    const entries = readdirSync(skillsPath, { withFileTypes: true });
-    
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
-      
-      const skillDir = join(skillsPath, entry.name);
-      const skillFile = join(skillDir, "SKILL.md");
-      
-      if (!existsSync(skillFile)) continue;
-      
-      try {
-        const content = readFileSync(skillFile, "utf-8");
-        const { name, description } = parseSkillFrontmatter(content);
-        
-        skills.push({
-          name: name || entry.name,
-          description: description || "",
-          path: skillDir,
-        });
-      } catch {
-        // Skip malformed skill files
+  const skillsByPath = new Map<string, Skill>();
+
+  for (const skillsPath of getSkillsDirectories()) {
+    if (!existsSync(skillsPath)) continue;
+
+    try {
+      const entries = readdirSync(skillsPath, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+
+        const skillDir = join(skillsPath, entry.name);
+        const skillFile = join(skillDir, "SKILL.md");
+
+        if (!existsSync(skillFile)) continue;
+
+        try {
+          const content = readFileSync(skillFile, "utf-8");
+          const { name, description } = parseSkillFrontmatter(content);
+
+          skillsByPath.set(skillDir, {
+            name: name || entry.name,
+            description: description || "",
+            path: skillDir,
+          });
+        } catch {
+          // Skip malformed skill files
+        }
       }
+    } catch {
+      // Skills directory not readable
     }
-  } catch {
-    // Skills directory not readable
   }
-  
-  return skills;
+
+  return Array.from(skillsByPath.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 interface FileNode {
