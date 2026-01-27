@@ -66,6 +66,7 @@ interface DaemonContextValue {
   setRepoPath: (path: string | null) => Promise<void>;
   refreshStatus: () => Promise<void>;
   refreshBranches: () => Promise<void>;
+  reconnect: () => void;
 }
 
 const DaemonContext = createContext<DaemonContextValue | null>(null);
@@ -163,6 +164,23 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
     };
   }, [refreshStatusInternal]);
 
+  const reconnect = useCallback(() => {
+    // Clear any pending reconnect timeout
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    // Close existing connection if any
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    // Clear pending requests
+    pendingRef.current.clear();
+    // Initiate new connection
+    connect();
+  }, [connect]);
+
   const setRepoPath = useCallback(async (path: string | null) => {
     repoPathRef.current = path;
     dispatch({ type: "SET_REPO_PATH", payload: path });
@@ -204,7 +222,7 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
   }, [connect]);
 
   return (
-    <DaemonContext.Provider value={{ state, send, setRepoPath, refreshStatus, refreshBranches }}>
+    <DaemonContext.Provider value={{ state, send, setRepoPath, refreshStatus, refreshBranches, reconnect }}>
       {children}
     </DaemonContext.Provider>
   );

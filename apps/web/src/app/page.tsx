@@ -5,6 +5,8 @@ import { useTabs } from "@/lib/tabs-context";
 import { WelcomeScreen } from "@/components/welcome-screen";
 import { MainInterface } from "@/components/main-interface";
 import { TabBar } from "@/components/tab-bar";
+import { ConnectionIndicator } from "@/components/connection-indicator";
+import { OnboardingScreen } from "@/components/onboarding-screen";
 import { Loader2 } from "lucide-react";
 
 export default function Home() {
@@ -13,15 +15,13 @@ export default function Home() {
 
   return (
     <main className="min-h-screen">
+      <div className="fixed top-4 right-4 z-40">
+        <ConnectionIndicator />
+      </div>
+
       {state.connection === "connected" && tabs.length > 0 && <TabBar />}
 
-      {state.connection === "disconnected" && (
-        <div className="flex flex-col items-center justify-center p-12 text-center min-h-[calc(100vh-57px)]">
-          <h2 className="text-xl font-semibold mb-2">Start the daemon</h2>
-          <p className="text-muted-foreground mb-4">Run this command in your terminal:</p>
-          <code className="px-4 py-2 bg-muted rounded-md font-mono text-sm">npx vibogit-daemon</code>
-        </div>
-      )}
+      {state.connection === "disconnected" && <OnboardingScreen />}
 
       {state.connection === "connecting" && (
         <div className="flex flex-col items-center justify-center p-12 min-h-[calc(100vh-57px)]">

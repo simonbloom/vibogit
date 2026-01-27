@@ -276,14 +276,24 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     );
   }
 
+  const handleOpenBrowser = () => {
+    if (port) {
+      window.open(`http://localhost:${port}`, "_blank");
+    }
+  };
+
   // Connected state
   if (status === "connected") {
     return (
       <div className="flex items-center gap-1">
-        <div className="flex items-center gap-1.5 px-2 py-1 text-sm bg-green-500 text-white rounded-md">
+        <button
+          onClick={handleOpenBrowser}
+          className="flex items-center gap-1.5 px-2 py-1 text-sm bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors cursor-pointer"
+          title="Open in browser"
+        >
           <span className="w-2 h-2 rounded-full bg-white" />
           :{port}
-        </div>
+        </button>
         <Button
           variant="ghost"
           size="icon"
