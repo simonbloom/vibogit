@@ -122,10 +122,71 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
       return { diff: result } as T;
     }
     
-    case "openFolder": {
+    case "openFolder":
+    case "pickFolder": {
       const result = await tauriInvoke("add_project_folder");
       return { path: result } as T;
     }
+    
+    case "getConfig": {
+      try {
+        const result = await tauriInvoke("get_config");
+        // Ensure we have a valid config with all required fields
+        const defaultConfig = {
+          computerName: "",
+          aiProvider: "anthropic",
+          aiApiKey: "",
+          editor: "cursor",
+          customEditorCommand: "",
+          terminal: "Terminal",
+          theme: "dark",
+          imageBasePath: "",
+          showHiddenFiles: false,
+          recentTabs: [],
+          activeTabId: null,
+        };
+        return { config: { ...defaultConfig, ...(result as object) } } as T;
+      } catch (err) {
+        console.error("[Tauri] get_config failed:", err);
+        return { config: {
+          computerName: "",
+          aiProvider: "anthropic",
+          aiApiKey: "",
+          editor: "cursor",
+          customEditorCommand: "",
+          terminal: "Terminal",
+          theme: "dark",
+          imageBasePath: "",
+          showHiddenFiles: false,
+          recentTabs: [],
+          activeTabId: null,
+        }} as T;
+      }
+    }
+    
+    case "isGitRepo": {
+      const path = args?.path as string;
+      const result = await tauriInvoke("is_git_repo", { path });
+      return { isRepo: result } as T;
+    }
+    
+    case "setConfig": {
+      const configArg = args?.config as Record<string, unknown>;
+      // Merge with existing config
+      const currentConfig = await tauriInvoke("get_config") as Record<string, unknown>;
+      const mergedConfig = { ...currentConfig, ...configArg };
+      const result = await tauriInvoke("set_config", { config: mergedConfig });
+      return { config: result } as T;
+    }
+    
+    // Stub commands that return defaults
+    case "getFavicon":
+    case "devServerState":
+    case "list-skills":
+    case "listFiles":
+    case "initGit":
+      console.log(`[Tauri] Stub command: ${type}`);
+      return {} as T;
     
     default:
       console.warn(`[Tauri] Unknown command: ${type}`);
