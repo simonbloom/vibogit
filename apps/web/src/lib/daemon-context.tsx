@@ -20,6 +20,105 @@ import type {
 const DAEMON_URL = "ws://localhost:9111";
 const RECONNECT_DELAY = 3000;
 
+// Tauri detection and integration
+const isTauri = (): boolean => 
+  typeof window !== 'undefined' && '__TAURI__' in window;
+
+// Dynamic import for Tauri APIs (only when in Tauri)
+let tauriInvoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
+let tauriListen: ((event: string, handler: (event: { payload: unknown }) => void) => Promise<() => void>) | null = null;
+
+async function ensureTauriAPIs() {
+  if (isTauri() && !tauriInvoke) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const { listen } = await import('@tauri-apps/api/event');
+    tauriInvoke = invoke;
+    tauriListen = listen;
+  }
+}
+
+// Map daemon message types to Tauri commands
+async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
+  if (!tauriInvoke) {
+    throw new Error("Tauri not initialized");
+  }
+  
+  const args = payload as Record<string, unknown> | undefined;
+  const repoPath = args?.repoPath as string || "";
+  
+  switch (type) {
+    case "status": {
+      const result = await tauriInvoke("git_status", { path: repoPath });
+      // Map Tauri ProjectState to daemon GitStatus format
+      const state = result as {
+        branch: string;
+        changedFiles: { path: string; status: string }[];
+        stagedFiles: { path: string; status: string }[];
+        untrackedFiles: string[];
+        ahead: number;
+        behind: number;
+      };
+      return {
+        status: {
+          branch: state.branch,
+          staged: state.stagedFiles.map(f => ({ path: f.path, status: f.status })),
+          unstaged: state.changedFiles.map(f => ({ path: f.path, status: f.status })),
+          untracked: state.untrackedFiles,
+          ahead: state.ahead,
+          behind: state.behind,
+        }
+      } as T;
+    }
+    
+    case "branches": {
+      // TODO: Implement branches command in Tauri
+      return { branches: [] } as T;
+    }
+    
+    case "watch": {
+      // File watching is handled automatically by Tauri's set_project
+      await tauriInvoke("set_project", { path: repoPath });
+      return {} as T;
+    }
+    
+    case "commit": {
+      const message = args?.message as string | undefined;
+      const result = await tauriInvoke("git_save", { path: repoPath, message });
+      return result as T;
+    }
+    
+    case "push": {
+      const result = await tauriInvoke("git_ship", { path: repoPath });
+      return result as T;
+    }
+    
+    case "pull": {
+      const result = await tauriInvoke("git_sync", { path: repoPath });
+      return result as T;
+    }
+    
+    case "log": {
+      const limit = args?.limit as number | undefined;
+      const result = await tauriInvoke("git_log", { path: repoPath, limit });
+      return { log: result } as T;
+    }
+    
+    case "diff": {
+      const result = await tauriInvoke("git_diff", { path: repoPath });
+      return { diff: result } as T;
+    }
+    
+    case "openFolder": {
+      const result = await tauriInvoke("add_project_folder");
+      return { path: result } as T;
+    }
+    
+    default:
+      console.warn(`[Tauri] Unknown command: ${type}`);
+      return {} as T;
+  }
+}
+
 type DaemonAction =
   | { type: "SET_CONNECTION"; payload: ConnectionState }
   | { type: "SET_REPO_PATH"; payload: string | null }
@@ -81,6 +180,11 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
   const generateId = () => Math.random().toString(36).substring(2, 15);
 
   const send = useCallback(<T = unknown,>(type: string, payload?: unknown): Promise<T> => {
+    // If running in Tauri, use invoke instead of WebSocket
+    if (isTauri() && tauriInvoke) {
+      return tauriSend<T>(type, payload);
+    }
+    
     return new Promise((resolve, reject) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
         reject(new Error("Not connected to daemon"));
@@ -115,7 +219,29 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
     }
   }, [send]);
 
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
+    // If running in Tauri, connect immediately (no WebSocket needed)
+    if (isTauri()) {
+      try {
+        await ensureTauriAPIs();
+        dispatch({ type: "SET_CONNECTION", payload: "connected" });
+        dispatch({ type: "SET_ERROR", payload: null });
+        
+        // Set up Tauri event listeners for file changes
+        if (tauriListen) {
+          tauriListen("file:change", () => {
+            refreshStatusInternal();
+          });
+        }
+        return;
+      } catch (err) {
+        console.error("[Tauri] Failed to initialize:", err);
+        dispatch({ type: "SET_ERROR", payload: "Failed to initialize Tauri" });
+        return;
+      }
+    }
+    
+    // WebSocket mode for browser
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     dispatch({ type: "SET_CONNECTION", payload: "connecting" });
