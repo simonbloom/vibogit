@@ -1,0 +1,44 @@
+[package]
+name = "vibogit"
+version = "0.1.0"
+description = "Git for the Vibe Coder - Desktop App"
+authors = ["ViboGit"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = ["macos-private-api", "tray-icon", "devtools"] }
+tauri-plugin-autostart = "2.0"
+tauri-plugin-notification = "2.0"
+tauri-plugin-shell = "2.0"
+tauri-plugin-dialog = "2.0"
+tauri-plugin-fs = "2.0"
+tauri-plugin-opener = "2.0"
+tauri-plugin-global-shortcut = "2.0"
+tauri-plugin-updater = "2.0"
+
+# Git operations
+git2 = "0.19"
+
+# File watching
+notify = "6.0"
+notify-debouncer-mini = "0.4"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Utilities
+dirs = "5"
+open = "5"
+thiserror = "1"
+chrono = { version = "0.4", features = ["serde"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.25"
+objc = "0.2"

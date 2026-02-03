@@ -33,3 +33,10 @@ coverage
 
 # Misc
 *.tsbuildinfo
+
+# Rust/Cargo build artifacts
+**/target/
+
+# Yarn
+.yarn/install-state.gz
+.yarnrc.yml
