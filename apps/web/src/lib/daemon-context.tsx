@@ -21,19 +21,33 @@ const DAEMON_URL = "ws://localhost:9111";
 const RECONNECT_DELAY = 3000;
 
 // Tauri detection and integration
-const isTauri = (): boolean => 
-  typeof window !== 'undefined' && '__TAURI__' in window;
+const isTauri = (): boolean => {
+  try {
+    return typeof window !== 'undefined' && '__TAURI__' in window;
+  } catch {
+    return false;
+  }
+};
 
 // Dynamic import for Tauri APIs (only when in Tauri)
 let tauriInvoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
 let tauriListen: ((event: string, handler: (event: { payload: unknown }) => void) => Promise<() => void>) | null = null;
+let tauriInitialized = false;
 
-async function ensureTauriAPIs() {
-  if (isTauri() && !tauriInvoke) {
-    const { invoke } = await import('@tauri-apps/api/core');
-    const { listen } = await import('@tauri-apps/api/event');
-    tauriInvoke = invoke;
-    tauriListen = listen;
+async function ensureTauriAPIs(): Promise<boolean> {
+  if (!isTauri()) return false;
+  if (tauriInitialized) return true;
+  
+  try {
+    const core = await import('@tauri-apps/api/core');
+    const event = await import('@tauri-apps/api/event');
+    tauriInvoke = core.invoke;
+    tauriListen = event.listen;
+    tauriInitialized = true;
+    return true;
+  } catch (err) {
+    console.warn('[Tauri] Failed to load APIs:', err);
+    return false;
   }
 }
 
@@ -180,8 +194,8 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
   const generateId = () => Math.random().toString(36).substring(2, 15);
 
   const send = useCallback(<T = unknown,>(type: string, payload?: unknown): Promise<T> => {
-    // If running in Tauri, use invoke instead of WebSocket
-    if (isTauri() && tauriInvoke) {
+    // If running in Tauri and initialized, use invoke instead of WebSocket
+    if (tauriInitialized && tauriInvoke) {
       return tauriSend<T>(type, payload);
     }
     
@@ -223,21 +237,23 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
     // If running in Tauri, connect immediately (no WebSocket needed)
     if (isTauri()) {
       try {
-        await ensureTauriAPIs();
-        dispatch({ type: "SET_CONNECTION", payload: "connected" });
-        dispatch({ type: "SET_ERROR", payload: null });
-        
-        // Set up Tauri event listeners for file changes
-        if (tauriListen) {
-          tauriListen("file:change", () => {
-            refreshStatusInternal();
-          });
+        const initialized = await ensureTauriAPIs();
+        if (initialized) {
+          dispatch({ type: "SET_CONNECTION", payload: "connected" });
+          dispatch({ type: "SET_ERROR", payload: null });
+          
+          // Set up Tauri event listeners for file changes
+          if (tauriListen) {
+            tauriListen("file:change", () => {
+              refreshStatusInternal();
+            });
+          }
+          return;
         }
-        return;
+        // Fall through to WebSocket if Tauri init failed
       } catch (err) {
         console.error("[Tauri] Failed to initialize:", err);
-        dispatch({ type: "SET_ERROR", payload: "Failed to initialize Tauri" });
-        return;
+        // Fall through to WebSocket
       }
     }
     
