@@ -370,15 +370,23 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
   if (status === "connected") {
     return (
       <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={handleOpenBrowser}
+          className="flex items-center gap-1.5 px-2 py-1 text-sm bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors cursor-pointer"
+          title="Open in browser"
+        >
+          <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+          :{port}
+        </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="flex items-center gap-1.5 px-2 py-1 text-sm bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors cursor-pointer"
+              className="flex items-center justify-center w-6 h-6 text-muted-foreground hover:text-foreground transition-colors"
+              title="More options"
             >
-              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-              :{port}
-              <ChevronDown className="w-3 h-3" />
+              <ChevronDown className="w-4 h-4" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
