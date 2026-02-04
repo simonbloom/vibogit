@@ -5,6 +5,7 @@ import { useDaemon } from "@/lib/daemon-context";
 import { Button } from "@/components/ui/button";
 import { Loader2, RefreshCw, X, AlertTriangle, Pencil } from "lucide-react";
 import { clsx } from "clsx";
+import { toast } from "sonner";
 import type { DevServerState, DevServerConfig } from "@vibogit/shared";
 
 type Status = "disconnected" | "connecting" | "restarting" | "connected" | "error";
@@ -31,6 +32,8 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const portCheckRef = useRef<AbortController | null>(null);
+  const statusRef = useRef<Status>(status);
+  statusRef.current = status;
 
   const clearPolling = useCallback(() => {
     if (portCheckRef.current) {
@@ -47,30 +50,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     }
   }, []);
 
-  const isPortOpen = useCallback(async (targetPort: number) => {
-    if (portCheckRef.current) {
-      portCheckRef.current.abort();
-    }
-    const controller = new AbortController();
-    portCheckRef.current = controller;
-    const timeout = setTimeout(() => controller.abort(), 2000);
 
-    try {
-      await fetch(`http://localhost:${targetPort}`, {
-        mode: "no-cors",
-        cache: "no-store",
-        signal: controller.signal,
-      });
-      return true;
-    } catch {
-      return false;
-    } finally {
-      clearTimeout(timeout);
-      if (portCheckRef.current === controller) {
-        portCheckRef.current = null;
-      }
-    }
-  }, []);
 
   const checkServerState = useCallback(async () => {
     if (!repoPath || daemonState.connection !== "connected") return;
@@ -80,9 +60,8 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
         path: repoPath,
       });
       
+      // Rust now checks both process AND port listening
       if (response.state.running && response.state.port) {
-        const reachable = await isPortOpen(response.state.port);
-        if (!reachable) return;
         clearPolling();
         setStatus("connected");
         setPort(response.state.port);
@@ -91,7 +70,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     } catch {
       // Silent fail on check
     }
-  }, [repoPath, daemonState.connection, send, clearPolling, onPortChange, isPortOpen]);
+  }, [repoPath, daemonState.connection, send, clearPolling, onPortChange]);
 
   // Check server state on tab switch (repoPath change)
   useEffect(() => {
@@ -110,9 +89,8 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
           path: repoPath,
         });
         
+        // Rust now checks both process AND port listening
         if (response.state.running && response.state.port) {
-          const reachable = await isPortOpen(response.state.port);
-          if (!reachable) return;
           setStatus("connected");
           setPort(response.state.port);
           onPortChange?.(response.state.port);
@@ -127,7 +105,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     return () => {
       clearPolling();
     };
-  }, [repoPath, daemonState.connection, send, clearPolling, onPortChange, isPortOpen]);
+  }, [repoPath, daemonState.connection, send, clearPolling, onPortChange]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -154,8 +132,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
         });
         
         if (response.state.running && response.state.port) {
-          const reachable = await isPortOpen(response.state.port);
-          if (!reachable) return;
+          // Backend already verified port is listening via TCP check
           clearPolling();
           setStatus("connected");
           setPort(response.state.port);
@@ -165,7 +142,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
         // Daemon error, continue polling
       }
     }, 1000);
-  }, [clearPolling, onPortChange, send, isPortOpen]);
+  }, [clearPolling, onPortChange, send]);
 
   const handleConnect = async () => {
     if (!repoPath || daemonState.connection !== "connected") return;
@@ -215,12 +192,30 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
         },
       });
 
-      // 4. Start polling
+      // 4. Start polling with 30s timeout
       startPolling(targetPort, repoPath);
 
+      // Set timeout for connection (use ref to check current status)
+      timeoutRef.current = setTimeout(() => {
+        if (statusRef.current === "connecting") {
+          setStatus("error");
+          setErrorMessage("Server did not start within 30 seconds");
+          toast.error("Dev server timeout", {
+            description: "Server did not start within 30 seconds",
+            duration: 5000,
+          });
+          clearPolling();
+        }
+      }, 30000);
+
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Failed to connect";
       setStatus("error");
-      setErrorMessage(error instanceof Error ? error.message : "Failed to connect");
+      setErrorMessage(errorMsg);
+      toast.error("Dev server failed", {
+        description: errorMsg,
+        duration: 5000,
+      });
     }
   };
 
@@ -255,8 +250,13 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
       startPolling(port, repoPath);
 
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Failed to restart";
       setStatus("error");
-      setErrorMessage(error instanceof Error ? error.message : "Failed to restart");
+      setErrorMessage(errorMsg);
+      toast.error("Dev server restart failed", {
+        description: errorMsg,
+        duration: 5000,
+      });
     }
   };
 
@@ -312,9 +312,9 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     );
   }
 
-  const handleOpenBrowser = () => {
+  const handleOpenBrowser = async () => {
     if (port) {
-      window.open(`http://localhost:${port}`, "_blank", "noopener,noreferrer");
+      await send("openBrowser", { url: `http://localhost:${port}` });
     }
   };
 

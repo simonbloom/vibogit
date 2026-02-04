@@ -3,8 +3,10 @@ use crate::watcher;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::process::{Command, Child, Stdio};
+use std::io::{BufRead, BufReader};
+use std::thread;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::{AutoLaunchManager, ManagerExt};
 
@@ -1008,7 +1010,7 @@ pub struct DevServerState {
 pub struct DevServerProcess {
     pub child: Option<Child>,
     pub port: Option<u16>,
-    pub logs: Vec<String>,
+    pub logs: Arc<Mutex<Vec<String>>>,
 }
 
 pub struct DevServerManager {
@@ -1129,7 +1131,7 @@ pub async fn dev_server_start(
         command.env("PATH", merged_path);
     }
 
-    let child = match command.spawn() {
+    let mut child = match command.spawn() {
         Ok(child) => child,
         Err(err) => {
             let mut fallback = Command::new(fallback_command);
@@ -1158,19 +1160,50 @@ pub async fn dev_server_start(
         }
     };
 
-    let mut servers = manager.servers.lock().unwrap();
-    let started_command = if config.command == "yarn" {
-        format!("{} {}", config.command, config.args.join(" "))
-    } else if config.command == "bun" {
-        format!("{} {}", config.command, config.args.join(" "))
-    } else {
-        format!("{} {}", config.command, config.args.join(" "))
-    };
+    // Create shared log storage
+    let started_command = format!("{} {}", config.command, config.args.join(" "));
+    let logs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![
+        format!("[{}] > {}", chrono::Local::now().format("%H:%M:%S"), started_command)
+    ]));
 
+    // Helper to add log line with timestamp, capped at 200 lines
+    fn add_log(logs: &Arc<Mutex<Vec<String>>>, line: String) {
+        if let Ok(mut logs) = logs.lock() {
+            let timestamped = format!("[{}] {}", chrono::Local::now().format("%H:%M:%S"), line);
+            logs.push(timestamped);
+            if logs.len() > 200 {
+                logs.remove(0);
+            }
+        }
+    }
+
+    // Spawn thread to capture stdout
+    if let Some(stdout) = child.stdout.take() {
+        let logs_clone = Arc::clone(&logs);
+        thread::spawn(move || {
+            let reader = BufReader::new(stdout);
+            for line in reader.lines().map_while(Result::ok) {
+                add_log(&logs_clone, line);
+            }
+        });
+    }
+
+    // Spawn thread to capture stderr
+    if let Some(stderr) = child.stderr.take() {
+        let logs_clone = Arc::clone(&logs);
+        thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines().map_while(Result::ok) {
+                add_log(&logs_clone, line);
+            }
+        });
+    }
+
+    let mut servers = manager.servers.lock().unwrap();
     servers.insert(path, DevServerProcess {
         child: Some(child),
         port: config.port,
-        logs: vec![format!("Started: {started_command}")],
+        logs,
     });
 
     Ok(())
@@ -1190,7 +1223,9 @@ pub async fn dev_server_stop(
             let _ = child.kill();
         }
         server.child = None;
-        server.logs.push("Server stopped".to_string());
+        if let Ok(mut logs) = server.logs.lock() {
+            logs.push(format!("[{}] Server stopped", chrono::Local::now().format("%H:%M:%S")));
+        }
     }
 
     Ok(())
@@ -1207,7 +1242,7 @@ pub async fn dev_server_state(
     let servers = manager.servers.lock().unwrap();
     
     if let Some(server) = servers.get(&path) {
-        let running = server.child.as_ref()
+        let process_alive = server.child.as_ref()
             .map(|c| {
                 // Check if process is still running
                 let mut cmd = Command::new("kill");
@@ -1216,10 +1251,30 @@ pub async fn dev_server_state(
             })
             .unwrap_or(false);
 
+        // Also check if the port is actually listening (TCP connect test)
+        let port_listening = server.port
+            .map(|p| {
+                use std::net::TcpStream;
+                use std::time::Duration;
+                TcpStream::connect_timeout(
+                    &format!("127.0.0.1:{}", p).parse().unwrap(),
+                    Duration::from_millis(500)
+                ).is_ok()
+            })
+            .unwrap_or(false);
+
+        // Only report running if BOTH process is alive AND port is listening
+        let running = process_alive && port_listening;
+
+        // Get logs from Arc<Mutex<Vec<String>>>
+        let logs = server.logs.lock()
+            .map(|l| l.clone())
+            .unwrap_or_default();
+
         Ok(DevServerState {
             running,
             port: server.port,
-            logs: server.logs.clone(),
+            logs,
         })
     } else {
         Ok(DevServerState {
@@ -1275,25 +1330,46 @@ pub async fn read_agents_config(repo_path: String) -> Result<AgentsConfig, Strin
         if full_path.exists() {
             let content = std::fs::read_to_string(&full_path).map_err(|e| e.to_string())?;
             
-            // Parse for port
+            // Parse for port (look for "port: 7777" or "Dev server port: 7777")
             let port = content.lines()
-                .find(|l| l.to_lowercase().contains("dev server port") || l.to_lowercase().contains("port:"))
+                .find(|l| {
+                    let lower = l.to_lowercase();
+                    lower.contains("dev server port") || 
+                    (lower.contains("port") && !lower.contains("server port"))
+                })
                 .and_then(|l| {
-                    l.split(':').last()
-                        .and_then(|p| p.trim().parse::<u16>().ok())
-                        .or_else(|| {
-                            l.chars()
-                                .filter(|c| c.is_ascii_digit())
-                                .collect::<String>()
-                                .parse::<u16>()
-                                .ok()
-                        })
+                    // Extract number from line like "- Dev server port: 7777" or "- **Port**: 7777"
+                    l.chars()
+                        .filter(|c| c.is_ascii_digit())
+                        .collect::<String>()
+                        .parse::<u16>()
+                        .ok()
                 });
+
+            // Parse for command (look for "Command": `bun run dev -- -p 7777`)
+            let (dev_command, dev_args) = content.lines()
+                .find(|l| l.to_lowercase().contains("command") && l.contains('`'))
+                .and_then(|l| {
+                    // Extract content between backticks
+                    let start = l.find('`')?;
+                    let end = l.rfind('`')?;
+                    if end > start + 1 {
+                        let cmd_str = &l[start + 1..end];
+                        let parts: Vec<&str> = cmd_str.split_whitespace().collect();
+                        if !parts.is_empty() {
+                            let command = parts[0].to_string();
+                            let args: Vec<String> = parts[1..].iter().map(|s| s.to_string()).collect();
+                            return Some((Some(command), Some(args)));
+                        }
+                    }
+                    None
+                })
+                .unwrap_or((None, None));
 
             return Ok(AgentsConfig {
                 port,
-                dev_command: None,
-                dev_args: None,
+                dev_command,
+                dev_args,
                 found: true,
                 file_path: Some(full_path.to_string_lossy().to_string()),
             });

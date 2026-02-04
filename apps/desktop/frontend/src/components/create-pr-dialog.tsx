@@ -119,7 +119,7 @@ export function CreatePRDialog({
     }
   };
 
-  const handleCreatePR = () => {
+  const handleCreatePR = async () => {
     if (!remoteUrl) {
       setError("Could not determine remote repository URL");
       return;
@@ -131,7 +131,7 @@ export function CreatePRDialog({
 
     const url = `${remoteUrl}/compare/${baseBranch}...${branch}?expand=1&title=${encodedTitle}&body=${encodedBody}`;
 
-    window.open(url, "_blank");
+    await send("openBrowser", { url });
   };
 
   if (!isOpen) return null;

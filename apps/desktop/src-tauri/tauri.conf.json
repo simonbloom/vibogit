@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "identifier": "app.vibogit.desktop",
   "build": {
-    "devUrl": "http://localhost:3000",
+    "beforeDevCommand": { "script": "bun run dev", "cwd": "../frontend" },
+    "devUrl": "http://localhost:3002",
     "frontendDist": "../frontend/out"
   },
   "app": {

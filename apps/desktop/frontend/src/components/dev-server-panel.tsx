@@ -108,9 +108,9 @@ export function DevServerPanel({ repoPath }: DevServerPanelProps) {
     handleStart(newServer);
   };
 
-  const handleOpenBrowser = () => {
+  const handleOpenBrowser = async () => {
     const port = state.port || config?.port || 3000;
-    window.open(`http://localhost:${port}`, "_blank");
+    await send("openBrowser", { url: `http://localhost:${port}` });
   };
 
   return (

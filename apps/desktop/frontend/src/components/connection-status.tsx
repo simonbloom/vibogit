@@ -30,9 +30,9 @@ export function ConnectionStatus() {
     return () => clearInterval(interval);
   }, [state.connection, state.repoPath, send]);
 
-  const handlePortClick = () => {
+  const handlePortClick = async () => {
     if (devServer?.port) {
-      window.open(`http://localhost:${devServer.port}`, "_blank");
+      await send("openBrowser", { url: `http://localhost:${devServer.port}` });
     }
   };
 

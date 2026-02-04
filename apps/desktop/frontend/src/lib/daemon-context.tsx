@@ -245,6 +245,12 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
       return {} as T;
     }
     
+    case "openBrowser": {
+      const url = args?.url as string || "";
+      await tauriInvoke("open_in_browser", { url });
+      return {} as T;
+    }
+    
     case "openTerminal": {
       const terminal = args?.terminal as string | undefined;
       await tauriInvoke("open_terminal_with_app", { path: repoPath, terminal });

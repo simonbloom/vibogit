@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { BranchSelector } from "@/components/branch-selector";
 import { DevServerConnection } from "@/components/dev-server-connection";
+import { DevServerLogs } from "@/components/dev-server-logs";
 import { CommitHistory } from "@/components/commit-history";
 import { SettingsPanel } from "@/components/settings-panel";
 import { CreatePRDialog } from "@/components/create-pr-dialog";
@@ -277,7 +278,7 @@ export function MainInterface() {
         }
         case "browser":
           if (devServerPort) {
-            window.open(`http://localhost:${devServerPort}`, "_blank", "noopener,noreferrer");
+            await send("openBrowser", { url: `http://localhost:${devServerPort}` });
           } else {
             try {
               const [stateResponse, configResponse] = await Promise.all([
@@ -285,9 +286,9 @@ export function MainInterface() {
                 send<{ config: DevServerConfig | null }>("devServerDetect", { path: repoPath }),
               ]);
               const port = stateResponse.state.port || configResponse.config?.port || 5557;
-              window.open(`http://localhost:${port}`, "_blank", "noopener,noreferrer");
+              await send("openBrowser", { url: `http://localhost:${port}` });
             } catch {
-              window.open("http://localhost:5557", "_blank", "noopener,noreferrer");
+              await send("openBrowser", { url: "http://localhost:5557" });
             }
           }
           break;
@@ -302,7 +303,7 @@ export function MainInterface() {
               } else if (url.endsWith(".git")) {
                 url = url.replace(".git", "");
               }
-              window.open(url, "_blank");
+              await send("openBrowser", { url });
             }
           } catch {
             console.error("Failed to get remote URL");
@@ -451,6 +452,9 @@ export function MainInterface() {
           Graph
         </Button>
       </div>
+
+      {/* Dev Server Logs */}
+      <DevServerLogs repoPath={repoPath} />
 
       {/* Content */}
       <div className="flex-1 overflow-hidden">
