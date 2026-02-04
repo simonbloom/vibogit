@@ -29,6 +29,7 @@ import {
   GitBranch,
   Github,
   FileEdit,
+  ScrollText,
 } from "lucide-react";
 import { clsx } from "clsx";
 import type { DevServerConfig, DevServerState } from "@vibogit/shared";
@@ -38,7 +39,7 @@ export function MainInterface() {
   const [isPulling, setIsPulling] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
-  const [activeView, setActiveView] = useState<"graph" | "tree" | "changes">("changes");
+  const [activeView, setActiveView] = useState<"graph" | "tree" | "changes" | "logs">("changes");
   const [showCreatePR, setShowCreatePR] = useState(false);
   const [devServerPort, setDevServerPort] = useState<number | null>(null);
   const [showPortPrompt, setShowPortPrompt] = useState(false);
@@ -437,10 +438,16 @@ export function MainInterface() {
           <GitBranch className="w-3.5 h-3.5" />
           Graph
         </Button>
+        <Button
+          variant={activeView === "logs" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setActiveView("logs")}
+          className="gap-1.5 rounded-full"
+        >
+          <ScrollText className="w-3.5 h-3.5" />
+          Logs
+        </Button>
       </div>
-
-      {/* Dev Server Logs */}
-      <DevServerLogs repoPath={repoPath} />
 
       {/* Content */}
       <div className="flex-1 overflow-hidden">
@@ -470,6 +477,11 @@ export function MainInterface() {
         {activeView === "changes" && (
           <div className="h-full overflow-auto">
             <StagedChanges repoPath={repoPath} />
+          </div>
+        )}
+        {activeView === "logs" && (
+          <div className="h-full overflow-auto">
+            <DevServerLogs repoPath={repoPath} expanded />
           </div>
         )}
       </div>

@@ -6,11 +6,12 @@ import type { DevServerState } from "@vibogit/shared";
 
 interface Props {
   repoPath: string | null;
+  expanded?: boolean; // When true, show full-height logs without toggle
 }
 
-export function DevServerLogs({ repoPath }: Props) {
+export function DevServerLogs({ repoPath, expanded: alwaysExpanded }: Props) {
   const { send, state: daemonState } = useDaemon();
-  const [expanded, setExpanded] = useState(() => {
+  const [internalExpanded, setInternalExpanded] = useState(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("devServerLogsExpanded") === "true";
   });
@@ -19,10 +20,14 @@ export function DevServerLogs({ repoPath }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevLogsLengthRef = useRef(0);
 
-  // Persist expanded state
+  const expanded = alwaysExpanded ?? internalExpanded;
+
+  // Persist expanded state (only for internal toggle mode)
   useEffect(() => {
-    localStorage.setItem("devServerLogsExpanded", String(expanded));
-  }, [expanded]);
+    if (!alwaysExpanded) {
+      localStorage.setItem("devServerLogsExpanded", String(internalExpanded));
+    }
+  }, [internalExpanded, alwaysExpanded]);
 
   // Poll for logs when expanded
   useEffect(() => {
@@ -60,14 +65,56 @@ export function DevServerLogs({ repoPath }: Props) {
   }, []);
 
   const handleToggle = useCallback(() => {
-    setExpanded((prev) => !prev);
-    if (!expanded) {
+    setInternalExpanded((prev) => !prev);
+    if (!internalExpanded) {
       setCleared(false);
     }
-  }, [expanded]);
+  }, [internalExpanded]);
 
   if (!repoPath) return null;
 
+  // Full-height mode (when used as a tab)
+  if (alwaysExpanded) {
+    return (
+      <div className="h-full flex flex-col bg-background">
+        <div className="flex items-center justify-between px-3 py-2 border-b">
+          <span className="text-sm font-medium">Dev Server Logs</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            onClick={handleClear}
+            title="Clear logs"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-auto px-3 py-2"
+          style={{
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+            fontSize: "12px",
+            lineHeight: "1.5",
+            background: "#1e1e1e",
+            color: "#d4d4d4",
+          }}
+        >
+          {logs.length === 0 ? (
+            <div className="text-muted-foreground italic py-2">No logs available. Start the dev server to see output.</div>
+          ) : (
+            logs.map((line, i) => (
+              <div key={i} className="whitespace-pre-wrap break-all">
+                {line}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Collapsible mode (legacy, no longer used in main view)
   return (
     <div className="border-t bg-background">
       <button
@@ -76,14 +123,14 @@ export function DevServerLogs({ repoPath }: Props) {
         className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/50 transition-colors"
       >
         <div className="flex items-center gap-2 text-sm font-medium">
-          {expanded ? (
+          {internalExpanded ? (
             <ChevronDown className="w-4 h-4" />
           ) : (
             <ChevronRight className="w-4 h-4" />
           )}
           Dev Server Logs
         </div>
-        {expanded && (
+        {internalExpanded && (
           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <Button
               variant="ghost"
@@ -106,7 +153,7 @@ export function DevServerLogs({ repoPath }: Props) {
           </div>
         )}
       </button>
-      {expanded && (
+      {internalExpanded && (
         <div
           ref={scrollRef}
           className="h-[200px] overflow-auto px-3 pb-2"
