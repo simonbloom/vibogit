@@ -1313,7 +1313,24 @@ pub async fn kill_port(port: u16) -> Result<(), String> {
                         .output();
                 }
             }
+            // Give OS time to release the port
+            std::thread::sleep(std::time::Duration::from_millis(500));
         }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cleanup_dev_locks(path: String) -> Result<(), String> {
+    // Remove Next.js dev lock file
+    let next_lock = PathBuf::from(&path).join(".next/dev/lock");
+    if next_lock.exists() {
+        let _ = std::fs::remove_file(&next_lock);
+    }
+    // Remove Vite lock file
+    let vite_lock = PathBuf::from(&path).join("node_modules/.vite/.lock");
+    if vite_lock.exists() {
+        let _ = std::fs::remove_file(&vite_lock);
     }
     Ok(())
 }

@@ -90,6 +90,7 @@ pub fn run() {
             commands::dev_server_stop,
             commands::dev_server_state,
             commands::kill_port,
+            commands::cleanup_dev_locks,
             // Agents config commands
             commands::read_agents_config,
             commands::update_agents_config,

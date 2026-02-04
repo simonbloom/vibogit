@@ -179,8 +179,9 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
         }
       }
 
-      // 2. Kill any existing process on the port
+      // 2. Kill any existing process on the port and clean up lock files
       await send("killPort", { port: targetPort });
+      await send("cleanupDevLocks", { path: repoPath });
 
       // 3. Start dev server
       await send("devServerStart", {
@@ -229,8 +230,9 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
       // 1. Stop the current server
       await send("devServerStop", { path: repoPath });
 
-      // 2. Kill the port (ensure it's free)
+      // 2. Kill the port and clean up lock files
       await send("killPort", { port });
+      await send("cleanupDevLocks", { path: repoPath });
 
       // 3. Get config and restart
       const configResponse = await send<{ config: AgentsConfig }>("readAgentsConfig", {
