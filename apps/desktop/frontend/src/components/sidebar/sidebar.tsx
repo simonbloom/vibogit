@@ -3,8 +3,10 @@
 import { ReactNode, useState } from "react";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
-import { Settings, HelpCircle, Plus, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Settings, HelpCircle, Plus, PanelLeftClose, PanelLeft, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useDaemon } from "@/lib/daemon-context";
+import type { ConnectionState } from "@vibogit/shared";
 
 interface SidebarProps {
   children?: ReactNode;
@@ -13,18 +15,30 @@ interface SidebarProps {
   className?: string;
 }
 
+const statusConfig: Record<ConnectionState, { dotClass: string; label: string }> = {
+  connected: { dotClass: "bg-green-500", label: "Connected" },
+  connecting: { dotClass: "bg-yellow-500", label: "Connecting..." },
+  disconnected: { dotClass: "bg-red-500", label: "Disconnected" },
+  error: { dotClass: "bg-red-500", label: "Error" },
+};
+
 export function Sidebar({ 
   children, 
   onAddRepository, 
   onOpenSettings,
   className 
 }: SidebarProps) {
+  const { state, reconnect } = useDaemon();
   const [isCollapsed, setIsCollapsed] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("vibogit-sidebar-collapsed") === "true";
     }
     return false;
   });
+
+  const { dotClass, label } = statusConfig[state.connection];
+  const showReconnect = state.connection === "disconnected" || state.connection === "error";
+  const isConnecting = state.connection === "connecting";
 
   const toggleCollapsed = () => {
     const newState = !isCollapsed;
@@ -78,7 +92,7 @@ export function Sidebar({
       </div>
 
       {/* Footer */}
-      <div className="border-t p-2 space-y-1">
+      <div className="border-t p-2 space-y-2">
         <Button
           variant="ghost"
           size={isCollapsed ? "icon" : "sm"}
@@ -114,6 +128,33 @@ export function Sidebar({
           >
             <HelpCircle className="h-4 w-4" />
           </Button>
+        </div>
+
+        {/* Connection Status */}
+        <div 
+          className={cn(
+            "flex items-center gap-2 px-2 py-1.5 rounded-md",
+            isCollapsed && "justify-center px-0"
+          )}
+          title={label}
+        >
+          <div className={cn("w-2 h-2 rounded-full shrink-0", dotClass)} />
+          {!isCollapsed && (
+            <>
+              <span className="text-xs text-muted-foreground">{label}</span>
+              {isConnecting && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+              {showReconnect && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={reconnect} 
+                  className="h-5 px-1.5 text-xs ml-auto"
+                >
+                  Retry
+                </Button>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -5,7 +5,6 @@ import { useTabs } from "@/lib/tabs-context";
 import { WelcomeScreen } from "@/components/welcome-screen";
 import { MainInterface } from "@/components/main-interface";
 import { TabBar } from "@/components/tab-bar";
-import { ConnectionIndicator } from "@/components/connection-indicator";
 import { OnboardingScreen } from "@/components/onboarding-screen";
 import { AppLayout } from "@/components/app-layout";
 import { Loader2 } from "lucide-react";
@@ -48,10 +47,6 @@ export default function Home() {
   // Connected - show app with sidebar
   return (
     <main className="h-screen overflow-hidden">
-      <div className="fixed top-4 right-4 z-40">
-        <ConnectionIndicator />
-      </div>
-
       <AppLayout>
         {tabs.length > 0 && <TabBar />}
         {!state.repoPath && <WelcomeScreen />}
