@@ -1121,6 +1121,11 @@ pub async fn dev_server_start(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
+    // Set PORT env var so Next.js/Vite/etc use the correct port
+    if let Some(port) = config.port {
+        command.env("PORT", port.to_string());
+    }
+
     #[cfg(target_os = "macos")]
     {
         let default_path = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin";
@@ -1140,6 +1145,11 @@ pub async fn dev_server_start(
                 .current_dir(&path)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
+
+            // Set PORT env var for fallback too
+            if let Some(port) = config.port {
+                fallback.env("PORT", port.to_string());
+            }
 
             #[cfg(target_os = "macos")]
             {
