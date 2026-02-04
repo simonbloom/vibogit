@@ -72,6 +72,12 @@ pub fn run() {
             commands::add_project_folder,
             commands::get_current_project,
             commands::is_git_repo,
+            // Saved projects (sidebar)
+            commands::get_saved_projects,
+            commands::add_saved_project,
+            commands::remove_saved_project,
+            commands::reorder_saved_projects,
+            commands::get_all_project_statuses,
             // File commands
             commands::list_files,
             commands::read_file,

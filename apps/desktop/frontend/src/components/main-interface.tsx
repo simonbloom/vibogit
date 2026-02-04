@@ -6,7 +6,6 @@ import { BranchSelector } from "@/components/branch-selector";
 import { DevServerConnection } from "@/components/dev-server-connection";
 import { DevServerLogs } from "@/components/dev-server-logs";
 import { CommitHistory } from "@/components/commit-history";
-import { SettingsPanel } from "@/components/settings-panel";
 import { CreatePRDialog } from "@/components/create-pr-dialog";
 
 import { FileTree } from "@/components/file-tree";
@@ -26,7 +25,6 @@ import {
   Code,
   ExternalLink,
   Loader2,
-  Settings,
   GitPullRequest,
   GitBranch,
   Github,
@@ -41,7 +39,6 @@ export function MainInterface() {
   const [isPushing, setIsPushing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [activeView, setActiveView] = useState<"graph" | "tree" | "changes">("changes");
-  const [showSettings, setShowSettings] = useState(false);
   const [showCreatePR, setShowCreatePR] = useState(false);
   const [devServerPort, setDevServerPort] = useState<number | null>(null);
   const [showPortPrompt, setShowPortPrompt] = useState(false);
@@ -317,11 +314,10 @@ export function MainInterface() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-57px)]">
+    <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
         <div className="flex items-center gap-3">
-          <span className="font-semibold">{projectName}</span>
           <BranchSelector currentBranch={currentBranch} branches={branches} />
           <DevServerConnection 
             repoPath={repoPath} 
@@ -332,22 +328,19 @@ export function MainInterface() {
         </div>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" onClick={() => handleQuickLink("finder")} title="Finder">
-            <Folder className="w-6 h-6 text-nav-icon-subscriptions" />
+            <Folder className="w-5 h-5 text-nav-icon-subscriptions" />
           </Button>
           <Button variant="ghost" size="icon" onClick={() => handleQuickLink("browser")} title="Open in browser">
-            <ExternalLink className="w-6 h-6 text-nav-icon-inputs" />
+            <ExternalLink className="w-5 h-5 text-nav-icon-inputs" />
           </Button>
           <Button variant="ghost" size="icon" onClick={() => handleQuickLink("github")} title="GitHub">
-            <Github className="w-6 h-6 text-nav-icon-spaces" />
+            <Github className="w-5 h-5 text-nav-icon-spaces" />
           </Button>
           <Button variant="ghost" size="icon" onClick={() => handleQuickLink("terminal")} title="Terminal">
-            <Terminal className="w-6 h-6 text-nav-icon-coding" />
+            <Terminal className="w-5 h-5 text-nav-icon-coding" />
           </Button>
           <Button variant="ghost" size="icon" onClick={() => handleQuickLink("editor")} title="Editor">
-            <Code className="w-6 h-6 text-nav-icon-knowledge" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => setShowSettings(true)} title="Settings">
-            <Settings className="w-6 h-6 text-nav-icon-settings" />
+            <Code className="w-5 h-5 text-nav-icon-knowledge" />
           </Button>
         </div>
       </div>
@@ -408,19 +401,6 @@ export function MainInterface() {
           <GitPullRequest className="w-4 h-4" />
           PR
         </Button>
-      </div>
-
-      {/* Prompt Box - Always visible */}
-      <div className="px-4 py-2 border-b">
-        <PromptBox
-          projectFiles={projectFiles}
-          uploadEndpoint="/api/upload"
-          imageBasePath={getSettings().imageBasePath}
-          onSubmit={handlePromptSubmit}
-          placeholder="Ask about this project... (use @ to reference files)"
-          maxLength={10000}
-          defaultExpanded
-        />
       </div>
 
       {/* Tabs */}
@@ -494,7 +474,18 @@ export function MainInterface() {
         )}
       </div>
 
-      <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />
+      {/* Prompt Box - Bottom */}
+      <div className="px-4 py-2 border-t bg-muted/30">
+        <PromptBox
+          projectFiles={projectFiles}
+          uploadEndpoint="/api/upload"
+          imageBasePath={getSettings().imageBasePath}
+          onSubmit={handlePromptSubmit}
+          placeholder="Ask about this project... (use @ to reference files)"
+          maxLength={10000}
+        />
+      </div>
+
       <CreatePRDialog isOpen={showCreatePR} onClose={() => setShowCreatePR(false)} repoPath={repoPath} currentBranch={currentBranch} />
       <PortPromptModal
         isOpen={showPortPrompt}

@@ -78,6 +78,162 @@ fn save_recent_projects(projects: &[ProjectInfo]) {
     }
 }
 
+// Saved Projects (for sidebar) - separate from recent projects
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedProject {
+    pub path: String,
+    pub name: String,
+    pub added_at: i64,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectStatus {
+    pub path: String,
+    pub current_branch: String,
+    pub uncommitted_count: i32,
+    pub ahead: i32,
+    pub behind: i32,
+    pub is_clean: bool,
+}
+
+fn load_saved_projects() -> Vec<SavedProject> {
+    let config_dir = match get_config_dir() {
+        Some(d) => d,
+        None => return vec![],
+    };
+
+    let saved_file = config_dir.join("saved_projects.json");
+    if !saved_file.exists() {
+        return vec![];
+    }
+
+    match std::fs::read_to_string(&saved_file) {
+        Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+        Err(_) => vec![],
+    }
+}
+
+fn persist_saved_projects(projects: &[SavedProject]) {
+    let config_dir = match get_config_dir() {
+        Some(d) => d,
+        None => return,
+    };
+
+    let _ = std::fs::create_dir_all(&config_dir);
+    let saved_file = config_dir.join("saved_projects.json");
+
+    if let Ok(content) = serde_json::to_string_pretty(projects) {
+        let _ = std::fs::write(saved_file, content);
+    }
+}
+
+#[tauri::command]
+pub async fn get_saved_projects() -> Result<Vec<SavedProject>, String> {
+    let projects = load_saved_projects();
+    // Filter out non-existent paths
+    let valid: Vec<_> = projects
+        .into_iter()
+        .filter(|p| std::path::Path::new(&p.path).exists())
+        .collect();
+    Ok(valid)
+}
+
+#[tauri::command]
+pub async fn add_saved_project(path: String) -> Result<SavedProject, String> {
+    // Validate it's a git repo
+    let git_dir = std::path::Path::new(&path).join(".git");
+    if !git_dir.exists() {
+        return Err("Not a git repository".to_string());
+    }
+
+    // Get project name from path
+    let name = std::path::Path::new(&path)
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.clone());
+
+    let project = SavedProject {
+        path: path.clone(),
+        name,
+        added_at: chrono::Utc::now().timestamp(),
+    };
+
+    // Load existing, add new, save
+    let mut projects = load_saved_projects();
+    // Remove if already exists (to update timestamp)
+    projects.retain(|p| p.path != path);
+    projects.push(project.clone());
+    persist_saved_projects(&projects);
+
+    Ok(project)
+}
+
+#[tauri::command]
+pub async fn remove_saved_project(path: String) -> Result<(), String> {
+    let mut projects = load_saved_projects();
+    projects.retain(|p| p.path != path);
+    persist_saved_projects(&projects);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn reorder_saved_projects(paths: Vec<String>) -> Result<(), String> {
+    let projects = load_saved_projects();
+    let mut reordered: Vec<SavedProject> = Vec::new();
+    
+    // Reorder based on the paths array
+    for path in &paths {
+        if let Some(project) = projects.iter().find(|p| &p.path == path) {
+            reordered.push(project.clone());
+        }
+    }
+    
+    // Add any projects that weren't in the paths array (shouldn't happen, but safety)
+    for project in projects {
+        if !paths.contains(&project.path) {
+            reordered.push(project);
+        }
+    }
+    
+    persist_saved_projects(&reordered);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_all_project_statuses(paths: Vec<String>) -> Result<Vec<ProjectStatus>, String> {
+    let mut statuses = Vec::new();
+    
+    for path in paths {
+        let status = match git::get_status(&path) {
+            Ok(state) => {
+                let uncommitted = state.staged_files.len() + state.changed_files.len() + state.untracked_files.len();
+                ProjectStatus {
+                    path: path.clone(),
+                    current_branch: state.branch,
+                    uncommitted_count: uncommitted as i32,
+                    ahead: state.ahead as i32,
+                    behind: state.behind as i32,
+                    is_clean: uncommitted == 0 && state.ahead == 0 && state.behind == 0,
+                }
+            }
+            Err(_) => ProjectStatus {
+                path: path.clone(),
+                current_branch: "unknown".to_string(),
+                uncommitted_count: 0,
+                ahead: 0,
+                behind: 0,
+                is_clean: true,
+            },
+        };
+        statuses.push(status);
+    }
+    
+    Ok(statuses)
+}
+
 // Git Commands
 
 #[tauri::command]

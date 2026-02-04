@@ -8,6 +8,7 @@ import { MatrixVideoFilter, DarkModeVideoFilter, EmberVideoFilter } from "@/comp
 import { DaemonProvider } from "@/lib/daemon-context";
 import { ConfigProvider } from "@/lib/config-context";
 import { TabsProvider } from "@/lib/tabs-context";
+import { ProjectsProvider } from "@/lib/projects-context";
 import { ThemeSync } from "@/components/theme-sync";
 import { AgentationWrapper } from "@/components/agentation-wrapper";
 
@@ -39,10 +40,12 @@ export default function RootLayout({
         <ThemeProvider>
           <MatrixRain />
           <DaemonProvider>
-            <ConfigProvider>
-              <ThemeSync />
-              <TabsProvider>{children}</TabsProvider>
-            </ConfigProvider>
+            <ProjectsProvider>
+              <ConfigProvider>
+                <ThemeSync />
+                <TabsProvider>{children}</TabsProvider>
+              </ConfigProvider>
+            </ProjectsProvider>
           </DaemonProvider>
           <AgentationWrapper />
           <CRTOverlay />
