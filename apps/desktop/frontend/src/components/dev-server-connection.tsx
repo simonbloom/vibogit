@@ -30,8 +30,13 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const portCheckRef = useRef<AbortController | null>(null);
 
   const clearPolling = useCallback(() => {
+    if (portCheckRef.current) {
+      portCheckRef.current.abort();
+      portCheckRef.current = null;
+    }
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
@@ -39,6 +44,31 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
+    }
+  }, []);
+
+  const isPortOpen = useCallback(async (targetPort: number) => {
+    if (portCheckRef.current) {
+      portCheckRef.current.abort();
+    }
+    const controller = new AbortController();
+    portCheckRef.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 2000);
+
+    try {
+      await fetch(`http://localhost:${targetPort}`, {
+        mode: "no-cors",
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      return true;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timeout);
+      if (portCheckRef.current === controller) {
+        portCheckRef.current = null;
+      }
     }
   }, []);
 
@@ -51,6 +81,8 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
       });
       
       if (response.state.running && response.state.port) {
+        const reachable = await isPortOpen(response.state.port);
+        if (!reachable) return;
         clearPolling();
         setStatus("connected");
         setPort(response.state.port);
@@ -59,7 +91,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     } catch {
       // Silent fail on check
     }
-  }, [repoPath, daemonState.connection, send, clearPolling, onPortChange]);
+  }, [repoPath, daemonState.connection, send, clearPolling, onPortChange, isPortOpen]);
 
   // Check server state on tab switch (repoPath change)
   useEffect(() => {
@@ -79,6 +111,8 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
         });
         
         if (response.state.running && response.state.port) {
+          const reachable = await isPortOpen(response.state.port);
+          if (!reachable) return;
           setStatus("connected");
           setPort(response.state.port);
           onPortChange?.(response.state.port);
@@ -93,7 +127,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     return () => {
       clearPolling();
     };
-  }, [repoPath, daemonState.connection, send, clearPolling, onPortChange]);
+  }, [repoPath, daemonState.connection, send, clearPolling, onPortChange, isPortOpen]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -120,6 +154,8 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
         });
         
         if (response.state.running && response.state.port) {
+          const reachable = await isPortOpen(response.state.port);
+          if (!reachable) return;
           clearPolling();
           setStatus("connected");
           setPort(response.state.port);
@@ -129,7 +165,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
         // Daemon error, continue polling
       }
     }, 1000);
-  }, [clearPolling, onPortChange, send]);
+  }, [clearPolling, onPortChange, send, isPortOpen]);
 
   const handleConnect = async () => {
     if (!repoPath || daemonState.connection !== "connected") return;
@@ -173,7 +209,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
       await send("devServerStart", {
         path: repoPath,
         config: {
-          command: devCommand || "npm",
+          command: devCommand || "bun",
           args: devArgs || ["run", "dev"],
           port: targetPort,
         },
@@ -209,7 +245,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
       await send("devServerStart", {
         path: repoPath,
         config: {
-          command: configResponse.config.devCommand || "npm",
+          command: configResponse.config.devCommand || "bun",
           args: configResponse.config.devArgs || ["run", "dev"],
           port,
         },
@@ -278,7 +314,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
 
   const handleOpenBrowser = () => {
     if (port) {
-      window.open(`http://localhost:${port}`, "_blank");
+      window.open(`http://localhost:${port}`, "_blank", "noopener,noreferrer");
     }
   };
 
@@ -287,6 +323,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     return (
       <div className="flex items-center gap-1">
         <button
+          type="button"
           onClick={handleOpenBrowser}
           className="flex items-center gap-1.5 px-2 py-1 text-sm bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors cursor-pointer"
           title="Open in browser"
@@ -328,11 +365,16 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
   // Error state
   if (status === "error") {
     return (
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5" title={errorMessage || undefined}>
         <div className="flex items-center gap-1.5 px-2 py-1 text-sm text-destructive">
           <AlertTriangle className="w-3.5 h-3.5" />
           Failed
         </div>
+        {errorMessage && (
+          <span className="text-xs text-destructive/80 truncate max-w-[220px]">
+            {errorMessage}
+          </span>
+        )}
         <Button variant="ghost" size="sm" className="text-destructive" onClick={handleConnect}>
           Retry
         </Button>

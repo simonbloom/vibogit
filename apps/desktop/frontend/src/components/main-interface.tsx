@@ -277,7 +277,7 @@ export function MainInterface() {
         }
         case "browser":
           if (devServerPort) {
-            window.open(`http://localhost:${devServerPort}`, "_blank");
+            window.open(`http://localhost:${devServerPort}`, "_blank", "noopener,noreferrer");
           } else {
             try {
               const [stateResponse, configResponse] = await Promise.all([
@@ -285,9 +285,9 @@ export function MainInterface() {
                 send<{ config: DevServerConfig | null }>("devServerDetect", { path: repoPath }),
               ]);
               const port = stateResponse.state.port || configResponse.config?.port || 5557;
-              window.open(`http://localhost:${port}`, "_blank");
+              window.open(`http://localhost:${port}`, "_blank", "noopener,noreferrer");
             } catch {
-              window.open("http://localhost:5557", "_blank");
+              window.open("http://localhost:5557", "_blank", "noopener,noreferrer");
             }
           }
           break;

@@ -1,5 +1,5 @@
 use git2::{
-    Cred, CredentialType, DiffOptions, Error as Git2Error, FetchOptions, PushOptions,
+    Cred, CredentialType, DiffOptions, Error as Git2Error, ErrorCode, FetchOptions, PushOptions,
     RemoteCallbacks, Repository, Signature, StatusOptions,
 };
 use serde::{Deserialize, Serialize};
@@ -35,6 +35,23 @@ impl From<Git2Error> for GitError {
 impl From<std::io::Error> for GitError {
     fn from(err: std::io::Error) -> Self {
         GitError::Io(err.to_string())
+    }
+}
+
+fn open_repo(repo_path: &str) -> Result<Repository, GitError> {
+    match Repository::open(repo_path) {
+        Ok(repo) => Ok(repo),
+        Err(err) => {
+            let message = err.message().to_string();
+            if message.to_lowercase().contains("permission denied") {
+                return Err(GitError::Io(message));
+            }
+
+            match err.code() {
+                ErrorCode::NotFound => Err(GitError::NotARepository(repo_path.to_string())),
+                _ => Err(GitError::Git2(message)),
+            }
+        }
     }
 }
 
@@ -143,8 +160,7 @@ fn get_credentials_callback<'a>() -> RemoteCallbacks<'a> {
 }
 
 pub fn get_status(repo_path: &str) -> Result<ProjectState, GitError> {
-    let repo = Repository::open(repo_path)
-        .map_err(|_| GitError::NotARepository(repo_path.to_string()))?;
+    let repo = open_repo(repo_path)?;
 
     // Get current branch
     let (branch, is_detached) = if repo.head_detached().unwrap_or(false) {
@@ -242,8 +258,7 @@ fn get_ahead_behind(repo: &Repository, branch: &str) -> Result<(usize, usize, bo
 }
 
 pub fn save(repo_path: &str, message: Option<String>) -> Result<SaveResult, GitError> {
-    let repo = Repository::open(repo_path)
-        .map_err(|_| GitError::NotARepository(repo_path.to_string()))?;
+    let repo = open_repo(repo_path)?;
 
     // Stage all changes
     let mut index = repo.index()?;
@@ -311,8 +326,7 @@ pub fn save(repo_path: &str, message: Option<String>) -> Result<SaveResult, GitE
 }
 
 pub fn ship(repo_path: &str) -> Result<ShipResult, GitError> {
-    let repo = Repository::open(repo_path)
-        .map_err(|_| GitError::NotARepository(repo_path.to_string()))?;
+    let repo = open_repo(repo_path)?;
 
     let head = repo.head()?;
     let branch_name = head.shorthand().unwrap_or("main").to_string();
@@ -344,8 +358,7 @@ pub fn ship(repo_path: &str) -> Result<ShipResult, GitError> {
 }
 
 pub fn sync(repo_path: &str) -> Result<SyncResult, GitError> {
-    let repo = Repository::open(repo_path)
-        .map_err(|_| GitError::NotARepository(repo_path.to_string()))?;
+    let repo = open_repo(repo_path)?;
 
     let head = repo.head()?;
     let branch_name = head.shorthand().unwrap_or("main").to_string();
@@ -390,8 +403,7 @@ pub fn sync(repo_path: &str) -> Result<SyncResult, GitError> {
 }
 
 pub fn get_log(repo_path: &str, limit: Option<usize>) -> Result<Vec<Commit>, GitError> {
-    let repo = Repository::open(repo_path)
-        .map_err(|_| GitError::NotARepository(repo_path.to_string()))?;
+    let repo = open_repo(repo_path)?;
 
     let mut revwalk = repo.revwalk()?;
     revwalk.push_head()?;
@@ -428,8 +440,7 @@ pub fn get_log(repo_path: &str, limit: Option<usize>) -> Result<Vec<Commit>, Git
 }
 
 pub fn get_diff(repo_path: &str) -> Result<Vec<FileDiff>, GitError> {
-    let repo = Repository::open(repo_path)
-        .map_err(|_| GitError::NotARepository(repo_path.to_string()))?;
+    let repo = open_repo(repo_path)?;
 
     let head = repo.head()?.peel_to_tree()?;
     
@@ -546,8 +557,7 @@ pub struct DetailedDiffLine {
 // Extended Git Operations
 
 pub fn stage(repo_path: &str, files: &[String]) -> Result<(), GitError> {
-    let repo = Repository::open(repo_path)
-        .map_err(|_| GitError::NotARepository(repo_path.to_string()))?;
+    let repo = open_repo(repo_path)?;
 
     let mut index = repo.index()?;
     
@@ -565,8 +575,7 @@ pub fn stage(repo_path: &str, files: &[String]) -> Result<(), GitError> {
 }
 
 pub fn unstage(repo_path: &str, files: &[String]) -> Result<(), GitError> {
-    let repo = Repository::open(repo_path)
-        .map_err(|_| GitError::NotARepository(repo_path.to_string()))?;
+    let repo = open_repo(repo_path)?;
 
     let head = repo.head()?.peel_to_commit()?;
     let paths: Vec<&Path> = files.iter().map(|f| Path::new(f.as_str())).collect();
@@ -577,8 +586,7 @@ pub fn unstage(repo_path: &str, files: &[String]) -> Result<(), GitError> {
 }
 
 pub fn checkout(repo_path: &str, branch_or_ref: &str) -> Result<(), GitError> {
-    let repo = Repository::open(repo_path)
-        .map_err(|_| GitError::NotARepository(repo_path.to_string()))?;
+    let repo = open_repo(repo_path)?;
 
     // Try as branch first
     if let Ok(branch) = repo.find_branch(branch_or_ref, git2::BranchType::Local) {
@@ -600,8 +608,7 @@ pub fn checkout(repo_path: &str, branch_or_ref: &str) -> Result<(), GitError> {
 }
 
 pub fn create_branch(repo_path: &str, name: &str, checkout_after: bool) -> Result<(), GitError> {
-    let repo = Repository::open(repo_path)
-        .map_err(|_| GitError::NotARepository(repo_path.to_string()))?;
+    let repo = open_repo(repo_path)?;
 
     let head = repo.head()?.peel_to_commit()?;
     repo.branch(name, &head, false)?;
@@ -614,8 +621,7 @@ pub fn create_branch(repo_path: &str, name: &str, checkout_after: bool) -> Resul
 }
 
 pub fn get_branches(repo_path: &str) -> Result<Vec<Branch>, GitError> {
-    let repo = Repository::open(repo_path)
-        .map_err(|_| GitError::NotARepository(repo_path.to_string()))?;
+    let repo = open_repo(repo_path)?;
 
     let mut branches = Vec::new();
     let head = repo.head().ok();
@@ -666,8 +672,7 @@ pub fn get_branches(repo_path: &str) -> Result<Vec<Branch>, GitError> {
 }
 
 pub fn get_remotes(repo_path: &str) -> Result<Vec<Remote>, GitError> {
-    let repo = Repository::open(repo_path)
-        .map_err(|_| GitError::NotARepository(repo_path.to_string()))?;
+    let repo = open_repo(repo_path)?;
 
     let mut remotes = Vec::new();
     
@@ -690,8 +695,7 @@ pub fn get_remotes(repo_path: &str) -> Result<Vec<Remote>, GitError> {
 }
 
 pub fn stash_save(repo_path: &str, message: Option<String>) -> Result<(), GitError> {
-    let mut repo = Repository::open(repo_path)
-        .map_err(|_| GitError::NotARepository(repo_path.to_string()))?;
+    let mut repo = open_repo(repo_path)?;
 
     let sig = repo.signature().unwrap_or_else(|_| {
         Signature::now("ViboGit User", "user@vibogit.app").unwrap()
@@ -704,8 +708,7 @@ pub fn stash_save(repo_path: &str, message: Option<String>) -> Result<(), GitErr
 }
 
 pub fn stash_pop(repo_path: &str) -> Result<(), GitError> {
-    let mut repo = Repository::open(repo_path)
-        .map_err(|_| GitError::NotARepository(repo_path.to_string()))?;
+    let mut repo = open_repo(repo_path)?;
 
     repo.stash_pop(0, None)?;
 
@@ -713,8 +716,7 @@ pub fn stash_pop(repo_path: &str) -> Result<(), GitError> {
 }
 
 pub fn get_file_diff(repo_path: &str, file_path: &str, staged: bool) -> Result<DetailedFileDiff, GitError> {
-    let repo = Repository::open(repo_path)
-        .map_err(|_| GitError::NotARepository(repo_path.to_string()))?;
+    let repo = open_repo(repo_path)?;
 
     let mut opts = DiffOptions::new();
     opts.pathspec(file_path);

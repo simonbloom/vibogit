@@ -1033,6 +1033,10 @@ pub async fn dev_server_detect(path: String) -> Result<Option<DevServerConfig>, 
 
     let content = std::fs::read_to_string(&package_json).map_err(|e| e.to_string())?;
     let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    let package_manager = json
+        .get("packageManager")
+        .and_then(|pm| pm.as_str())
+        .map(|pm| pm.to_lowercase());
 
     // Look for dev script
     if let Some(scripts) = json.get("scripts").and_then(|s| s.as_object()) {
@@ -1053,9 +1057,25 @@ pub async fn dev_server_detect(path: String) -> Result<Option<DevServerConfig>, 
                         else { Some(3000) }
                     });
 
+                let command = if package_manager.as_deref().unwrap_or("").starts_with("pnpm") {
+                    "pnpm"
+                } else if package_manager.as_deref().unwrap_or("").starts_with("npm") {
+                    "npm"
+                } else if package_manager.as_deref().unwrap_or("").starts_with("yarn") {
+                    "yarn"
+                } else {
+                    "bun"
+                };
+
+                let args = if command == "yarn" {
+                    vec!["dev".to_string()]
+                } else {
+                    vec!["run".to_string(), "dev".to_string()]
+                };
+
                 return Ok(Some(DevServerConfig {
-                    command: "npm".to_string(),
-                    args: vec!["run".to_string(), "dev".to_string()],
+                    command: command.to_string(),
+                    args,
                     port,
                 }));
             }
@@ -1084,20 +1104,73 @@ pub async fn dev_server_start(
         }
     }
 
+    let fallback_command = if config.command == "bun" { "npm" } else { "bun" };
+    let fallback_args = if fallback_command == "yarn" {
+        vec!["dev".to_string()]
+    } else {
+        vec!["run".to_string(), "dev".to_string()]
+    };
+
     // Start new server
-    let child = Command::new(&config.command)
+    let mut command = Command::new(&config.command);
+    command
         .args(&config.args)
         .current_dir(&path)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| e.to_string())?;
+        .stderr(Stdio::piped());
+
+    #[cfg(target_os = "macos")]
+    {
+        let default_path = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+        let merged_path = match std::env::var("PATH") {
+            Ok(path) => format!("{}:{}", path, default_path),
+            Err(_) => default_path.to_string(),
+        };
+        command.env("PATH", merged_path);
+    }
+
+    let child = match command.spawn() {
+        Ok(child) => child,
+        Err(err) => {
+            let mut fallback = Command::new(fallback_command);
+            fallback
+                .args(&fallback_args)
+                .current_dir(&path)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+
+            #[cfg(target_os = "macos")]
+            {
+                let default_path = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+                let merged_path = match std::env::var("PATH") {
+                    Ok(path) => format!("{}:{}", path, default_path),
+                    Err(_) => default_path.to_string(),
+                };
+                fallback.env("PATH", merged_path);
+            }
+
+            fallback.spawn().map_err(|fallback_err| {
+                format!(
+                    "Failed to start dev server with '{}' ({err}). Fallback '{}' failed: {fallback_err}",
+                    config.command, fallback_command
+                )
+            })?
+        }
+    };
 
     let mut servers = manager.servers.lock().unwrap();
+    let started_command = if config.command == "yarn" {
+        format!("{} {}", config.command, config.args.join(" "))
+    } else if config.command == "bun" {
+        format!("{} {}", config.command, config.args.join(" "))
+    } else {
+        format!("{} {}", config.command, config.args.join(" "))
+    };
+
     servers.insert(path, DevServerProcess {
         child: Some(child),
         port: config.port,
-        logs: vec![format!("Started: {} {}", config.command, config.args.join(" "))],
+        logs: vec![format!("Started: {started_command}")],
     });
 
     Ok(())
