@@ -93,7 +93,7 @@ pub fn run() {
             commands::cleanup_dev_locks,
             // Agents config commands
             commands::read_agents_config,
-            commands::update_agents_config,
+            commands::write_agents_config,
             // Skills commands
             commands::list_skills,
             // Autostart commands

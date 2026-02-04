@@ -3,7 +3,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, X, AlertTriangle, Pencil } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Loader2, RefreshCw, X, AlertTriangle, ChevronDown, Globe, Settings } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
 import type { DevServerState, DevServerConfig } from "@vibogit/shared";
@@ -16,19 +22,23 @@ interface AgentsConfig {
   devArgs?: string[];
   found: boolean;
   filePath?: string;
+  isMonorepo: boolean;
 }
 
 interface Props {
   repoPath: string | null;
   onPortChange?: (port: number | null) => void;
-  onRequestPortPrompt?: () => void;
+  onRequestPortPrompt?: (isMonorepo?: boolean) => void;
+  onMonorepoChange?: (isMonorepo: boolean) => void;
 }
 
-export function DevServerConnection({ repoPath, onPortChange, onRequestPortPrompt }: Props) {
+export function DevServerConnection({ repoPath, onPortChange, onRequestPortPrompt, onMonorepoChange }: Props) {
   const { send, state: daemonState } = useDaemon();
   const [status, setStatus] = useState<Status>("disconnected");
   const [port, setPort] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [detectedPort, setDetectedPort] = useState<number | null>(null);
+  const [isMonorepo, setIsMonorepo] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const portCheckRef = useRef<AbortController | null>(null);
@@ -77,10 +87,27 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     clearPolling();
     setStatus("disconnected");
     setPort(null);
+    setDetectedPort(null);
+    setIsMonorepo(false);
     setErrorMessage(null);
     onPortChange?.(null);
 
     if (!repoPath || daemonState.connection !== "connected") return;
+
+    // Fetch agents config to get detected port and monorepo status
+    const fetchConfig = async () => {
+      try {
+        const configResponse = await send<{ config: AgentsConfig }>("readAgentsConfig", {
+          repoPath,
+        });
+        setDetectedPort(configResponse.config.port ?? null);
+        setIsMonorepo(configResponse.config.isMonorepo);
+        onMonorepoChange?.(configResponse.config.isMonorepo);
+      } catch {
+        // Config fetch failed, leave as unknown
+      }
+    };
+    fetchConfig();
 
     // Check if a server is already running for this project
     const checkExisting = async () => {
@@ -288,9 +315,28 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
   // Disconnected state
   if (status === "disconnected") {
     return (
-      <Button variant="destructive" size="sm" onClick={handleConnect}>
-        Connect
-      </Button>
+      <div className="flex items-center gap-1">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center gap-1 px-2 py-1 text-sm bg-muted text-muted-foreground rounded-md font-mono hover:bg-muted/80 transition-colors"
+            >
+              :{detectedPort ?? "????"}
+              <ChevronDown className="w-3 h-3" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={() => onRequestPortPrompt?.()}>
+              <Settings className="w-4 h-4 mr-2" />
+              Edit port...
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button variant="destructive" size="sm" onClick={handleConnect}>
+          Connect
+        </Button>
+      </div>
     );
   }
 
@@ -324,24 +370,28 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
   if (status === "connected") {
     return (
       <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={handleOpenBrowser}
-          className="flex items-center gap-1.5 px-2 py-1 text-sm bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors cursor-pointer"
-          title="Open in browser"
-        >
-          <span className="w-2 h-2 rounded-full bg-white" />
-          :{port}
-        </button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={onRequestPortPrompt}
-          title="Change port"
-        >
-          <Pencil className="w-3.5 h-3.5" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center gap-1.5 px-2 py-1 text-sm bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors cursor-pointer"
+            >
+              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              :{port}
+              <ChevronDown className="w-3 h-3" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={handleOpenBrowser}>
+              <Globe className="w-4 h-4 mr-2" />
+              Open in browser
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onRequestPortPrompt?.()}>
+              <Settings className="w-4 h-4 mr-2" />
+              Edit port...
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button
           variant="ghost"
           size="icon"

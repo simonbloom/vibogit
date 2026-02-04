@@ -303,6 +303,12 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
       await tauriInvoke("cleanup_dev_locks", { path });
       return {} as T;
     }
+    case "writeAgentsConfig": {
+      const repoPath = args?.repoPath as string;
+      const port = args?.port as number;
+      await tauriInvoke("write_agents_config", { repoPath, port });
+      return {} as T;
+    }
     
     case "readAgentsConfig": {
       const result = await tauriInvoke("read_agents_config", { repoPath });

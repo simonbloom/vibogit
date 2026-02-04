@@ -1,20 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { X, AlertCircle } from "lucide-react";
+import { X, AlertCircle, AlertTriangle } from "lucide-react";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (port: number, saveToConfig: boolean) => void;
   defaultPort?: number;
+  isMonorepo?: boolean;
 }
 
-export function PortPromptModal({ isOpen, onClose, onSubmit, defaultPort = 3000 }: Props) {
+export function PortPromptModal({ isOpen, onClose, onSubmit, defaultPort = 3000, isMonorepo = false }: Props) {
   const [port, setPort] = useState(defaultPort.toString());
   const [saveToConfig, setSaveToConfig] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Reset port when defaultPort changes
+  useEffect(() => {
+    setPort(defaultPort.toString());
+  }, [defaultPort]);
 
   if (!isOpen) return null;
 
@@ -58,15 +64,32 @@ export function PortPromptModal({ isOpen, onClose, onSubmit, defaultPort = 3000 
       <div className="relative z-10 w-full max-w-md bg-background border rounded-lg shadow-xl p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Dev Server Port</h2>
+          <h2 className="text-lg font-semibold">
+            {isMonorepo ? "Monorepo Detected" : "Dev Server Port"}
+          </h2>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
           </Button>
         </div>
 
+        {/* Monorepo Warning */}
+        {isMonorepo && (
+          <div className="flex items-start gap-3 p-3 mb-4 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
+            <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium text-yellow-500">This project uses turbo/nx/lerna</p>
+              <p className="text-muted-foreground mt-1">
+                Running &quot;bun run dev&quot; will start all workspaces. For a single app, open its folder directly in ViboGit.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Description */}
         <p className="text-sm text-muted-foreground mb-4">
-          No port configuration found in agents.md. Please enter the port your dev server runs on.
+          {isMonorepo 
+            ? "Enter the port to monitor for the main application."
+            : "No port configuration found in agents.md. Please enter the port your dev server runs on."}
         </p>
 
         {/* Form */}
@@ -111,7 +134,7 @@ export function PortPromptModal({ isOpen, onClose, onSubmit, defaultPort = 3000 
               Cancel
             </Button>
             <Button type="submit">
-              Connect
+              {isMonorepo ? "Connect Anyway" : "Connect"}
             </Button>
           </div>
         </form>

@@ -1345,6 +1345,7 @@ pub struct AgentsConfig {
     pub dev_args: Option<Vec<String>>,
     pub found: bool,
     pub file_path: Option<String>,
+    pub is_monorepo: bool,
 }
 
 #[tauri::command]
@@ -1352,20 +1353,29 @@ pub async fn read_agents_config(repo_path: String) -> Result<AgentsConfig, Strin
     let agents_paths = ["AGENTS.md", "agents.md", ".agents.md"];
     let base = PathBuf::from(&repo_path);
 
+    // Detect monorepo by checking for common config files
+    let is_monorepo = base.join("turbo.json").exists()
+        || base.join("nx.json").exists()
+        || base.join("lerna.json").exists()
+        || (base.join("pnpm-workspace.yaml").exists() && base.join("packages").exists());
+
     for agents_path in &agents_paths {
         let full_path = base.join(agents_path);
         if full_path.exists() {
             let content = std::fs::read_to_string(&full_path).map_err(|e| e.to_string())?;
             
-            // Parse for port (look for "port: 7777" or "Dev server port: 7777")
+            // Parse for port - check standard format first "- Port: 7777"
+            // Then fall back to other formats
             let port = content.lines()
                 .find(|l| {
                     let lower = l.to_lowercase();
+                    // Standard format: "- Port: 7777" under "## Development Server"
+                    lower.trim().starts_with("- port:") ||
                     lower.contains("dev server port") || 
                     (lower.contains("port") && !lower.contains("server port"))
                 })
                 .and_then(|l| {
-                    // Extract number from line like "- Dev server port: 7777" or "- **Port**: 7777"
+                    // Extract number from line like "- Port: 7777" or "- Dev server port: 7777"
                     l.chars()
                         .filter(|c| c.is_ascii_digit())
                         .collect::<String>()
@@ -1399,6 +1409,7 @@ pub async fn read_agents_config(repo_path: String) -> Result<AgentsConfig, Strin
                 dev_args,
                 found: true,
                 file_path: Some(full_path.to_string_lossy().to_string()),
+                is_monorepo,
             });
         }
     }
@@ -1409,11 +1420,12 @@ pub async fn read_agents_config(repo_path: String) -> Result<AgentsConfig, Strin
         dev_args: None,
         found: false,
         file_path: None,
+        is_monorepo,
     })
 }
 
 #[tauri::command]
-pub async fn update_agents_config(
+pub async fn write_agents_config(
     repo_path: String,
     port: u16,
 ) -> Result<(), String> {
@@ -1421,23 +1433,47 @@ pub async fn update_agents_config(
     
     let content = if agents_path.exists() {
         let existing = std::fs::read_to_string(&agents_path).map_err(|e| e.to_string())?;
-        // Update existing port line or append
-        if existing.to_lowercase().contains("dev server port") {
-            existing.lines()
-                .map(|l| {
-                    if l.to_lowercase().contains("dev server port") {
-                        format!("- Dev server port: {}", port)
-                    } else {
-                        l.to_string()
+        
+        // Check if "## Development Server" section exists
+        if existing.contains("## Development Server") {
+            // Update existing port in Development Server section
+            let mut lines: Vec<String> = existing.lines().map(|s| s.to_string()).collect();
+            let mut in_dev_section = false;
+            let mut port_updated = false;
+            
+            for line in &mut lines {
+                if line.starts_with("## Development Server") {
+                    in_dev_section = true;
+                } else if line.starts_with("## ") {
+                    in_dev_section = false;
+                }
+                
+                if in_dev_section && line.trim().to_lowercase().starts_with("- port:") {
+                    *line = format!("- Port: {}", port);
+                    port_updated = true;
+                }
+            }
+            
+            // If no port line found in section, add it after the header
+            if !port_updated {
+                let mut new_lines = Vec::new();
+                for line in lines {
+                    new_lines.push(line.clone());
+                    if line.starts_with("## Development Server") {
+                        new_lines.push(format!("- Port: {}", port));
                     }
-                })
-                .collect::<Vec<_>>()
-                .join("\n")
+                }
+                new_lines.join("\n")
+            } else {
+                lines.join("\n")
+            }
         } else {
-            format!("{}\n\n- Dev server port: {}", existing, port)
+            // Append new Development Server section
+            format!("{}\n\n## Development Server\n- Port: {}\n", existing.trim_end(), port)
         }
     } else {
-        format!("# Project Configuration\n\n- Dev server port: {}\n", port)
+        // Create new AGENTS.md with standard format
+        format!("# Agent Configuration\n\n## Development Server\n- Port: {}\n", port)
     };
 
     std::fs::write(&agents_path, content).map_err(|e| e.to_string())?;

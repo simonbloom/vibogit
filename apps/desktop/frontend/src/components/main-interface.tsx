@@ -45,6 +45,7 @@ export function MainInterface() {
   const [showCreatePR, setShowCreatePR] = useState(false);
   const [devServerPort, setDevServerPort] = useState<number | null>(null);
   const [showPortPrompt, setShowPortPrompt] = useState(false);
+  const [isMonorepo, setIsMonorepo] = useState(false);
   const [projectFiles, setProjectFiles] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<{ path: string; name: string } | null>(null);
   const [graphRefreshKey, setGraphRefreshKey] = useState(0);
@@ -322,7 +323,12 @@ export function MainInterface() {
         <div className="flex items-center gap-3">
           <span className="font-semibold">{projectName}</span>
           <BranchSelector currentBranch={currentBranch} branches={branches} />
-          <DevServerConnection repoPath={repoPath} onPortChange={setDevServerPort} onRequestPortPrompt={() => setShowPortPrompt(true)} />
+          <DevServerConnection 
+            repoPath={repoPath} 
+            onPortChange={setDevServerPort} 
+            onRequestPortPrompt={() => setShowPortPrompt(true)}
+            onMonorepoChange={setIsMonorepo}
+          />
         </div>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" onClick={() => handleQuickLink("finder")} title="Finder">
@@ -494,10 +500,11 @@ export function MainInterface() {
         isOpen={showPortPrompt}
         onClose={() => setShowPortPrompt(false)}
         defaultPort={devServerPort || 3000}
+        isMonorepo={isMonorepo}
         onSubmit={async (port, saveToConfig) => {
           if (saveToConfig && repoPath) {
             try {
-              await send("updateAgentsConfig", { repoPath, port });
+              await send("writeAgentsConfig", { repoPath, port });
             } catch {
               // Silent fail on save
             }
