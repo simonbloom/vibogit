@@ -8,5 +8,5 @@ export { VIEW_MODE_CONFIG } from "./ViewModeToggle";
 export type { Branch } from "./BranchFilter";
 
 // Utilities
-export * from "./utils/bezier";
+export * from "./utils/edges";
 export * from "./utils/colors";

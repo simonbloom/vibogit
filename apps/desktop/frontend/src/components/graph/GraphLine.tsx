@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import { curvePath, verticalPath, mergeInCurve, branchOutCurve } from "./utils/bezier";
+import { verticalPath, mergeInPath, branchOutPath } from "./utils/edges";
 import { getBranchColorBase, getBranchColorDim } from "./utils/colors";
 
 export type LineType = "vertical" | "branch-out" | "merge-in";
@@ -48,10 +48,10 @@ export const GraphLine = memo(function GraphLine({
       pathD = verticalPath(startX, startY, endY);
       break;
     case "merge-in":
-      pathD = mergeInCurve(startX, startY, endX, endY);
+      pathD = mergeInPath(startX, startY, endX, endY);
       break;
     case "branch-out":
-      pathD = branchOutCurve(startX, startY, endX, endY);
+      pathD = branchOutPath(startX, startY, endX, endY);
       break;
     default:
       pathD = verticalPath(startX, startY, endY);
@@ -63,7 +63,6 @@ export const GraphLine = memo(function GraphLine({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
-      {/* Glow effect for highlighted lines */}
       {isHighlighted && (
         <path
           d={pathD}
@@ -76,7 +75,6 @@ export const GraphLine = memo(function GraphLine({
         />
       )}
 
-      {/* Main line */}
       <path
         d={pathD}
         fill="none"
@@ -87,7 +85,6 @@ export const GraphLine = memo(function GraphLine({
         className="transition-all duration-150"
       />
 
-      {/* Invisible wider path for easier hover detection */}
       <path
         d={pathD}
         fill="none"
