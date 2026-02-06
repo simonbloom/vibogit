@@ -143,18 +143,52 @@ pub struct DiffLine {
 
 fn get_credentials_callback<'a>() -> RemoteCallbacks<'a> {
     let mut callbacks = RemoteCallbacks::new();
-    callbacks.credentials(|_url, username_from_url, allowed_types| {
+    callbacks.credentials(|url, username_from_url, allowed_types| {
+        eprintln!("Git auth requested for URL: {}, username: {:?}, allowed: {:?}", 
+                  url, username_from_url, allowed_types);
+        
         if allowed_types.contains(CredentialType::SSH_KEY) {
             let username = username_from_url.unwrap_or("git");
-            Cred::ssh_key_from_agent(username)
+            
+            // Try SSH agent first
+            if let Ok(cred) = Cred::ssh_key_from_agent(username) {
+                eprintln!("Using SSH key from agent");
+                return Ok(cred);
+            }
+            
+            // Fall back to default SSH key locations
+            let home = std::env::var("HOME").unwrap_or_default();
+            let key_paths = [
+                format!("{}/.ssh/id_ed25519", home),
+                format!("{}/.ssh/id_rsa", home),
+            ];
+            
+            for key_path in &key_paths {
+                let pub_path = format!("{}.pub", key_path);
+                if std::path::Path::new(key_path).exists() {
+                    eprintln!("Trying SSH key: {}", key_path);
+                    if let Ok(cred) = Cred::ssh_key(
+                        username,
+                        Some(std::path::Path::new(&pub_path)),
+                        std::path::Path::new(key_path),
+                        None,
+                    ) {
+                        return Ok(cred);
+                    }
+                }
+            }
+            
+            Err(git2::Error::from_str("No SSH key found"))
         } else if allowed_types.contains(CredentialType::USER_PASS_PLAINTEXT) {
-            // Try to use credential helper
+            eprintln!("Trying credential helper for HTTPS");
+            // Try to use credential helper (git credential-osxkeychain on macOS)
             Cred::credential_helper(
                 &git2::Config::open_default()?,
-                _url,
+                url,
                 username_from_url,
             )
         } else {
+            eprintln!("Using default credentials");
             Cred::default()
         }
     });
@@ -334,9 +368,14 @@ pub fn ship(repo_path: &str) -> Result<ShipResult, GitError> {
     let branch_name = head.shorthand().unwrap_or("main").to_string();
 
     let mut remote = repo.find_remote("origin").map_err(|_| GitError::NoRemote)?;
+    
+    // Log remote URL for debugging
+    let remote_url = remote.url().unwrap_or("unknown");
+    eprintln!("Pushing to remote: {} ({})", remote_url, branch_name);
 
     let mut callbacks = get_credentials_callback();
-    callbacks.push_update_reference(|_ref_name, status| {
+    callbacks.push_update_reference(|ref_name, status| {
+        eprintln!("Push update ref: {}, status: {:?}", ref_name, status);
         if let Some(msg) = status {
             eprintln!("Push error: {}", msg);
         }
@@ -347,9 +386,14 @@ pub fn ship(repo_path: &str) -> Result<ShipResult, GitError> {
     push_opts.remote_callbacks(callbacks);
 
     let refspec = format!("refs/heads/{}:refs/heads/{}", branch_name, branch_name);
+    eprintln!("Push refspec: {}", refspec);
+    
     remote
         .push(&[&refspec], Some(&mut push_opts))
-        .map_err(|e| GitError::AuthFailed(e.message().to_string()))?;
+        .map_err(|e| {
+            eprintln!("Push failed: {}", e.message());
+            GitError::AuthFailed(e.message().to_string())
+        })?;
 
     Ok(ShipResult {
         pushed: true,
