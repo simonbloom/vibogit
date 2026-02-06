@@ -16,6 +16,7 @@
   "packageManager": "pnpm@9.0.0",
   "workspaces": [
     "apps/*",
+    "apps/desktop/frontend",
     "packages/*"
   ]
 }

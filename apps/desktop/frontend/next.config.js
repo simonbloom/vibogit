@@ -1,11 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "export",
-  transpilePackages: ["@vibogit/shared"],
+  transpilePackages: ["@vibogit/shared", "@vibogit/ui"],
   images: {
     unoptimized: true,
   },
-  // Disable server-side features for Tauri
   trailingSlash: true,
 };
 

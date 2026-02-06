@@ -2,15 +2,15 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import { Toaster } from "sonner";
 import "./globals.css";
-import { ThemeProvider } from "@/providers/ThemeProvider";
-import { MatrixRain, CRTOverlay } from "@/components/effects";
-import { MatrixVideoFilter, DarkModeVideoFilter, EmberVideoFilter } from "@/components/ui/video-filters";
-import { DaemonProvider } from "@/lib/daemon-context";
-import { ConfigProvider } from "@/lib/config-context";
-import { TabsProvider } from "@/lib/tabs-context";
-import { ProjectsProvider } from "@/lib/projects-context";
-import { ThemeSync } from "@/components/theme-sync";
-import { AgentationWrapper } from "@/components/agentation-wrapper";
+import { ThemeProvider } from "@vibogit/ui/providers/ThemeProvider";
+import { MatrixRain, CRTOverlay } from "@vibogit/ui/components/effects";
+import { MatrixVideoFilter, DarkModeVideoFilter, EmberVideoFilter } from "@vibogit/ui/components/ui/video-filters";
+import { DaemonProvider } from "@vibogit/ui/lib/daemon-context";
+import { ConfigProvider } from "@vibogit/ui/lib/config-context";
+import { TabsProvider } from "@vibogit/ui/lib/tabs-context";
+import { ProjectsProvider } from "@vibogit/ui/lib/projects-context";
+import { ThemeSync } from "@vibogit/ui/components/theme-sync";
+import { AgentationWrapper } from "@vibogit/ui/components/agentation-wrapper";
 
 export const metadata: Metadata = {
   title: "ViboGit",
