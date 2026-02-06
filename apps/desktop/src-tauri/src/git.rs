@@ -367,37 +367,27 @@ pub fn ship(repo_path: &str) -> Result<ShipResult, GitError> {
     let head = repo.head()?;
     let branch_name = head.shorthand().unwrap_or("main").to_string();
 
-    let mut remote = repo.find_remote("origin").map_err(|_| GitError::NoRemote)?;
+    // Verify origin remote exists
+    let _remote = repo.find_remote("origin").map_err(|_| GitError::NoRemote)?;
     
-    // Log remote URL for debugging
-    let remote_url = remote.url().unwrap_or("unknown");
-    eprintln!("Pushing to remote: {} ({})", remote_url, branch_name);
-
-    let mut callbacks = get_credentials_callback();
-    callbacks.push_update_reference(|ref_name, status| {
-        eprintln!("Push update ref: {}, status: {:?}", ref_name, status);
-        if let Some(msg) = status {
-            eprintln!("Push error: {}", msg);
-        }
-        Ok(())
-    });
-
-    let mut push_opts = PushOptions::new();
-    push_opts.remote_callbacks(callbacks);
-
-    let refspec = format!("refs/heads/{}:refs/heads/{}", branch_name, branch_name);
-    eprintln!("Push refspec: {}", refspec);
+    // Use git CLI for push - it has proper credential helper support
+    eprintln!("Pushing via git CLI: origin/{}", branch_name);
     
-    remote
-        .push(&[&refspec], Some(&mut push_opts))
-        .map_err(|e| {
-            eprintln!("Push failed: {}", e.message());
-            GitError::AuthFailed(e.message().to_string())
-        })?;
+    let output = std::process::Command::new("git")
+        .args(["push", "origin", &branch_name])
+        .current_dir(repo_path)
+        .output()
+        .map_err(|e| GitError::Io(format!("Failed to run git push: {}", e)))?;
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("Git push failed: {}", stderr);
+        return Err(GitError::AuthFailed(stderr.trim().to_string()));
+    }
 
     Ok(ShipResult {
         pushed: true,
-        commits_pushed: 1, // TODO: Calculate actual count
+        commits_pushed: 1,
         remote: "origin".to_string(),
         branch: branch_name,
     })
@@ -409,41 +399,34 @@ pub fn sync(repo_path: &str) -> Result<SyncResult, GitError> {
     let head = repo.head()?;
     let branch_name = head.shorthand().unwrap_or("main").to_string();
 
-    // Fetch first
-    let mut remote = repo.find_remote("origin").map_err(|_| GitError::NoRemote)?;
+    // Verify origin remote exists
+    let _remote = repo.find_remote("origin").map_err(|_| GitError::NoRemote)?;
     
-    let callbacks = get_credentials_callback();
-    let mut fetch_opts = FetchOptions::new();
-    fetch_opts.remote_callbacks(callbacks);
-
-    remote.fetch(&[&branch_name], Some(&mut fetch_opts), None)?;
-
-    // Get the fetch head
-    let fetch_head = repo.find_reference("FETCH_HEAD")?;
-    let fetch_commit = repo.reference_to_annotated_commit(&fetch_head)?;
-
-    // Do merge analysis
-    let (analysis, _) = repo.merge_analysis(&[&fetch_commit])?;
-
-    let pulled = if analysis.is_fast_forward() {
-        let refname = format!("refs/heads/{}", branch_name);
-        let mut reference = repo.find_reference(&refname)?;
-        reference.set_target(fetch_commit.id(), "Fast-forward")?;
-        repo.set_head(&refname)?;
-        repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
-        1
-    } else if analysis.is_up_to_date() {
-        0
-    } else {
-        return Err(GitError::MergeConflict);
-    };
-
-    // Now push
-    let ship_result = ship(repo_path)?;
+    // Use git CLI for pull - it has proper credential helper support
+    eprintln!("Pulling via git CLI: origin/{}", branch_name);
+    
+    let output = std::process::Command::new("git")
+        .args(["pull", "--ff-only", "origin", &branch_name])
+        .current_dir(repo_path)
+        .output()
+        .map_err(|e| GitError::Io(format!("Failed to run git pull: {}", e)))?;
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("Git pull failed: {}", stderr);
+        // Check for merge conflict
+        if stderr.contains("conflict") || stderr.contains("CONFLICT") {
+            return Err(GitError::MergeConflict);
+        }
+        return Err(GitError::AuthFailed(stderr.trim().to_string()));
+    }
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let pulled = if stdout.contains("Already up to date") { 0 } else { 1 };
 
     Ok(SyncResult {
         pulled,
-        pushed: if ship_result.pushed { 1 } else { 0 },
+        pushed: 0,
         conflicts: false,
     })
 }
