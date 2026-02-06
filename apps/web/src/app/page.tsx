@@ -7,7 +7,9 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[#0a0a0b] text-[#fafafa]">
       <style jsx global>{`
-        body {
+        html, body {
+          overflow: auto !important;
+          height: auto !important;
           background: #0a0a0b;
         }
       `}</style>
