@@ -432,8 +432,14 @@ pub fn get_log(repo_path: &str, limit: Option<usize>) -> Result<Vec<Commit>, Git
     }
 
     let mut revwalk = repo.revwalk()?;
+    revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
     revwalk.push_head()?;
-    revwalk.set_sorting(git2::Sort::TIME)?;
+    for branch in repo.branches(None)? {
+        let (branch, _) = branch?;
+        if let Some(target) = branch.get().target() {
+            let _ = revwalk.push(target);
+        }
+    }
 
     let limit = limit.unwrap_or(50);
     let mut commits = Vec::new();
