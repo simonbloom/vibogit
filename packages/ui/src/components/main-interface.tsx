@@ -40,6 +40,7 @@ export function MainInterface() {
   const { state, send, refreshStatus, refreshBranches } = useDaemon();
   const [isPulling, setIsPulling] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [activeView, setActiveView] = useState<"graph" | "tree" | "changes" | "logs">("changes");
   const [showCreatePR, setShowCreatePR] = useState(false);
@@ -133,6 +134,31 @@ export function MainInterface() {
       console.error("Failed to send to terminal:", error);
     }
   };
+
+  const handleFetch = async () => {
+    if (!repoPath) return;
+    setIsFetching(true);
+    try {
+      await send("fetch", { repoPath });
+      await refreshStatus();
+      await refreshBranches();
+    } catch (error) {
+      console.error("Failed to fetch:", error);
+    } finally {
+      setIsFetching(false);
+    }
+  };
+
+  // Auto-fetch every 60 seconds to keep ahead/behind counts current
+  useEffect(() => {
+    if (!repoPath) return;
+    const interval = setInterval(() => {
+      send("fetch", { repoPath })
+        .then(() => refreshStatus())
+        .catch(() => {});
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [repoPath, send, refreshStatus]);
 
   const handlePull = async () => {
     if (!repoPath) return;
@@ -372,10 +398,11 @@ export function MainInterface() {
       {/* Actions */}
       <div className="flex items-center gap-2 px-4 py-3 border-b">
         <Button
-          variant="outline"
+          variant={(status?.behind || 0) > 0 ? "default" : "outline"}
           size="sm"
           onClick={handlePull}
           disabled={isPulling}
+          className={(status?.behind || 0) > 0 ? "bg-blue-600 hover:bg-blue-700" : ""}
         >
           {isPulling ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowDown className="w-4 h-4" />}
           Pull {(status?.behind || 0) > 0 && `(${status?.behind})`}
@@ -383,12 +410,12 @@ export function MainInterface() {
         <Button
           variant="outline"
           size="icon"
-          onClick={handlePull}
-          disabled={isPulling}
+          onClick={handleFetch}
+          disabled={isFetching}
           title="Fetch"
           className="h-9 w-9"
         >
-          <RefreshCw className={clsx("w-4 h-4", isPulling && "animate-spin")} />
+          <RefreshCw className={clsx("w-4 h-4", isFetching && "animate-spin")} />
         </Button>
         <Button
           variant={(status?.ahead || 0) > 0 ? "default" : "outline"}

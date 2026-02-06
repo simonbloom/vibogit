@@ -54,6 +54,7 @@ pub fn run() {
             commands::git_save,
             commands::git_ship,
             commands::git_sync,
+            commands::git_fetch,
             commands::git_log,
             commands::git_diff,
             commands::git_stage,

@@ -314,6 +314,25 @@ pub async fn git_sync(
 }
 
 #[tauri::command]
+pub async fn git_fetch(
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<(), GitError> {
+    let project_path = if path.is_empty() {
+        state
+            .current_project
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or_else(|| GitError::NotARepository("No project selected".to_string()))?
+    } else {
+        path
+    };
+
+    git::fetch(&project_path)
+}
+
+#[tauri::command]
 pub async fn git_log(
     path: String,
     limit: Option<usize>,
@@ -508,12 +527,22 @@ pub async fn open_in_terminal(path: String) -> Result<(), String> {
         // Check for iTerm first
         let iterm_script = format!(
             r#"tell application "iTerm"
-                create window with default profile
-                tell current session of current window
-                    write text "cd '{}'"
-                end tell
+                activate
+                if (count of windows) = 0 then
+                    create window with default profile
+                    tell current session of current window
+                        write text "cd '{}'"
+                    end tell
+                else
+                    tell current window
+                        create tab with default profile
+                        tell current session
+                            write text "cd '{}'"
+                        end tell
+                    end tell
+                end if
             end tell"#,
-            path
+            path, path
         );
 
         // Try iTerm
@@ -529,7 +558,12 @@ pub async fn open_in_terminal(path: String) -> Result<(), String> {
         let terminal_script = format!(
             r#"tell application "Terminal"
                 activate
-                do script "cd '{}'"
+            end tell
+            delay 0.3
+            tell application "System Events" to keystroke "t" using command down
+            delay 0.3
+            tell application "Terminal"
+                do script "cd '{}'" in front window
             end tell"#,
             path
         );
@@ -1679,27 +1713,53 @@ pub async fn open_terminal_with_app(
         let script = match terminal_app.as_str() {
             "iTerm" => format!(
                 r#"tell application "iTerm"
-                    create window with default profile
-                    tell current session of current window
-                        write text "cd '{}'"
-                    end tell
-                end tell"#,
-                path
-            ),
-            "Ghostty" | "Warp" | "kitty" => format!(
-                r#"tell application "{}"
                     activate
-                end tell
-                delay 0.5
-                tell application "System Events"
-                    keystroke "cd '{}'" & return
+                    if (count of windows) = 0 then
+                        create window with default profile
+                        tell current session of current window
+                            write text "cd '{}'"
+                        end tell
+                    else
+                        tell current window
+                            create tab with default profile
+                            tell current session
+                                write text "cd '{}'"
+                            end tell
+                        end tell
+                    end if
                 end tell"#,
-                terminal_app, path
+                path, path
             ),
+            "Ghostty" => {
+                return Command::new("open")
+                    .args(["-a", "Ghostty", &path])
+                    .spawn()
+                    .map(|_| ())
+                    .map_err(|e| e.to_string());
+            },
+            "Warp" => {
+                return Command::new("open")
+                    .args(["-a", "Warp", &path])
+                    .spawn()
+                    .map(|_| ())
+                    .map_err(|e| e.to_string());
+            },
+            "kitty" => {
+                return Command::new("open")
+                    .args(["-a", "kitty", &path])
+                    .spawn()
+                    .map(|_| ())
+                    .map_err(|e| e.to_string());
+            },
             _ => format!(
                 r#"tell application "Terminal"
                     activate
-                    do script "cd '{}'"
+                end tell
+                delay 0.3
+                tell application "System Events" to keystroke "t" using command down
+                delay 0.3
+                tell application "Terminal"
+                    do script "cd '{}'" in front window
                 end tell"#,
                 path
             ),

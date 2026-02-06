@@ -126,6 +126,11 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
       return result as T;
     }
     
+    case "fetch": {
+      await tauriInvoke("git_fetch", { path: repoPath });
+      return {} as T;
+    }
+    
     case "checkout": {
       const branch = args?.branch as string || args?.ref as string || "";
       await tauriInvoke("git_checkout", { path: repoPath, branch });

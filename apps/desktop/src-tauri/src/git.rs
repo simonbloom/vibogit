@@ -431,6 +431,27 @@ pub fn sync(repo_path: &str) -> Result<SyncResult, GitError> {
     })
 }
 
+pub fn fetch(repo_path: &str) -> Result<(), GitError> {
+    let repo = open_repo(repo_path)?;
+
+    // Verify origin remote exists
+    let _remote = repo.find_remote("origin").map_err(|_| GitError::NoRemote)?;
+
+    let output = std::process::Command::new("git")
+        .args(["fetch", "origin"])
+        .current_dir(repo_path)
+        .output()
+        .map_err(|e| GitError::Io(format!("Failed to run git fetch: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("Git fetch failed: {}", stderr);
+        return Err(GitError::AuthFailed(stderr.trim().to_string()));
+    }
+
+    Ok(())
+}
+
 pub fn get_log(repo_path: &str, limit: Option<usize>) -> Result<Vec<Commit>, GitError> {
     let repo = open_repo(repo_path)?;
 
