@@ -33,6 +33,7 @@ import {
   ScrollText,
 } from "lucide-react";
 import { clsx } from "clsx";
+import { toast } from "sonner";
 import type { DevServerConfig, DevServerState } from "@vibogit/shared";
 
 export function MainInterface() {
@@ -154,8 +155,10 @@ export function MainInterface() {
     try {
       await send("push", { repoPath });
       await refreshStatus();
+      toast.success("Pushed successfully");
     } catch (error) {
       console.error("Failed to push:", error);
+      toast.error(`Push failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsPushing(false);
     }
@@ -382,10 +385,11 @@ export function MainInterface() {
           <RefreshCw className={clsx("w-4 h-4", isPulling && "animate-spin")} />
         </Button>
         <Button
-          variant="outline"
+          variant={(status?.ahead || 0) > 0 ? "default" : "outline"}
           size="sm"
           onClick={handlePush}
           disabled={isPushing || (status?.ahead || 0) === 0}
+          className={(status?.ahead || 0) > 0 ? "bg-green-600 hover:bg-green-700" : ""}
         >
           {isPushing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4" />}
           Push {(status?.ahead || 0) > 0 && `(${status?.ahead})`}
