@@ -52,12 +52,17 @@ interface ContextMenuState {
   y: number;
 }
 
+interface ActiveLane {
+  lane: number;
+  colorId: number;
+}
+
 // ---------------------------------------------------------------------------
 // Straight-branch lane assignment algorithm
 // ---------------------------------------------------------------------------
 
-function buildGraph(commits: GitCommitType[]): { rows: GraphRow[]; maxLane: number } {
-  if (commits.length === 0) return { rows: [], maxLane: 0 };
+function buildGraph(commits: GitCommitType[]): { rows: GraphRow[]; maxLane: number; activeLanes: ActiveLane[] } {
+  if (commits.length === 0) return { rows: [], maxLane: 0, activeLanes: [] };
 
   // lanes[i] = hash of commit currently "owning" that lane, or null if free
   const lanes: Array<string | null> = [];
@@ -244,7 +249,14 @@ function buildGraph(commits: GitCommitType[]): { rows: GraphRow[]; maxLane: numb
     rows.push({ commit, lane, colorId, edges, hasParents, hasChildren });
   }
 
-  return { rows, maxLane };
+  const activeLanes: ActiveLane[] = [];
+  for (let l = 0; l < lanes.length; l++) {
+    if (lanes[l] !== null) {
+      activeLanes.push({ lane: l, colorId: hashToColor.get(lanes[l]!) ?? 0 });
+    }
+  }
+
+  return { rows, maxLane, activeLanes };
 }
 
 // ---------------------------------------------------------------------------
@@ -275,6 +287,10 @@ export function CommitHistory({ repoPath, limit = 200, refreshKey }: CommitHisto
 
   const config = VIEW_MODE_CONFIG.expanded;
   const ROW_HEIGHT = config.rowHeight;
+  const COL_WIDTH = config.colWidth;
+  const GRAPH_OFFSET = 20;
+  const [messagePopover, setMessagePopover] = useState<{ message: string; top: number; left: number } | null>(null);
+  const messagePopoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load commits
   useEffect(() => {
@@ -296,9 +312,10 @@ export function CommitHistory({ repoPath, limit = 200, refreshKey }: CommitHisto
   }, [repoPath, limit, send, refreshKey]);
 
   // Build graph layout
-  const { rows: graphRows, maxLane } = useMemo(() => buildGraph(commits), [commits]);
-  const graphWidth = (maxLane + 1) * config.colWidth + 32;
+  const { rows: graphRows, maxLane, activeLanes } = useMemo(() => buildGraph(commits), [commits]);
+  const graphWidth = (maxLane + 1) * COL_WIDTH + 32;
   const totalHeight = graphRows.length * ROW_HEIGHT;
+  const extendedHeight = Math.max(totalHeight, containerHeight);
 
   // Virtualization: compute visible range
   const firstVisible = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - SCROLL_BUFFER);
@@ -326,6 +343,7 @@ export function CommitHistory({ repoPath, limit = 200, refreshKey }: CommitHisto
     if (containerRef.current) {
       setScrollTop(containerRef.current.scrollTop);
     }
+    setMessagePopover(null);
   }, []);
 
   // Event handlers
@@ -361,6 +379,20 @@ export function CommitHistory({ repoPath, limit = 200, refreshKey }: CommitHisto
 
   const handleContextMenuClose = useCallback(() => {
     setContextMenuVisible(false);
+  }, []);
+
+  const handleRowMouseEnter = useCallback((message: string, rowIndex: number) => {
+    if (messagePopoverTimeoutRef.current) clearTimeout(messagePopoverTimeoutRef.current);
+    messagePopoverTimeoutRef.current = setTimeout(() => {
+      const top = (rowIndex + 1) * ROW_HEIGHT;
+      const left = graphWidth + 8;
+      setMessagePopover({ message, top, left });
+    }, 150);
+  }, [ROW_HEIGHT, graphWidth]);
+
+  const handleRowMouseLeave = useCallback(() => {
+    if (messagePopoverTimeoutRef.current) clearTimeout(messagePopoverTimeoutRef.current);
+    messagePopoverTimeoutRef.current = setTimeout(() => setMessagePopover(null), 100);
   }, []);
 
   const handleContextMenuAction = useCallback(
@@ -418,7 +450,7 @@ export function CommitHistory({ repoPath, limit = 200, refreshKey }: CommitHisto
         ref={containerRef}
         onScroll={handleScroll}
       >
-        <div style={{ height: totalHeight, position: "relative" }}>
+        <div style={{ height: extendedHeight, position: "relative" }}>
           {visibleRows.map((row, vi) => {
             const rowIndex = firstVisible + vi;
             return (
@@ -435,11 +467,46 @@ export function CommitHistory({ repoPath, limit = 200, refreshKey }: CommitHisto
                 onBranchLeave={handleBranchLeave}
                 onCommitClick={handleCommitClick}
                 onContextMenu={handleContextMenu}
+                onRowMouseEnter={handleRowMouseEnter}
+                onRowMouseLeave={handleRowMouseLeave}
                 viewConfig={config}
               />
             );
           })}
+
+          {/* Continuation lines extending past last commit to fill visible pane */}
+          {extendedHeight > totalHeight && activeLanes.length > 0 && (
+            <svg
+              width={graphWidth}
+              height={extendedHeight - totalHeight}
+              style={{ position: "absolute", top: totalHeight, left: 0 }}
+            >
+              {activeLanes.map(({ lane, colorId }) => (
+                <GraphLine
+                  key={`continuation-${lane}`}
+                  type="vertical"
+                  startX={GRAPH_OFFSET + lane * COL_WIDTH}
+                  startY={0}
+                  endX={GRAPH_OFFSET + lane * COL_WIDTH}
+                  endY={extendedHeight - totalHeight}
+                  colorIndex={colorId}
+                  isHighlighted={false}
+                  isDimmed={false}
+                />
+              ))}
+            </svg>
+          )}
         </div>
+
+        {/* Message popover */}
+        {messagePopover && (
+          <div
+            className="absolute z-50 max-w-md px-3 py-2 bg-popover text-popover-foreground border rounded-md shadow-lg text-sm pointer-events-none"
+            style={{ top: messagePopover.top, left: messagePopover.left }}
+          >
+            {messagePopover.message}
+          </div>
+        )}
 
         <GraphTooltip
           commit={tooltip.commit}
@@ -472,7 +539,6 @@ interface ViewConfig {
   headNodeRadius: number;
   fontSize: number;
   showAuthor: boolean;
-  messageMaxLength: number;
   colWidth: number;
 }
 
@@ -488,6 +554,8 @@ interface CommitRowProps {
   onBranchLeave: () => void;
   onCommitClick: (hash: string) => void;
   onContextMenu: (commit: GitCommitType, x: number, y: number) => void;
+  onRowMouseEnter: (message: string, rowIndex: number) => void;
+  onRowMouseLeave: () => void;
   viewConfig: ViewConfig;
 }
 
@@ -503,6 +571,8 @@ const CommitRow = memo(function CommitRow({
   onBranchLeave,
   onCommitClick,
   onContextMenu,
+  onRowMouseEnter,
+  onRowMouseLeave,
   viewConfig,
 }: CommitRowProps) {
   const [copied, setCopied] = useState(false);
@@ -513,7 +583,7 @@ const CommitRow = memo(function CommitRow({
   const isSelected = selectedCommit === commit.hash;
   const nodeColor = getBranchColorBase(colorId);
 
-  const { rowHeight: ROW_HEIGHT, colWidth: COL_WIDTH, showAuthor, messageMaxLength, fontSize } = viewConfig;
+  const { rowHeight: ROW_HEIGHT, colWidth: COL_WIDTH, showAuthor, fontSize } = viewConfig;
   const OFFSET = 20;
   const midY = ROW_HEIGHT / 2;
   const nodeX = OFFSET + lane * COL_WIDTH;
@@ -528,6 +598,8 @@ const CommitRow = memo(function CommitRow({
         left: 0,
         right: 0,
       }}
+      onMouseEnter={() => onRowMouseEnter(commit.message, rowIndex)}
+      onMouseLeave={onRowMouseLeave}
     >
       {/* Graph column */}
       <div className="flex-shrink-0 relative" style={{ width: graphWidth, height: ROW_HEIGHT }}>
@@ -625,9 +697,7 @@ const CommitRow = memo(function CommitRow({
         <div className="flex items-center justify-between gap-2 w-full">
           <div className="min-w-0 flex-1">
             <p className="font-medium truncate" style={{ fontSize }} title={commit.message}>
-              {commit.message.length > messageMaxLength
-                ? commit.message.slice(0, messageMaxLength) + "..."
-                : commit.message}
+              {commit.message}
             </p>
             <div className="flex items-center gap-2 mt-0.5 text-muted-foreground" style={{ fontSize: fontSize - 2 }}>
               <span

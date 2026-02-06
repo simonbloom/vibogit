@@ -49,7 +49,6 @@ export const VIEW_MODE_CONFIG = {
     headNodeRadius: 4,
     fontSize: 11,
     showAuthor: false,
-    messageMaxLength: 45,
     colWidth: 16,
   },
   expanded: {
@@ -58,7 +57,6 @@ export const VIEW_MODE_CONFIG = {
     headNodeRadius: 6,
     fontSize: 14,
     showAuthor: true,
-    messageMaxLength: 60,
     colWidth: 20,
   },
 } as const;
