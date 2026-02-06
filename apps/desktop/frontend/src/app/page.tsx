@@ -148,15 +148,31 @@ open /Applications/ViboGit.app`}</code>
             <div className="max-w-[700px] mx-auto mt-8 bg-[#111113] border border-[#27272a] rounded-xl overflow-hidden">
               <div className="px-6 py-5 border-b border-[#27272a] flex justify-between items-center">
                 <h3 className="font-semibold">Web App</h3>
-                <span className="text-sm text-[#71717a]">No installation required</span>
+                <span className="text-sm text-[#71717a]">Requires local daemon</span>
               </div>
               <div className="p-6">
-                <p className="text-sm text-[#a1a1aa] mb-4">
-                  Try ViboGit directly in your browser - no download needed.
-                </p>
+                <div className="mb-5">
+                  <span className="inline-flex items-center justify-center w-6 h-6 bg-[#1a1a1d] rounded-full text-xs font-semibold mr-3">1</span>
+                  <span className="text-sm text-[#a1a1aa]">Run the daemon in your terminal:</span>
+                </div>
+                <div className="relative bg-[#18181b] border border-[#27272a] rounded-lg p-4 font-mono text-sm">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`npx vibogit`);
+                    }}
+                    className="absolute top-2 right-2 bg-[#1a1a1d] border border-[#27272a] rounded-md px-3 py-1.5 text-xs text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#fafafa] transition-all"
+                  >
+                    Copy
+                  </button>
+                  <code className="text-[#e4e4e7]">npx vibogit</code>
+                </div>
+                <div className="mt-6">
+                  <span className="inline-flex items-center justify-center w-6 h-6 bg-[#1a1a1d] rounded-full text-xs font-semibold mr-3">2</span>
+                  <span className="text-sm text-[#a1a1aa]">Open the web app:</span>
+                </div>
                 <a
                   href="/app"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-[#3b82f6] text-white hover:bg-[#2563eb] transition-all"
+                  className="inline-flex items-center gap-2 mt-3 px-5 py-2.5 rounded-lg text-sm font-medium bg-[#3b82f6] text-white hover:bg-[#2563eb] transition-all"
                 >
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="12" cy="12" r="10"/>
