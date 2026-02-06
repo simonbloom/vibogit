@@ -452,7 +452,7 @@ export function MainInterface() {
       {/* Content */}
       <div className="flex-1 overflow-hidden">
         {activeView === "graph" && (
-          <div className="h-full overflow-auto">
+          <div className="h-full">
             <CommitHistory repoPath={repoPath} refreshKey={graphRefreshKey} />
           </div>
         )}
