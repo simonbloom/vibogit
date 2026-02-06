@@ -506,6 +506,7 @@ export function MainInterface() {
           projectFiles={projectFiles}
           uploadEndpoint="/api/upload"
           imageBasePath={getSettings().imageBasePath}
+          terminalName={getSettings().terminal}
           onSubmit={handlePromptSubmit}
           placeholder="Ask about this project... (use @ to reference files)"
           maxLength={10000}

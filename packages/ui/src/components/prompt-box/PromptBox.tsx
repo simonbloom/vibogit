@@ -41,7 +41,8 @@ export function PromptBox({
   onSubmit,
   onCopy,
   onClear,
-  defaultExpanded = false,
+  defaultExpanded = true,
+  terminalName,
   minHeight = 100,
   maxHeight = 300,
   ariaLabel = 'Compose prompt',
@@ -377,6 +378,7 @@ export function PromptBox({
       <CollapsibleHeader
         isExpanded={state.isExpanded}
         onToggle={() => setExpanded(!state.isExpanded)}
+        terminalName={terminalName}
       />
 
       {state.isExpanded && (

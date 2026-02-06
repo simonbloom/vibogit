@@ -5,13 +5,17 @@ interface CollapsibleHeaderProps {
   isExpanded: boolean
   onToggle: () => void
   label?: string
+  terminalName?: string
 }
 
 export function CollapsibleHeader({
   isExpanded,
   onToggle,
   label = 'Prompt',
+  terminalName,
 }: CollapsibleHeaderProps) {
+  const displayLabel = terminalName ? `${label} - ${terminalName}` : label
+
   return (
     <Button
       variant="ghost"
@@ -24,7 +28,7 @@ export function CollapsibleHeader({
           isExpanded ? 'rotate-180' : ''
         }`}
       />
-      <span>{label}</span>
+      <span>{displayLabel}</span>
     </Button>
   )
 }

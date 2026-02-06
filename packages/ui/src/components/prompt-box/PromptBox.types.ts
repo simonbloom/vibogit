@@ -89,8 +89,10 @@ export interface PromptBoxProps {
   onClear?: () => void
 
   // Appearance
-  /** Start expanded. Default: false */
+  /** Start expanded. Default: true */
   defaultExpanded?: boolean
+  /** Terminal name to display in header */
+  terminalName?: string
   /** Minimum height in pixels */
   minHeight?: number
   /** Maximum height in pixels */
