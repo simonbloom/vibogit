@@ -110,6 +110,8 @@ pub struct Commit {
     pub email: String,
     pub timestamp: i64,
     pub parent_shas: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refs: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -405,6 +407,30 @@ pub fn sync(repo_path: &str) -> Result<SyncResult, GitError> {
 pub fn get_log(repo_path: &str, limit: Option<usize>) -> Result<Vec<Commit>, GitError> {
     let repo = open_repo(repo_path)?;
 
+    // Build a map of OID -> list of ref names for decoration
+    let mut ref_map: std::collections::HashMap<git2::Oid, Vec<String>> = std::collections::HashMap::new();
+    if let Ok(refs) = repo.references() {
+        for reference in refs.flatten() {
+            if let Some(name) = reference.shorthand() {
+                if let Ok(target) = reference.peel_to_commit() {
+                    ref_map.entry(target.id()).or_default().push(name.to_string());
+                }
+            }
+        }
+    }
+    // Add HEAD decoration
+    if let Ok(head) = repo.head() {
+        if let Ok(target) = head.peel_to_commit() {
+            let entry = ref_map.entry(target.id()).or_default();
+            if let Some(name) = head.shorthand() {
+                let head_label = format!("HEAD -> {}", name);
+                if !entry.iter().any(|r| r.starts_with("HEAD")) {
+                    entry.insert(0, head_label);
+                }
+            }
+        }
+    }
+
     let mut revwalk = repo.revwalk()?;
     revwalk.push_head()?;
     revwalk.set_sorting(git2::Sort::TIME)?;
@@ -422,8 +448,10 @@ pub fn get_log(repo_path: &str, limit: Option<usize>) -> Result<Vec<Commit>, Git
 
         let parent_shas: Vec<String> = commit
             .parents()
-            .map(|p| p.id().to_string()[..7].to_string())
+            .map(|p| p.id().to_string())
             .collect();
+
+        let refs = ref_map.get(&oid).cloned();
 
         commits.push(Commit {
             sha: commit.id().to_string(),
@@ -433,6 +461,7 @@ pub fn get_log(repo_path: &str, limit: Option<usize>) -> Result<Vec<Commit>, Git
             email: commit.author().email().unwrap_or("").to_string(),
             timestamp: commit.time().seconds(),
             parent_shas,
+            refs,
         });
     }
 

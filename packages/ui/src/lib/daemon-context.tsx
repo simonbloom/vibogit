@@ -164,6 +164,7 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
           email: commit.email,
           date: new Date((commit.timestamp as number) * 1000).toISOString(),
           parents: commit.parentShas,
+          refs: commit.refs || undefined,
         };
       });
       return { commits } as T;
