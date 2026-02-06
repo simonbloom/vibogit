@@ -158,7 +158,13 @@ export function MainInterface() {
       toast.success("Pushed successfully");
     } catch (error) {
       console.error("Failed to push:", error);
-      toast.error(`Push failed: ${error instanceof Error ? error.message : String(error)}`);
+      // Handle Tauri error objects which have a message property
+      const errorMsg = error instanceof Error 
+        ? error.message 
+        : typeof error === 'object' && error !== null && 'message' in error
+          ? String((error as { message: unknown }).message)
+          : JSON.stringify(error);
+      toast.error(`Push failed: ${errorMsg}`);
     } finally {
       setIsPushing(false);
     }
