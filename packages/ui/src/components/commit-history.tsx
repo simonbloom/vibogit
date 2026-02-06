@@ -449,6 +449,10 @@ export function CommitHistory({ repoPath, limit = 200, refreshKey }: CommitHisto
 
   return (
     <div className="flex flex-col h-full">
+      {/* DEBUG: Show commit count */}
+      <div className="px-2 py-1 text-xs text-muted-foreground bg-muted/50 border-b">
+        Total: {commits.length} commits | Visible: {visibleRows.length} rows | Height: {totalHeight}px | Container: {containerHeight}px
+      </div>
       {/* Virtualized graph */}
       <div
         className="overflow-auto relative flex-1"
