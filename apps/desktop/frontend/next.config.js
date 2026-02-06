@@ -18,6 +18,7 @@ const nextConfig = {
     config.resolve.alias["@/components"] = path.join(uiSrc, "components");
     config.resolve.alias["@/lib"] = path.join(uiSrc, "lib");
     config.resolve.alias["@/providers"] = path.join(uiSrc, "providers");
+    config.resolve.alias["@/platform"] = path.join(uiSrc, "platform");
     return config;
   },
 };

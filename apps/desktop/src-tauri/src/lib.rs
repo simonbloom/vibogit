@@ -113,6 +113,8 @@ pub fn run() {
             // Config commands
             commands::get_config,
             commands::set_config,
+            // AI commands
+            commands::ai_generate_commit,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ViboGit");

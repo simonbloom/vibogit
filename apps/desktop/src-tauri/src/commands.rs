@@ -1825,3 +1825,147 @@ pub async fn install_update(
     
     Ok(())
 }
+
+// AI Commands
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AiCommitRequest {
+    pub diff: String,
+    pub provider: String,
+    pub api_key: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AiCommitResponse {
+    pub message: String,
+}
+
+#[tauri::command]
+pub async fn ai_generate_commit(
+    diff: String,
+    provider: String,
+    api_key: String,
+) -> Result<AiCommitResponse, String> {
+    let prompt = format!(
+        "Write a git commit message for this diff.\n\
+        Use conventional commit format (type: description).\n\
+        Output ONLY the commit message - no markdown, no code blocks, no backticks, no quotes.\n\
+        First line should be under 72 characters.\n\
+        If the diff is summarized, rely on the stats and file list.\n\n\
+        {}",
+        if diff.len() > 10000 { &diff[..10000] } else { &diff }
+    );
+
+    let client = reqwest::Client::new();
+    
+    let response_text = match provider.as_str() {
+        "anthropic" => {
+            let body = serde_json::json!({
+                "model": "claude-3-5-haiku-latest",
+                "max_tokens": 500,
+                "messages": [{
+                    "role": "user",
+                    "content": prompt
+                }]
+            });
+            
+            let res = client
+                .post("https://api.anthropic.com/v1/messages")
+                .header("x-api-key", &api_key)
+                .header("anthropic-version", "2023-06-01")
+                .header("content-type", "application/json")
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| format!("Request failed: {}", e))?;
+            
+            let json: serde_json::Value = res.json().await
+                .map_err(|e| format!("Failed to parse response: {}", e))?;
+            
+            json["content"][0]["text"]
+                .as_str()
+                .unwrap_or("")
+                .to_string()
+        }
+        "openai" => {
+            let body = serde_json::json!({
+                "model": "gpt-4o-mini",
+                "max_tokens": 500,
+                "messages": [{
+                    "role": "user",
+                    "content": prompt
+                }]
+            });
+            
+            let res = client
+                .post("https://api.openai.com/v1/chat/completions")
+                .header("Authorization", format!("Bearer {}", api_key))
+                .header("content-type", "application/json")
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| format!("Request failed: {}", e))?;
+            
+            let json: serde_json::Value = res.json().await
+                .map_err(|e| format!("Failed to parse response: {}", e))?;
+            
+            json["choices"][0]["message"]["content"]
+                .as_str()
+                .unwrap_or("")
+                .to_string()
+        }
+        "gemini" => {
+            let url = format!(
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={}",
+                api_key
+            );
+            
+            let body = serde_json::json!({
+                "contents": [{
+                    "parts": [{"text": prompt}]
+                }],
+                "generationConfig": {
+                    "maxOutputTokens": 500
+                }
+            });
+            
+            let res = client
+                .post(&url)
+                .header("content-type", "application/json")
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| format!("Request failed: {}", e))?;
+            
+            let json: serde_json::Value = res.json().await
+                .map_err(|e| format!("Failed to parse response: {}", e))?;
+            
+            json["candidates"][0]["content"]["parts"][0]["text"]
+                .as_str()
+                .unwrap_or("")
+                .to_string()
+        }
+        _ => return Err(format!("Unknown provider: {}", provider)),
+    };
+
+    // Clean up the response
+    let mut message = response_text.trim().to_string();
+    
+    // Remove markdown code blocks
+    if message.starts_with("```") {
+        message = message
+            .trim_start_matches(|c: char| c == '`' || c.is_alphabetic() || c == '\n')
+            .trim_end_matches('`')
+            .trim()
+            .to_string();
+    }
+    
+    // Remove surrounding quotes
+    if (message.starts_with('"') && message.ends_with('"'))
+        || (message.starts_with('`') && message.ends_with('`'))
+    {
+        message = message[1..message.len() - 1].trim().to_string();
+    }
+
+    Ok(AiCommitResponse { message })
+}

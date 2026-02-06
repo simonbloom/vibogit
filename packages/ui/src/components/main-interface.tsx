@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useDaemon } from "@/lib/daemon-context";
+import { isTauri } from "@/platform";
 import { BranchSelector } from "@/components/branch-selector";
 import { DevServerConnection } from "@/components/dev-server-connection";
 import { DevServerLogs } from "@/components/dev-server-logs";
@@ -207,23 +208,36 @@ export function MainInterface() {
         combinedDiff = `Changed files:\n${allFiles.map((f) => `- ${f}`).join("\n")}`;
       }
       
-      // 3. Generate AI commit message
-      const response = await fetch("/api/ai/commit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      // 3. Generate AI commit message (use Tauri command in desktop, fetch in web)
+      let message: string;
+      
+      if (isTauri()) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const result = await invoke<{ message: string }>("ai_generate_commit", {
           diff: combinedDiff,
           provider: settings.aiProvider,
           apiKey: settings.aiApiKey,
-        }),
-      });
-      
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to generate commit message");
+        });
+        message = result.message;
+      } else {
+        const response = await fetch("/api/ai/commit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            diff: combinedDiff,
+            provider: settings.aiProvider,
+            apiKey: settings.aiApiKey,
+          }),
+        });
+        
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || "Failed to generate commit message");
+        }
+        
+        const result = await response.json();
+        message = result.message;
       }
-      
-      const { message } = await response.json();
       
       // 4. Commit with generated message
       await send("commit", { repoPath, message });

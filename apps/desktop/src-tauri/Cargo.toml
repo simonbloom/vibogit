@@ -33,6 +33,9 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# HTTP client for AI APIs
+reqwest = { version = "0.11", features = ["json"] }
+
 # Utilities
 dirs = "5"
 open = "5"

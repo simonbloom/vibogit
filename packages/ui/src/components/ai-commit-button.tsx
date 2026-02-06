@@ -6,6 +6,7 @@ import { getSettings } from "@/lib/settings";
 import { AI_PROVIDERS } from "@/lib/ai-service";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Loader2, AlertCircle } from "lucide-react";
+import { isTauri } from "@/platform";
 
 interface AICommitButtonProps {
   onMessageGenerated: (message: string) => void;
@@ -75,24 +76,38 @@ export function AICommitButton({ onMessageGenerated, disabled }: AICommitButtonP
         combinedDiff = `Changed files:\n${allFiles.map((f) => `- ${f}`).join("\n")}`;
       }
 
-      // Call the AI API
-      const response = await fetch("/api/ai/commit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      // Call the AI API (use Tauri command in desktop, fetch in web)
+      let message: string;
+      
+      if (isTauri()) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const result = await invoke<{ message: string }>("ai_generate_commit", {
           diff: combinedDiff,
           provider: settings.aiProvider,
           apiKey: settings.aiApiKey,
-        }),
-      });
+        });
+        message = result.message;
+      } else {
+        const response = await fetch("/api/ai/commit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            diff: combinedDiff,
+            provider: settings.aiProvider,
+            apiKey: settings.aiApiKey,
+          }),
+        });
 
-      if (!response.ok) {
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || "Failed to generate commit message");
+        }
+
         const data = await response.json();
-        throw new Error(data.error || "Failed to generate commit message");
+        message = data.message;
       }
-
-      const data = await response.json();
-      onMessageGenerated(data.message);
+      
+      onMessageGenerated(message);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate commit message");
     } finally {
