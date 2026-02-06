@@ -9,10 +9,8 @@ import {
   GraphLine,
   GraphTooltip,
   GraphContextMenu,
-  BranchFilter,
   VIEW_MODE_CONFIG,
   getBranchColorBase,
-  type Branch,
 } from "./graph";
 
 // ---------------------------------------------------------------------------
@@ -37,6 +35,8 @@ interface GraphRow {
   lane: number;
   colorId: number;
   edges: GraphEdge[];
+  hasParents: boolean;
+  hasChildren: boolean;
 }
 
 interface TooltipState {
@@ -239,7 +239,9 @@ function buildGraph(commits: GitCommitType[]): { rows: GraphRow[]; maxLane: numb
 
     if (lane > maxLane) maxLane = lane;
 
-    rows.push({ commit, lane, colorId, edges });
+    const hasParents = parents.length > 0;
+    const hasChildren = branchChildrenOf.has(commit.hash) || mergeChildrenOf.has(commit.hash);
+    rows.push({ commit, lane, colorId, edges, hasParents, hasChildren });
   }
 
   return { rows, maxLane };
@@ -266,8 +268,6 @@ export function CommitHistory({ repoPath, limit = 200, refreshKey }: CommitHisto
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({ commit: null, x: 0, y: 0 });
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
-  const [visibleBranches, setVisibleBranches] = useState<Set<string>>(new Set());
-  const [branchesInitialized, setBranchesInitialized] = useState(false);
   const [scrollTop, setScrollTop] = useState(0);
   const [containerHeight, setContainerHeight] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -275,46 +275,6 @@ export function CommitHistory({ repoPath, limit = 200, refreshKey }: CommitHisto
 
   const config = VIEW_MODE_CONFIG.expanded;
   const ROW_HEIGHT = config.rowHeight;
-
-  // Extract unique branches from commits
-  const branches = useMemo<Branch[]>(() => {
-    const branchMap = new Map<string, Branch>();
-    let colorIndex = 0;
-    commits.forEach((commit) => {
-      commit.refs?.forEach((ref) => {
-        if (ref === "HEAD" || ref.includes("->")) return;
-        const isRemote = ref.startsWith("origin/") || ref.includes("remote");
-        if (!branchMap.has(ref)) {
-          branchMap.set(ref, { name: ref, isRemote, colorIndex: colorIndex++ });
-        }
-      });
-    });
-    return Array.from(branchMap.values());
-  }, [commits]);
-
-  useEffect(() => {
-    if (branches.length > 0 && !branchesInitialized) {
-      setVisibleBranches(new Set(branches.map((b) => b.name)));
-      setBranchesInitialized(true);
-    }
-  }, [branches, branchesInitialized]);
-
-  const handleToggleBranch = useCallback((branchName: string) => {
-    setVisibleBranches((prev) => {
-      const next = new Set(prev);
-      if (next.has(branchName)) next.delete(branchName);
-      else next.add(branchName);
-      return next;
-    });
-  }, []);
-
-  const handleShowAllBranches = useCallback(() => {
-    setVisibleBranches(new Set(branches.map((b) => b.name)));
-  }, [branches]);
-
-  const handleHideAllBranches = useCallback(() => {
-    setVisibleBranches(new Set());
-  }, []);
 
   // Load commits
   useEffect(() => {
@@ -452,17 +412,6 @@ export function CommitHistory({ repoPath, limit = 200, refreshKey }: CommitHisto
 
   return (
     <div className="flex flex-col h-full">
-      {/* Toolbar */}
-      <div className="flex items-center gap-4 px-3 py-2 border-b border-border bg-muted/20">
-        <BranchFilter
-          branches={branches}
-          visibleBranches={visibleBranches}
-          onToggleBranch={handleToggleBranch}
-          onShowAll={handleShowAllBranches}
-          onHideAll={handleHideAllBranches}
-        />
-      </div>
-
       {/* Virtualized graph */}
       <div
         className="overflow-auto relative flex-1"
@@ -557,7 +506,7 @@ const CommitRow = memo(function CommitRow({
   viewConfig,
 }: CommitRowProps) {
   const [copied, setCopied] = useState(false);
-  const { commit, lane, colorId, edges } = row;
+  const { commit, lane, colorId, edges, hasParents, hasChildren } = row;
   const formattedDate = formatCommitDate(commit.date);
   const isHead = commit.refs?.some((r) => r.includes("HEAD"));
   const isMerge = (commit.parents?.length ?? 0) > 1;
@@ -618,14 +567,30 @@ const CommitRow = memo(function CommitRow({
             );
           })}
 
-          {/* Vertical line through the node's own lane (above node) */}
-          {rowIndex > 0 && (
+          {/* Vertical line above node (from top of row to node center) */}
+          {hasChildren && (
             <GraphLine
               type="vertical"
               startX={nodeX}
               startY={0}
               endX={nodeX}
               endY={midY}
+              colorIndex={colorId}
+              isHighlighted={highlightedBranch === colorId}
+              isDimmed={highlightedBranch !== null && highlightedBranch !== colorId}
+              onMouseEnter={() => onBranchHover(colorId)}
+              onMouseLeave={onBranchLeave}
+            />
+          )}
+
+          {/* Vertical line below node (from node center to bottom of row) */}
+          {hasParents && (
+            <GraphLine
+              type="vertical"
+              startX={nodeX}
+              startY={midY}
+              endX={nodeX}
+              endY={ROW_HEIGHT}
               colorIndex={colorId}
               isHighlighted={highlightedBranch === colorId}
               isDimmed={highlightedBranch !== null && highlightedBranch !== colorId}

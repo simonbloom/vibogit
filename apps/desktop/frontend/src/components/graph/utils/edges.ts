@@ -36,7 +36,8 @@ export function mergeInPath(
 
 /**
  * Branch-out: node column spawns a new branch in target column.
- * Goes horizontal from source, rounded corner, then vertical down.
+ * Goes vertical down from source, rounded corner, then horizontal to target.
+ * Mirrors merge-in so the branch visually exits from the commit node.
  */
 export function branchOutPath(
   sourceX: number,
@@ -49,11 +50,11 @@ export function branchOutPath(
   }
   const r = Math.min(CORNER_RADIUS, Math.abs(targetX - sourceX) / 2, Math.abs(targetY - sourceY) / 2);
   const dir = targetX > sourceX ? 1 : -1;
-  // Horizontal from source, then rounded corner, then vertical down
+  // Vertical down from source, rounded corner, then horizontal to target
   return [
     `M ${sourceX} ${sourceY}`,
-    `L ${targetX - dir * r} ${sourceY}`,
-    `Q ${targetX} ${sourceY} ${targetX} ${sourceY + r}`,
+    `L ${sourceX} ${targetY - r}`,
+    `Q ${sourceX} ${targetY} ${sourceX + dir * r} ${targetY}`,
     `L ${targetX} ${targetY}`,
   ].join(" ");
 }

@@ -10,8 +10,14 @@ import {
   ContextMenuTrigger 
 } from "@/components/ui/context-menu";
 import { Folder, Terminal, Copy, Trash2 } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
 import type { Project, ProjectStatus } from "@/lib/projects-context";
+
+async function safeInvoke(cmd: string, args?: Record<string, unknown>): Promise<void> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    if (typeof invoke === "function") await invoke(cmd, args);
+  } catch { /* not in Tauri */ }
+}
 
 interface ProjectItemProps {
   project: Project;
@@ -40,7 +46,7 @@ export function ProjectItem({
 
   const handleOpenInFinder = async () => {
     try {
-      await invoke("open_in_finder", { path: project.path });
+      await safeInvoke("open_in_finder", { path: project.path });
     } catch (err) {
       console.error("Failed to open in Finder:", err);
     }
@@ -48,7 +54,7 @@ export function ProjectItem({
 
   const handleOpenInTerminal = async () => {
     try {
-      await invoke("open_terminal_with_app", { path: project.path });
+      await safeInvoke("open_terminal_with_app", { path: project.path });
     } catch (err) {
       console.error("Failed to open in Terminal:", err);
     }

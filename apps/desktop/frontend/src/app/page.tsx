@@ -1,17 +1,27 @@
 "use client";
 
+import { useEffect } from "react";
 import { useDaemon } from "@/lib/daemon-context";
-import { useTabs } from "@/lib/tabs-context";
 import { WelcomeScreen } from "@/components/welcome-screen";
 import { MainInterface } from "@/components/main-interface";
-import { TabBar } from "@/components/tab-bar";
+
 import { OnboardingScreen } from "@/components/onboarding-screen";
 import { AppLayout } from "@/components/app-layout";
 import { Loader2 } from "lucide-react";
 
 export default function Home() {
-  const { state } = useDaemon();
-  const { tabs } = useTabs();
+  const { state, setRepoPath } = useDaemon();
+  // Auto-open repo from ?repo= URL param (useful for dev/testing)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (state.connection === "connected" && !state.repoPath) {
+      const params = new URLSearchParams(window.location.search);
+      const repo = params.get("repo");
+      if (repo) {
+        setRepoPath(repo);
+      }
+    }
+  }, [state.connection, state.repoPath, setRepoPath]);
 
   // Show onboarding or loading states without sidebar
   if (state.connection === "disconnected") {
@@ -48,7 +58,6 @@ export default function Home() {
   return (
     <main className="h-screen overflow-hidden">
       <AppLayout>
-        {tabs.length > 0 && <TabBar />}
         {!state.repoPath && <WelcomeScreen />}
         {state.repoPath && <MainInterface />}
       </AppLayout>

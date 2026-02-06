@@ -13,8 +13,8 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const { setRepoPath } = useDaemon();
-  const { state: projectsState } = useProjects();
+  const { state: daemonState, setRepoPath } = useDaemon();
+  const { state: projectsState, addProject } = useProjects();
   const [showAddRepo, setShowAddRepo] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -30,6 +30,16 @@ export function AppLayout({ children }: AppLayoutProps) {
       setRepoPath(projectsState.selectedPath);
     }
   }, [projectsState.selectedPath, setRepoPath]);
+
+  // Reverse sync: when daemon has a repoPath not in sidebar, add it
+  useEffect(() => {
+    const repoPath = daemonState.repoPath;
+    if (!repoPath) return;
+    const alreadyInList = projectsState.projects.some(p => p.path === repoPath);
+    if (!alreadyInList && !projectsState.loading) {
+      addProject(repoPath);
+    }
+  }, [daemonState.repoPath, projectsState.projects, projectsState.loading, addProject]);
 
   const handleProjectSelect = (path: string) => {
     setRepoPath(path);

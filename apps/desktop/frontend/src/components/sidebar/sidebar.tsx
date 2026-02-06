@@ -101,10 +101,10 @@ export function Sidebar({
             "w-full justify-start gap-2",
             isCollapsed && "justify-center"
           )}
-          title="Add repository"
+          title="Add project"
         >
           <Plus className="h-4 w-4" />
-          {!isCollapsed && <span>Add repository</span>}
+          {!isCollapsed && <span>Add project</span>}
         </Button>
         
         <div className={cn(

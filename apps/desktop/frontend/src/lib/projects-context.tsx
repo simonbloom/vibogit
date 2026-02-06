@@ -9,7 +9,16 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { invoke } from "@tauri-apps/api/core";
+// Safe invoke that returns null when Tauri is not available (e.g. browser dev mode)
+async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    if (typeof invoke !== "function") return null;
+    return await invoke<T>(cmd, args);
+  } catch {
+    return null;
+  }
+}
 
 export interface Project {
   path: string;
@@ -99,14 +108,17 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   const loadProjects = useCallback(async () => {
     try {
-      const projects = await invoke<Project[]>("get_saved_projects");
-      if (isMountedRef.current) {
+      const projects = await safeInvoke<Project[]>("get_saved_projects");
+      if (!isMountedRef.current) return;
+      if (projects) {
+        // Tauri available: use persisted projects
         dispatch({ type: "SET_PROJECTS", payload: projects });
-        
-        // Auto-select first project if none selected
-        if (projects.length > 0 && !state.selectedPath) {
+        if (projects.length > 0) {
           dispatch({ type: "SELECT_PROJECT", payload: projects[0].path });
         }
+      } else {
+        // No Tauri: just mark loading done, keep any in-memory projects
+        dispatch({ type: "SET_LOADING", payload: false });
       }
     } catch (err) {
       console.error("[Projects] Failed to load projects:", err);
@@ -115,14 +127,15 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "SET_LOADING", payload: false });
       }
     }
-  }, [state.selectedPath]);
+  }, []);
 
   const refreshStatuses = useCallback(async () => {
     if (state.projects.length === 0) return;
     
     try {
       const paths = state.projects.map(p => p.path);
-      const statusList = await invoke<ProjectStatus[]>("get_all_project_statuses", { paths });
+      const statusList = await safeInvoke<ProjectStatus[]>("get_all_project_statuses", { paths });
+      if (!statusList) return;
       
       if (isMountedRef.current) {
         const statusMap: Record<string, ProjectStatus> = {};
@@ -137,7 +150,13 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   }, [state.projects]);
 
   const addProject = useCallback(async (path: string): Promise<Project> => {
-    const project = await invoke<Project>("add_saved_project", { path });
+    const saved = await safeInvoke<Project>("add_saved_project", { path });
+    // Fallback: create project locally when Tauri is unavailable (browser dev mode)
+    const project = saved ?? {
+      path,
+      name: path.split("/").filter(Boolean).pop() || path,
+      addedAt: Date.now(),
+    };
     dispatch({ type: "ADD_PROJECT", payload: project });
     dispatch({ type: "SELECT_PROJECT", payload: project.path });
     
@@ -148,7 +167,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   }, [refreshStatuses]);
 
   const removeProject = useCallback(async (path: string): Promise<void> => {
-    await invoke("remove_saved_project", { path });
+    await safeInvoke("remove_saved_project", { path });
     dispatch({ type: "REMOVE_PROJECT", payload: path });
   }, []);
 
@@ -157,7 +176,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const reorderProjects = useCallback(async (paths: string[]): Promise<void> => {
-    await invoke("reorder_saved_projects", { paths });
+    await safeInvoke("reorder_saved_projects", { paths });
     // Reorder local state to match
     const reordered = paths
       .map(path => state.projects.find(p => p.path === path))
@@ -209,7 +228,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       
       // Check if there's a current project from recent projects
       try {
-        const recentProjects = await invoke<Array<{ path: string; name: string }>>("list_recent_projects");
+        const recentProjects = await safeInvoke<Array<{ path: string; name: string }>>("list_recent_projects");
+        if (!recentProjects) return;
         if (recentProjects.length > 0) {
           const firstRecent = recentProjects[0];
           await addProject(firstRecent.path);
