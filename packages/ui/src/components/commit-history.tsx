@@ -255,6 +255,11 @@ function buildGraph(commits: GitCommitType[]): { rows: GraphRow[]; maxLane: numb
       activeLanes.push({ lane: l, colorId: hashToColor.get(lanes[l]!) ?? 0 });
     }
   }
+  // If no lanes are active (e.g., last commit is a root), keep lane 0
+  // so continuation lines extend past the root commit
+  if (activeLanes.length === 0 && rows.length > 0) {
+    activeLanes.push({ lane: rows[rows.length - 1].lane, colorId: rows[rows.length - 1].colorId });
+  }
 
   return { rows, maxLane, activeLanes };
 }
@@ -479,7 +484,7 @@ export function CommitHistory({ repoPath, limit = 200, refreshKey }: CommitHisto
             <svg
               width={graphWidth}
               height={extendedHeight - totalHeight}
-              style={{ position: "absolute", top: totalHeight, left: 0 }}
+              style={{ position: "absolute", top: totalHeight, left: 0, pointerEvents: "none" }}
             >
               {activeLanes.map(({ lane, colorId }) => (
                 <GraphLine
