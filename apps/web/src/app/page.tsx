@@ -147,38 +147,24 @@ open /Applications/ViboGit.app`}</code>
             {/* Web App Instructions */}
             <div className="max-w-[700px] mx-auto mt-8 bg-[#111113] border border-[#27272a] rounded-xl overflow-hidden">
               <div className="px-6 py-5 border-b border-[#27272a] flex justify-between items-center">
-                <h3 className="font-semibold">Web App Setup</h3>
-                <span className="text-sm text-[#71717a]">Requires local daemon</span>
+                <h3 className="font-semibold">Web App</h3>
+                <span className="text-sm text-[#71717a]">No installation required</span>
               </div>
               <div className="p-6">
-                <div className="mb-5">
-                  <span className="inline-flex items-center justify-center w-6 h-6 bg-[#1a1a1d] rounded-full text-xs font-semibold mr-3">1</span>
-                  <span className="text-sm text-[#a1a1aa]">Install and run the ViboGit daemon:</span>
-                </div>
-                <div className="relative bg-[#18181b] border border-[#27272a] rounded-lg p-4 font-mono text-sm">
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(`git clone https://github.com/simonbloom/vibogit.git
-cd vibogit
-bun install
-bun run daemon`);
-                    }}
-                    className="absolute top-2 right-2 bg-[#1a1a1d] border border-[#27272a] rounded-md px-3 py-1.5 text-xs text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#fafafa] transition-all"
-                  >
-                    Copy
-                  </button>
-                  <code className="text-[#e4e4e7] whitespace-pre">{`git clone https://github.com/simonbloom/vibogit.git
-cd vibogit
-bun install
-bun run daemon`}</code>
-                </div>
-                <div className="mt-6">
-                  <span className="inline-flex items-center justify-center w-6 h-6 bg-[#1a1a1d] rounded-full text-xs font-semibold mr-3">2</span>
-                  <span className="text-sm text-[#a1a1aa]">Keep the daemon running, then open <a href="/app" className="text-[#3b82f6] hover:underline">vibogit.com/app</a> in your browser.</span>
-                </div>
-                <div className="mt-4 p-3 bg-[#1a1a1d] rounded-lg">
-                  <p className="text-xs text-[#71717a]">The daemon runs on <code className="text-[#a1a1aa]">ws://localhost:9111</code> and connects your browser to your local git repos.</p>
-                </div>
+                <p className="text-sm text-[#a1a1aa] mb-4">
+                  Try ViboGit directly in your browser - no download needed.
+                </p>
+                <a
+                  href="/app"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-[#3b82f6] text-white hover:bg-[#2563eb] transition-all"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="2" y1="12" x2="22" y2="12"/>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                  </svg>
+                  Open Web App
+                </a>
               </div>
             </div>
           </div>
