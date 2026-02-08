@@ -1825,7 +1825,7 @@ pub async fn send_to_terminal(
 
 // Skills Commands
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Skill {
     pub name: String,
@@ -1833,10 +1833,140 @@ pub struct Skill {
     pub path: String,
 }
 
+fn get_skills_directories() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    
+    // 1. FACTORY_SKILLS_PATH env var
+    if let Ok(p) = std::env::var("FACTORY_SKILLS_PATH") {
+        paths.push(PathBuf::from(p));
+    }
+    
+    // 2. FACTORY_HOME/skills env var
+    if let Ok(home) = std::env::var("FACTORY_HOME") {
+        paths.push(PathBuf::from(home).join("skills"));
+    }
+    
+    // 3. ~/.factory/skills/
+    if let Some(home) = dirs::home_dir() {
+        paths.push(home.join(".factory").join("skills"));
+    }
+    
+    paths
+}
+
+fn parse_skill_frontmatter(content: &str) -> (Option<String>, Option<String>) {
+    // Check if content starts with frontmatter delimiter
+    if !content.starts_with("---") {
+        return (None, None);
+    }
+    
+    // Find the end of frontmatter
+    let rest = &content[3..];
+    let end_idx = rest.find("\n---");
+    if end_idx.is_none() {
+        return (None, None);
+    }
+    
+    let frontmatter = &rest[..end_idx.unwrap()];
+    
+    // Parse name field
+    let name = frontmatter.lines()
+        .find(|l| l.trim().starts_with("name:"))
+        .map(|l| {
+            l.trim()
+                .trim_start_matches("name:")
+                .trim()
+                .trim_matches(|c| c == '"' || c == '\'')
+                .to_string()
+        });
+    
+    // Parse description field
+    let description = frontmatter.lines()
+        .find(|l| l.trim().starts_with("description:"))
+        .map(|l| {
+            l.trim()
+                .trim_start_matches("description:")
+                .trim()
+                .trim_matches(|c| c == '"' || c == '\'')
+                .to_string()
+        });
+    
+    (name, description)
+}
+
+fn scan_skills_directory(path: &PathBuf) -> Vec<Skill> {
+    let mut skills = Vec::new();
+    
+    // Return empty if directory doesn't exist
+    if !path.exists() {
+        return skills;
+    }
+    
+    // Read directory entries
+    let entries = match std::fs::read_dir(path) {
+        Ok(e) => e,
+        Err(_) => return skills,
+    };
+    
+    for entry in entries.flatten() {
+        // Skip non-directories and hidden directories
+        let entry_path = entry.path();
+        if !entry_path.is_dir() {
+            continue;
+        }
+        
+        let dir_name = match entry.file_name().to_str() {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
+        
+        if dir_name.starts_with('.') {
+            continue;
+        }
+        
+        // Check for SKILL.md
+        let skill_file = entry_path.join("SKILL.md");
+        if !skill_file.exists() {
+            continue;
+        }
+        
+        // Read and parse SKILL.md
+        let content = match std::fs::read_to_string(&skill_file) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        
+        let (name, description) = parse_skill_frontmatter(&content);
+        
+        skills.push(Skill {
+            name: name.unwrap_or(dir_name),
+            description: description.unwrap_or_default(),
+            path: entry_path.to_string_lossy().to_string(),
+        });
+    }
+    
+    skills
+}
+
 #[tauri::command]
 pub async fn list_skills() -> Result<Vec<Skill>, String> {
-    // Return empty skills list for now - skills are typically handled by the daemon
-    Ok(vec![])
+    let mut all_skills: Vec<Skill> = Vec::new();
+    let mut seen_paths = std::collections::HashSet::new();
+    
+    // Scan all skill directories
+    for dir in get_skills_directories() {
+        for skill in scan_skills_directory(&dir) {
+            // Deduplicate by path
+            if seen_paths.insert(skill.path.clone()) {
+                all_skills.push(skill);
+            }
+        }
+    }
+    
+    // Sort alphabetically by name
+    all_skills.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    
+    Ok(all_skills)
 }
 
 // Update Commands

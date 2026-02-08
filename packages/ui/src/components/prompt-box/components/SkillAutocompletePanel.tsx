@@ -52,8 +52,21 @@ export function SkillAutocompletePanel({
         className="absolute z-50 w-80 rounded-md border border-border bg-popover shadow-lg"
         style={{ top: position.y, left: position.x }}
       >
-        <div className="px-3 py-4 text-sm text-muted-foreground text-center">
-          No skills found in ~/.factory/skills/
+        <div className="px-4 py-4 text-sm text-muted-foreground">
+          <p className="font-medium text-foreground mb-2">No skills found</p>
+          <p className="text-xs mb-3">
+            Skills are loaded from:<br />
+            <code className="text-xs bg-muted px-1 py-0.5 rounded">~/.factory/skills/</code>
+          </p>
+          <a
+            href="https://docs.factory.ai/skills"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+          >
+            Learn how to create skills
+            <span aria-hidden="true">→</span>
+          </a>
         </div>
       </div>
     )
