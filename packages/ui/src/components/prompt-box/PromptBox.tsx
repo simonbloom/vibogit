@@ -212,6 +212,41 @@ export function PromptBox({
     maxImageSize,
   })
 
+  // Helper: get config from Tauri
+  const getTauriConfig = useCallback(async () => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const result = await invoke<{ config: { cleanShotMode?: boolean; imageBasePath?: string } }>('get_config')
+      return {
+        cleanShotMode: result.config.cleanShotMode ?? false,
+        folder: result.config.imageBasePath ?? '',
+      }
+    } catch {
+      return { cleanShotMode: false, folder: '' }
+    }
+  }, [])
+
+  // Helper: copy file to screenshot folder and get data URL preview
+  const copyAndPreview = useCallback(async (sourcePath: string, destFolder: string) => {
+    const { invoke } = await import('@tauri-apps/api/core')
+
+    // Skip copy if already in the destination folder
+    const expandedFolder = destFolder.startsWith('~/')
+      ? destFolder // Rust will expand; we can't easily expand here
+      : destFolder
+    let finalPath = sourcePath
+    if (destFolder && !sourcePath.startsWith(expandedFolder)) {
+      const copyResult = await invoke<{ path: string }>('copy_image_to_folder', {
+        sourcePath,
+        destFolder,
+      })
+      finalPath = copyResult.path
+    }
+
+    const dataUrl = await invoke<string>('read_image_as_data_url', { path: finalPath })
+    return { path: finalPath, dataUrl }
+  }, [])
+
   // Tauri: listen for native drag-drop events
   useEffect(() => {
     if (!isTauri()) return
@@ -223,7 +258,6 @@ export function PromptBox({
     ;(async () => {
       try {
         const { getCurrentWebview } = await import('@tauri-apps/api/webview')
-        const { convertFileSrc } = await import('@tauri-apps/api/core')
 
         unlisten = (await getCurrentWebview().onDragDropEvent((event) => {
           if (event.payload.type === 'drop') {
@@ -242,23 +276,42 @@ export function PromptBox({
             }
 
             const toAdd = imagePaths.slice(0, remaining)
-            for (const filePath of toAdd) {
-              const filename = filePath.split('/').pop() || 'image'
-              const preview = convertFileSrc(filePath)
+            for (const originalPath of toAdd) {
+              const filename = originalPath.split('/').pop() || 'image'
               const referenceNumber = getNextReferenceNumber()
               const cursorPosition = getCursorPosition()
+              const tempId = crypto.randomUUID()
 
               const image: PromptImage = {
-                id: crypto.randomUUID(),
+                id: tempId,
                 filename,
-                filePath,
-                preview,
-                url: preview,
-                status: 'uploaded',
-                progress: 100,
+                filePath: originalPath,
+                preview: '',
+                url: null,
+                status: 'uploading',
+                progress: 50,
                 referenceNumber,
               }
               addImage(image, cursorPosition)
+
+              // Copy to screenshot folder and get data URL preview
+              getTauriConfig().then(({ folder }) =>
+                copyAndPreview(originalPath, folder).then(({ path, dataUrl }) => {
+                  updateImage(tempId, {
+                    filePath: path,
+                    filename: path.split('/').pop() || filename,
+                    preview: dataUrl,
+                    url: dataUrl,
+                    status: 'uploaded',
+                    progress: 100,
+                  })
+                }).catch((error) => {
+                  updateImage(tempId, {
+                    status: 'error',
+                    error: error instanceof Error ? error.message : 'Failed to process image',
+                  })
+                })
+              )
             }
           }
         })) as unknown as () => void
@@ -270,7 +323,7 @@ export function PromptBox({
     return () => {
       unlisten?.()
     }
-  }, [maxImages, state.images.length, getNextReferenceNumber, getCursorPosition, addImage])
+  }, [maxImages, state.images.length, getNextReferenceNumber, getCursorPosition, addImage, updateImage, getTauriConfig, copyAndPreview])
 
   // Tauri: handle clipboard paste with CleanShot / save_clipboard_image
   const handlePaste = useCallback(
@@ -294,17 +347,7 @@ export function PromptBox({
       if (!hasImage) return
       e.preventDefault()
 
-      // Get config for CleanShot mode and imageBasePath
-      let cleanShotMode = false
-      let folder = ''
-      try {
-        const { invoke } = await import('@tauri-apps/api/core')
-        const configResult = await invoke<{ config: { cleanShotMode?: boolean; imageBasePath?: string } }>('get_config')
-        cleanShotMode = configResult.config.cleanShotMode ?? false
-        folder = configResult.config.imageBasePath ?? ''
-      } catch {
-        // Fallback to defaults
-      }
+      const { cleanShotMode, folder } = await getTauriConfig()
 
       const remaining = maxImages - state.images.length
       if (remaining <= 0) {
@@ -312,7 +355,7 @@ export function PromptBox({
         return
       }
 
-      // Create blob preview from clipboard for display
+      // Create blob preview from clipboard as temporary placeholder
       let blobPreview = ''
       let clipFilename = 'clipboard-image.png'
       for (let i = 0; i < items.length; i++) {
@@ -358,9 +401,14 @@ export function PromptBox({
           resolvedPath = result.path
         }
 
+        // Copy to screenshot folder if not already there, then get data URL preview
+        const { path: finalPath, dataUrl } = await copyAndPreview(resolvedPath, folder)
+
         updateImage(tempId, {
-          filePath: resolvedPath,
-          filename: resolvedPath.split('/').pop() || clipFilename,
+          filePath: finalPath,
+          filename: finalPath.split('/').pop() || clipFilename,
+          preview: dataUrl,
+          url: dataUrl,
           status: 'uploaded',
           progress: 100,
         })
@@ -371,7 +419,7 @@ export function PromptBox({
         })
       }
     },
-    [browserHandlePaste, maxImages, state.images.length, getNextReferenceNumber, getCursorPosition, addImage, updateImage]
+    [browserHandlePaste, maxImages, state.images.length, getNextReferenceNumber, getCursorPosition, addImage, updateImage, getTauriConfig, copyAndPreview]
   )
 
   const handleTextChange = useCallback(

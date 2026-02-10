@@ -119,6 +119,8 @@ pub fn run() {
             // Clipboard image commands
             commands::save_clipboard_image,
             commands::find_recent_image,
+            commands::read_image_as_data_url,
+            commands::copy_image_to_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ViboGit");

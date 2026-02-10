@@ -2284,3 +2284,80 @@ pub async fn find_recent_image(folder: String, within_secs: u64) -> Result<FindR
         path: newest.map(|(p, _)| p.to_string_lossy().to_string()),
     })
 }
+
+#[tauri::command]
+pub async fn read_image_as_data_url(path: String) -> Result<String, String> {
+    use base64::Engine;
+
+    let file_path = PathBuf::from(&path);
+    if !file_path.exists() {
+        return Err(format!("File not found: {}", path));
+    }
+
+    let bytes = std::fs::read(&file_path).map_err(|e| format!("Failed to read file: {}", e))?;
+    let ext = file_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("png")
+        .to_lowercase();
+    let mime = match ext.as_str() {
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        _ => "image/png",
+    };
+
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:{};base64,{}", mime, b64))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyImageResponse {
+    pub path: String,
+}
+
+#[tauri::command]
+pub async fn copy_image_to_folder(source_path: String, dest_folder: String) -> Result<CopyImageResponse, String> {
+    let source = PathBuf::from(&source_path);
+    if !source.exists() {
+        return Err(format!("Source file not found: {}", source_path));
+    }
+
+    let dest_dir = if dest_folder.is_empty() {
+        dirs::desktop_dir().unwrap_or_else(|| PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("Desktop"))
+    } else {
+        let expanded = if dest_folder.starts_with("~/") {
+            PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(&dest_folder[2..])
+        } else {
+            PathBuf::from(&dest_folder)
+        };
+        expanded
+    };
+
+    if !dest_dir.exists() {
+        std::fs::create_dir_all(&dest_dir).map_err(|e| format!("Failed to create folder: {}", e))?;
+    }
+
+    let filename = source.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let stem = source.file_stem().unwrap_or_default().to_string_lossy().to_string();
+    let ext = source.extension().and_then(|e| e.to_str()).unwrap_or("png");
+
+    let mut dest_path = dest_dir.join(&filename);
+
+    // Auto-rename with timestamp if file exists
+    if dest_path.exists() {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+        let new_filename = format!("{}-{}.{}", stem, timestamp, ext);
+        dest_path = dest_dir.join(new_filename);
+    }
+
+    std::fs::copy(&source, &dest_path).map_err(|e| format!("Failed to copy file: {}", e))?;
+
+    Ok(CopyImageResponse {
+        path: dest_path.to_string_lossy().to_string(),
+    })
+}

@@ -9,7 +9,7 @@ edition = "2021"
 tauri-build = { version = "2.0", features = [] }
 
 [dependencies]
-tauri = { version = "2.0", features = ["macos-private-api", "tray-icon", "devtools", "protocol-asset"] }
+tauri = { version = "2.0", features = ["macos-private-api", "tray-icon", "devtools"] }
 tauri-plugin-autostart = "2.0"
 tauri-plugin-notification = "2.0"
 tauri-plugin-shell = "2.0"
@@ -45,6 +45,7 @@ chrono = { version = "0.4", features = ["serde"] }
 # Clipboard image access
 arboard = "3"
 png = "0.17"
+base64 = "0.22"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.25"

@@ -32,11 +32,7 @@
       "menuOnLeftClick": false
     },
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost blob: data:; style-src 'self' 'unsafe-inline'",
-      "assetProtocol": {
-        "enable": true,
-        "scope": ["$HOME/**/*", "$DESKTOP/**/*", "$DOWNLOAD/**/*", "$PICTURE/**/*"]
-      }
+      "csp": null
     }
   },
   "bundle": {
