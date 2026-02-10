@@ -103,7 +103,7 @@ interface FileNode {
   children?: FileNode[];
 }
 
-async function listFilesRecursive(basePath: string, currentPath: string, maxDepth: number, depth = 0): Promise<FileNode[]> {
+async function listFilesRecursive(basePath: string, currentPath: string, maxDepth: number, depth = 0, showHidden = false): Promise<FileNode[]> {
   if (depth > maxDepth) return [];
   
   const ignoreDirs = new Set(["node_modules", ".git", ".next", "dist", "build", ".turbo", ".cache"]);
@@ -114,12 +114,13 @@ async function listFilesRecursive(basePath: string, currentPath: string, maxDept
     
     for (const entry of entries) {
       if (ignoreDirs.has(entry.name)) continue;
+      if (!showHidden && entry.name.startsWith(".")) continue;
       
       const fullPath = join(currentPath, entry.name);
       const relativePath = relative(basePath, fullPath);
       
       if (entry.isDirectory()) {
-        const children = await listFilesRecursive(basePath, fullPath, maxDepth, depth + 1);
+        const children = await listFilesRecursive(basePath, fullPath, maxDepth, depth + 1, showHidden);
         nodes.push({
           name: entry.name,
           path: relativePath,
@@ -508,8 +509,8 @@ async function handleMessage(
       }
 
       case "listFiles": {
-        const { path } = payload as { path: string };
-        const tree = await listFilesRecursive(path, path, 2);
+        const { path, showHidden } = payload as { path: string; showHidden?: boolean };
+        const tree = await listFilesRecursive(path, path, 2, 0, showHidden ?? false);
         response = { tree };
         break;
       }
