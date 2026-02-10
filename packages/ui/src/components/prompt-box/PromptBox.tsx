@@ -204,6 +204,7 @@ export function PromptBox({
   const dropzone = useDropzone({
     onDrop: handleImageDrop,
     maxImageSize,
+    disabled: isTauri(),
   })
 
   const { handlePaste: browserHandlePaste } = useClipboardPaste({

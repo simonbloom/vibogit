@@ -29,6 +29,10 @@
     "fs:allow-write-file",
     "fs:allow-read-dir",
     "fs:allow-exists",
+    {
+      "identifier": "fs:scope",
+      "allow": ["$HOME/**/*", "$DESKTOP/**/*", "$DOWNLOAD/**/*", "$PICTURE/**/*"]
+    },
     "opener:allow-open-url",
     "opener:allow-open-path",
     "global-shortcut:allow-is-registered",
