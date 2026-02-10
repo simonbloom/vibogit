@@ -1,6 +1,6 @@
 {
   "name": "vibogit-daemon",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Local daemon for ViboGit - Web-based Git client",
   "author": "Simon Bloom",
   "license": "MIT",
