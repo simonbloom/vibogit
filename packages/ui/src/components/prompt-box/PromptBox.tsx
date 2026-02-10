@@ -247,7 +247,19 @@ export function PromptBox({
     return { path: finalPath, dataUrl }
   }, [])
 
-  // Tauri: listen for native drag-drop events
+  // Refs so the drag-drop listener always sees current values without re-registering
+  const stateRef = useRef(state)
+  stateRef.current = state
+  const addImageRef = useRef(addImage)
+  addImageRef.current = addImage
+  const updateImageRef = useRef(updateImage)
+  updateImageRef.current = updateImage
+  const getNextReferenceNumberRef = useRef(getNextReferenceNumber)
+  getNextReferenceNumberRef.current = getNextReferenceNumber
+  const getCursorPositionRef = useRef(getCursorPosition)
+  getCursorPositionRef.current = getCursorPosition
+
+  // Tauri: listen for native drag-drop events (registered once)
   useEffect(() => {
     if (!isTauri()) return
 
@@ -269,7 +281,7 @@ export function PromptBox({
 
             if (imagePaths.length === 0) return
 
-            const remaining = maxImages - state.images.length
+            const remaining = maxImages - stateRef.current.images.length
             if (remaining <= 0) {
               toast.error(`Maximum ${maxImages} images allowed`)
               return
@@ -278,8 +290,8 @@ export function PromptBox({
             const toAdd = imagePaths.slice(0, remaining)
             for (const originalPath of toAdd) {
               const filename = originalPath.split('/').pop() || 'image'
-              const referenceNumber = getNextReferenceNumber()
-              const cursorPosition = getCursorPosition()
+              const referenceNumber = getNextReferenceNumberRef.current()
+              const cursorPosition = getCursorPositionRef.current()
               const tempId = crypto.randomUUID()
 
               const image: PromptImage = {
@@ -292,12 +304,11 @@ export function PromptBox({
                 progress: 50,
                 referenceNumber,
               }
-              addImage(image, cursorPosition)
+              addImageRef.current(image, cursorPosition)
 
-              // Copy to screenshot folder and get data URL preview
               getTauriConfig().then(({ folder }) =>
                 copyAndPreview(originalPath, folder).then(({ path, dataUrl }) => {
-                  updateImage(tempId, {
+                  updateImageRef.current(tempId, {
                     filePath: path,
                     filename: path.split('/').pop() || filename,
                     preview: dataUrl,
@@ -306,7 +317,7 @@ export function PromptBox({
                     progress: 100,
                   })
                 }).catch((error) => {
-                  updateImage(tempId, {
+                  updateImageRef.current(tempId, {
                     status: 'error',
                     error: error instanceof Error ? error.message : 'Failed to process image',
                   })
@@ -323,7 +334,8 @@ export function PromptBox({
     return () => {
       unlisten?.()
     }
-  }, [maxImages, state.images.length, getNextReferenceNumber, getCursorPosition, addImage, updateImage, getTauriConfig, copyAndPreview])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maxImages])
 
   // Tauri: handle clipboard paste with CleanShot / save_clipboard_image
   const handlePaste = useCallback(
