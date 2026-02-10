@@ -185,6 +185,33 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
               onChange={(path) => handleSave({ imageBasePath: path })}
             />
           </div>
+
+          {/* CleanShot Mode */}
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium text-foreground">
+                CleanShot Mode
+              </label>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={config.cleanShotMode}
+                onClick={() => handleSave({ cleanShotMode: !config.cleanShotMode })}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  config.cleanShotMode ? "bg-primary" : "bg-muted-foreground/30"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    config.cleanShotMode ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              When enabled, pasted images are matched to files already saved by CleanShot instead of creating duplicates.
+            </p>
+          </div>
         </div>
 
         <div className="p-4 border-t border-border">

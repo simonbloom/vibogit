@@ -636,6 +636,7 @@ pub struct AppConfig {
     pub theme: String,
     pub image_base_path: String,
     pub show_hidden_files: bool,
+    pub clean_shot_mode: bool,
     pub recent_tabs: Vec<ConfigTab>,
     pub active_tab_id: Option<String>,
 }
@@ -660,6 +661,7 @@ impl Default for AppConfig {
             theme: "dark".to_string(),
             image_base_path: String::new(),
             show_hidden_files: false,
+            clean_shot_mode: false,
             recent_tabs: vec![],
             active_tab_id: None,
         }
@@ -2158,4 +2160,127 @@ pub async fn ai_generate_commit(
     }
 
     Ok(AiCommitResponse { message })
+}
+
+// Clipboard Image Commands
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveClipboardImageResponse {
+    pub path: String,
+}
+
+#[tauri::command]
+pub async fn save_clipboard_image(folder: String) -> Result<SaveClipboardImageResponse, String> {
+    use arboard::Clipboard;
+    use std::io::Write;
+
+    let folder_path = if folder.is_empty() {
+        dirs::desktop_dir().unwrap_or_else(|| PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("Desktop"))
+    } else {
+        let expanded = if folder.starts_with("~/") {
+            PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(&folder[2..])
+        } else {
+            PathBuf::from(&folder)
+        };
+        expanded
+    };
+
+    if !folder_path.exists() {
+        std::fs::create_dir_all(&folder_path).map_err(|e| format!("Failed to create folder: {}", e))?;
+    }
+
+    let mut clipboard = Clipboard::new().map_err(|e| format!("Failed to access clipboard: {}", e))?;
+    let image = clipboard.get_image().map_err(|e| format!("No image in clipboard: {}", e))?;
+
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let filename = format!("vibogit-paste-{}.png", timestamp);
+    let file_path = folder_path.join(&filename);
+
+    // Write raw RGBA data as PNG
+    let width = image.width as u32;
+    let height = image.height as u32;
+    let mut png_data = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut png_data, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().map_err(|e| format!("PNG encode error: {}", e))?;
+        writer.write_image_data(&image.bytes).map_err(|e| format!("PNG write error: {}", e))?;
+    }
+
+    let mut file = std::fs::File::create(&file_path).map_err(|e| format!("Failed to create file: {}", e))?;
+    file.write_all(&png_data).map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(SaveClipboardImageResponse {
+        path: file_path.to_string_lossy().to_string(),
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FindRecentImageResponse {
+    pub path: Option<String>,
+}
+
+#[tauri::command]
+pub async fn find_recent_image(folder: String, within_secs: u64) -> Result<FindRecentImageResponse, String> {
+    let folder_path = if folder.is_empty() {
+        dirs::desktop_dir().unwrap_or_else(|| PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("Desktop"))
+    } else {
+        let expanded = if folder.starts_with("~/") {
+            PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(&folder[2..])
+        } else {
+            PathBuf::from(&folder)
+        };
+        expanded
+    };
+
+    if !folder_path.exists() {
+        return Ok(FindRecentImageResponse { path: None });
+    }
+
+    let image_extensions = ["png", "jpg", "jpeg", "gif", "webp"];
+    let now = std::time::SystemTime::now();
+    let cutoff = std::time::Duration::from_secs(within_secs);
+
+    let mut newest: Option<(PathBuf, std::time::SystemTime)> = None;
+
+    let entries = std::fs::read_dir(&folder_path).map_err(|e| format!("Failed to read folder: {}", e))?;
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        if !image_extensions.contains(&ext.as_str()) {
+            continue;
+        }
+        if let Ok(metadata) = path.metadata() {
+            if let Ok(modified) = metadata.modified() {
+                if let Ok(elapsed) = now.duration_since(modified) {
+                    if elapsed <= cutoff {
+                        match &newest {
+                            Some((_, prev_time)) => {
+                                if modified > *prev_time {
+                                    newest = Some((path, modified));
+                                }
+                            }
+                            None => {
+                                newest = Some((path, modified));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(FindRecentImageResponse {
+        path: newest.map(|(p, _)| p.to_string_lossy().to_string()),
+    })
 }

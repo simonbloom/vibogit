@@ -1,4 +1,5 @@
 import { useCallback, useRef, useEffect } from 'react'
+import { isTauri } from '@/platform'
 import type { PromptImage } from '../PromptBox.types'
 
 interface UseImageUploadProps {
@@ -43,6 +44,16 @@ export function useImageUpload({
       }
 
       onAddImage(image, cursorPosition)
+
+      // In Tauri mode, skip upload -- images are local files
+      if (isTauri()) {
+        onUpdateImage(tempId, {
+          url: preview,
+          status: 'uploaded',
+          progress: 100,
+        })
+        return
+      }
 
       try {
         let result: { url: string; id: string }

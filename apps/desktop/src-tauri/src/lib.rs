@@ -116,6 +116,9 @@ pub fn run() {
             commands::set_config,
             // AI commands
             commands::ai_generate_commit,
+            // Clipboard image commands
+            commands::save_clipboard_image,
+            commands::find_recent_image,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ViboGit");

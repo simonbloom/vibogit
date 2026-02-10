@@ -1,7 +1,8 @@
 'use client'
 
-import { useRef, useCallback, useEffect } from 'react'
+import { useRef, useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { isTauri } from '@/platform'
 import { CollapsibleHeader } from './components/CollapsibleHeader'
 import { FileChip } from './components/FileChip'
 import { AutocompletePanel } from './components/AutocompletePanel'
@@ -205,10 +206,172 @@ export function PromptBox({
     maxImageSize,
   })
 
-  const { handlePaste } = useClipboardPaste({
+  const { handlePaste: browserHandlePaste } = useClipboardPaste({
     onPasteImages: handleImageDrop,
     maxImageSize,
   })
+
+  // Tauri: listen for native drag-drop events
+  useEffect(() => {
+    if (!isTauri()) return
+
+    let unlisten: (() => void) | undefined
+
+    const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp']
+
+    ;(async () => {
+      try {
+        const { getCurrentWebview } = await import('@tauri-apps/api/webview')
+        const { convertFileSrc } = await import('@tauri-apps/api/core')
+
+        unlisten = (await getCurrentWebview().onDragDropEvent((event) => {
+          if (event.payload.type === 'drop') {
+            const paths = event.payload.paths || []
+            const imagePaths = paths.filter((p: string) => {
+              const ext = p.split('.').pop()?.toLowerCase() || ''
+              return IMAGE_EXTENSIONS.includes(ext)
+            })
+
+            if (imagePaths.length === 0) return
+
+            const remaining = maxImages - state.images.length
+            if (remaining <= 0) {
+              toast.error(`Maximum ${maxImages} images allowed`)
+              return
+            }
+
+            const toAdd = imagePaths.slice(0, remaining)
+            for (const filePath of toAdd) {
+              const filename = filePath.split('/').pop() || 'image'
+              const preview = convertFileSrc(filePath)
+              const referenceNumber = getNextReferenceNumber()
+              const cursorPosition = getCursorPosition()
+
+              const image: PromptImage = {
+                id: crypto.randomUUID(),
+                filename,
+                filePath,
+                preview,
+                url: preview,
+                status: 'uploaded',
+                progress: 100,
+                referenceNumber,
+              }
+              addImage(image, cursorPosition)
+            }
+          }
+        })) as unknown as () => void
+      } catch (e) {
+        console.error('Failed to set up Tauri drag-drop:', e)
+      }
+    })()
+
+    return () => {
+      unlisten?.()
+    }
+  }, [maxImages, state.images.length, getNextReferenceNumber, getCursorPosition, addImage])
+
+  // Tauri: handle clipboard paste with CleanShot / save_clipboard_image
+  const handlePaste = useCallback(
+    async (e: React.ClipboardEvent) => {
+      if (!isTauri()) {
+        browserHandlePaste(e)
+        return
+      }
+
+      const items = e.clipboardData?.items
+      if (!items) return
+
+      let hasImage = false
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          hasImage = true
+          break
+        }
+      }
+
+      if (!hasImage) return
+      e.preventDefault()
+
+      // Get config for CleanShot mode and imageBasePath
+      let cleanShotMode = false
+      let folder = ''
+      try {
+        const { invoke } = await import('@tauri-apps/api/core')
+        const configResult = await invoke<{ config: { cleanShotMode?: boolean; imageBasePath?: string } }>('get_config')
+        cleanShotMode = configResult.config.cleanShotMode ?? false
+        folder = configResult.config.imageBasePath ?? ''
+      } catch {
+        // Fallback to defaults
+      }
+
+      const remaining = maxImages - state.images.length
+      if (remaining <= 0) {
+        toast.error(`Maximum ${maxImages} images allowed`)
+        return
+      }
+
+      // Create blob preview from clipboard for display
+      let blobPreview = ''
+      let clipFilename = 'clipboard-image.png'
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile()
+          if (file) {
+            blobPreview = URL.createObjectURL(file)
+            clipFilename = file.name || clipFilename
+          }
+          break
+        }
+      }
+
+      const referenceNumber = getNextReferenceNumber()
+      const cursorPosition = getCursorPosition()
+      const tempId = crypto.randomUUID()
+
+      const image: PromptImage = {
+        id: tempId,
+        filename: clipFilename,
+        preview: blobPreview,
+        url: blobPreview,
+        status: 'uploading',
+        progress: 0,
+        referenceNumber,
+      }
+      addImage(image, cursorPosition)
+
+      try {
+        const { invoke } = await import('@tauri-apps/api/core')
+        let resolvedPath: string | null = null
+
+        if (cleanShotMode) {
+          const result = await invoke<{ path: string | null }>('find_recent_image', {
+            folder,
+            withinSecs: 5,
+          })
+          resolvedPath = result.path
+        }
+
+        if (!resolvedPath) {
+          const result = await invoke<{ path: string }>('save_clipboard_image', { folder })
+          resolvedPath = result.path
+        }
+
+        updateImage(tempId, {
+          filePath: resolvedPath,
+          filename: resolvedPath.split('/').pop() || clipFilename,
+          status: 'uploaded',
+          progress: 100,
+        })
+      } catch (error) {
+        updateImage(tempId, {
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Failed to process clipboard image',
+        })
+      }
+    },
+    [browserHandlePaste, maxImages, state.images.length, getNextReferenceNumber, getCursorPosition, addImage, updateImage]
+  )
 
   const handleTextChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {

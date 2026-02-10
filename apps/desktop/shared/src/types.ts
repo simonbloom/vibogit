@@ -317,6 +317,7 @@ export interface Config {
   theme: ThemeOption;
   imageBasePath: string;
   showHiddenFiles: boolean;
+  cleanShotMode: boolean;
   recentTabs: ConfigTab[];
   activeTabId: string | null;
 }
@@ -331,6 +332,7 @@ export const DEFAULT_CONFIG: Config = {
   theme: "dark",
   imageBasePath: "",
   showHiddenFiles: false,
+  cleanShotMode: false,
   recentTabs: [],
   activeTabId: null,
 };
