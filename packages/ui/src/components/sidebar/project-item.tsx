@@ -10,7 +10,8 @@ import {
   ContextMenuTrigger 
 } from "@/components/ui/context-menu";
 import { Folder, Terminal, Copy, Trash2 } from "lucide-react";
-import type { Project, ProjectStatus } from "@/lib/projects-context";
+import type { Project, ProjectStatus, FaviconData } from "@/lib/projects-context";
+import { ProjectAvatar } from "./project-avatar";
 
 async function safeInvoke(cmd: string, args?: Record<string, unknown>): Promise<void> {
   try {
@@ -22,6 +23,7 @@ async function safeInvoke(cmd: string, args?: Record<string, unknown>): Promise<
 interface ProjectItemProps {
   project: Project;
   status?: ProjectStatus;
+  favicon?: FaviconData | null;
   isSelected: boolean;
   isCollapsed?: boolean;
   onClick: () => void;
@@ -31,6 +33,7 @@ interface ProjectItemProps {
 export function ProjectItem({ 
   project, 
   status,
+  favicon,
   isSelected, 
   isCollapsed,
   onClick,
@@ -85,10 +88,12 @@ export function ProjectItem({
           )}
           title={`${project.name}\n${statusData.currentBranch}`}
         >
-          <span className={cn(
-            "w-2 h-2 rounded-full",
-            isSelected ? "bg-primary" : "border border-muted-foreground"
-          )} />
+          <ProjectAvatar
+            project={project}
+            favicon={favicon}
+            size={24}
+            className={cn(isSelected && "ring-2 ring-primary")}
+          />
           <GitStatusBadge 
             uncommittedCount={statusData.uncommittedCount}
             ahead={statusData.ahead}
@@ -103,15 +108,17 @@ export function ProjectItem({
     return (
       <div
         className={cn(
-          "w-full flex items-start gap-2 p-2 rounded-md transition-colors text-left cursor-pointer",
+          "w-full flex items-center gap-3 p-2 rounded-md transition-colors text-left cursor-pointer",
           "hover:bg-accent",
           isSelected && "bg-accent"
         )}
       >
-        <span className={cn(
-          "mt-1.5 w-2 h-2 rounded-full shrink-0",
-          isSelected ? "bg-primary" : "border border-muted-foreground"
-        )} />
+        <ProjectAvatar
+          project={project}
+          favicon={favicon}
+          size={24}
+          className={cn(isSelected && "ring-2 ring-primary")}
+        />
         
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">

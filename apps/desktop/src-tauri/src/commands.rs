@@ -1119,14 +1119,25 @@ pub struct FaviconResult {
 
 #[tauri::command]
 pub async fn get_favicon(path: String) -> Result<FaviconResult, String> {
-    // Try to find favicon in common locations
+    const MAX_FILE_SIZE: u64 = 512 * 1024; // 512KB
+
     let favicon_paths = [
+        // Favicons (highest priority)
         "public/favicon.ico",
         "public/favicon.png",
         "static/favicon.ico",
         "static/favicon.png",
         "src/favicon.ico",
         "favicon.ico",
+        // Logo files
+        "logo.png",
+        "logo.svg",
+        "icon.png",
+        "public/logo.png",
+        "public/logo.svg",
+        "public/icon.png",
+        "assets/logo.png",
+        "assets/icon.png",
     ];
 
     let base = PathBuf::from(&path);
@@ -1134,9 +1145,16 @@ pub async fn get_favicon(path: String) -> Result<FaviconResult, String> {
     for favicon_path in &favicon_paths {
         let full_path = base.join(favicon_path);
         if full_path.exists() {
+            if let Ok(meta) = std::fs::metadata(&full_path) {
+                if meta.len() > MAX_FILE_SIZE {
+                    continue;
+                }
+            }
             if let Ok(bytes) = std::fs::read(&full_path) {
                 let mime_type = if favicon_path.ends_with(".png") {
                     "image/png"
+                } else if favicon_path.ends_with(".svg") {
+                    "image/svg+xml"
                 } else {
                     "image/x-icon"
                 };

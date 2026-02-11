@@ -50,7 +50,7 @@ export function Sidebar({
     <div 
       className={cn(
         "flex flex-col h-full bg-background border-r transition-all duration-200 ease-in-out",
-        isCollapsed ? "w-12" : "w-[220px]",
+        isCollapsed ? "w-16" : "w-[220px]",
         className
       )}
     >
@@ -159,7 +159,7 @@ export function Sidebar({
 
         {!isCollapsed && (
           <div className="px-2 pb-1">
-            <span className="text-[10px] text-muted-foreground/50">v0.2.1</span>
+            <span className="text-[10px] text-muted-foreground/50">v2.2.1</span>
           </div>
         )}
       </div>

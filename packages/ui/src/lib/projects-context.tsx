@@ -35,10 +35,16 @@ export interface ProjectStatus {
   isClean: boolean;
 }
 
+export interface FaviconData {
+  data: string;
+  mimeType: string;
+}
+
 interface ProjectsState {
   projects: Project[];
   selectedPath: string | null;
   statuses: Record<string, ProjectStatus>;
+  favicons: Record<string, FaviconData | null>;
   loading: boolean;
   error: string | null;
 }
@@ -49,6 +55,8 @@ type ProjectsAction =
   | { type: "REMOVE_PROJECT"; payload: string }
   | { type: "SELECT_PROJECT"; payload: string | null }
   | { type: "SET_STATUSES"; payload: Record<string, ProjectStatus> }
+  | { type: "SET_FAVICONS"; payload: Record<string, FaviconData | null> }
+  | { type: "UPDATE_FAVICON"; payload: { path: string; favicon: FaviconData | null } }
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_ERROR"; payload: string | null };
 
@@ -56,6 +64,7 @@ const initialState: ProjectsState = {
   projects: [],
   selectedPath: null,
   statuses: {},
+  favicons: {},
   loading: true,
   error: null,
 };
@@ -79,6 +88,10 @@ function projectsReducer(state: ProjectsState, action: ProjectsAction): Projects
       return { ...state, selectedPath: action.payload };
     case "SET_STATUSES":
       return { ...state, statuses: action.payload };
+    case "SET_FAVICONS":
+      return { ...state, favicons: action.payload };
+    case "UPDATE_FAVICON":
+      return { ...state, favicons: { ...state.favicons, [action.payload.path]: action.payload.favicon } };
     case "SET_LOADING":
       return { ...state, loading: action.payload };
     case "SET_ERROR":
@@ -149,6 +162,36 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     }
   }, [state.projects]);
 
+  const loadFavicons = useCallback(async (projects: Project[]) => {
+    if (projects.length === 0) return;
+    const results = await Promise.allSettled(
+      projects.map(async (p) => {
+        const result = await safeInvoke<{ favicon: string | null; mimeType: string | null }>("get_favicon", { path: p.path });
+        const favicon: FaviconData | null = result?.favicon && result?.mimeType
+          ? { data: result.favicon, mimeType: result.mimeType }
+          : null;
+        return { path: p.path, favicon };
+      })
+    );
+    if (!isMountedRef.current) return;
+    const faviconMap: Record<string, FaviconData | null> = {};
+    for (const r of results) {
+      if (r.status === "fulfilled") {
+        faviconMap[r.value.path] = r.value.favicon;
+      }
+    }
+    dispatch({ type: "SET_FAVICONS", payload: faviconMap });
+  }, []);
+
+  const loadSingleFavicon = useCallback(async (path: string) => {
+    const result = await safeInvoke<{ favicon: string | null; mimeType: string | null }>("get_favicon", { path });
+    if (!isMountedRef.current) return;
+    const favicon: FaviconData | null = result?.favicon && result?.mimeType
+      ? { data: result.favicon, mimeType: result.mimeType }
+      : null;
+    dispatch({ type: "UPDATE_FAVICON", payload: { path, favicon } });
+  }, []);
+
   const addProject = useCallback(async (path: string): Promise<Project> => {
     const saved = await safeInvoke<Project>("add_saved_project", { path });
     // Fallback: create project locally when Tauri is unavailable (browser dev mode)
@@ -160,11 +203,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "ADD_PROJECT", payload: project });
     dispatch({ type: "SELECT_PROJECT", payload: project.path });
     
-    // Refresh statuses to include the new project
+    // Refresh statuses and load favicon for the new project
     setTimeout(refreshStatuses, 100);
+    loadSingleFavicon(project.path);
     
     return project;
-  }, [refreshStatuses]);
+  }, [refreshStatuses, loadSingleFavicon]);
 
   const removeProject = useCallback(async (path: string): Promise<void> => {
     await safeInvoke("remove_saved_project", { path });
@@ -193,6 +237,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       isMountedRef.current = false;
     };
   }, [loadProjects]);
+
+  // Load favicons after projects are loaded (non-blocking)
+  useEffect(() => {
+    if (state.loading || state.projects.length === 0) return;
+    loadFavicons(state.projects);
+  }, [state.loading, state.projects.length, loadFavicons]);
 
   // Auto-refresh statuses
   useEffect(() => {

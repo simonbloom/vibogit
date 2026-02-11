@@ -10,7 +10,7 @@ interface ProjectListProps {
 
 export function ProjectList({ isCollapsed, onProjectSelect }: ProjectListProps) {
   const { state, selectProject, removeProject } = useProjects();
-  const { projects, selectedPath, statuses } = state;
+  const { projects, selectedPath, statuses, favicons } = state;
 
   const handleSelect = (path: string) => {
     selectProject(path);
@@ -44,6 +44,7 @@ export function ProjectList({ isCollapsed, onProjectSelect }: ProjectListProps) 
           key={project.path}
           project={project}
           status={statuses[project.path]}
+          favicon={favicons[project.path]}
           isSelected={project.path === selectedPath}
           isCollapsed={isCollapsed}
           onClick={() => handleSelect(project.path)}
