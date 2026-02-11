@@ -220,12 +220,26 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const reorderProjects = useCallback(async (paths: string[]): Promise<void> => {
-    await safeInvoke("reorder_saved_projects", { paths });
-    // Reorder local state to match
-    const reordered = paths
-      .map(path => state.projects.find(p => p.path === path))
-      .filter((p): p is Project => p !== undefined);
+    const existingPaths = state.projects.map(project => project.path);
+    const uniqueRequestedPaths = Array.from(new Set(paths));
+    const normalizedPaths = [
+      ...uniqueRequestedPaths,
+      ...existingPaths.filter(path => !uniqueRequestedPaths.includes(path)),
+    ];
+
+    // Optimistically reorder local state first for immediate UI response.
+    const projectsByPath = new Map(state.projects.map(project => [project.path, project]));
+    const reordered = normalizedPaths
+      .map(path => projectsByPath.get(path))
+      .filter((project): project is Project => project !== undefined);
     dispatch({ type: "SET_PROJECTS", payload: reordered });
+
+    // Persist order in background (desktop/Tauri).
+    try {
+      await safeInvoke("reorder_saved_projects", { paths: normalizedPaths });
+    } catch (err) {
+      console.error("[Projects] Failed to persist project order:", err);
+    }
   }, [state.projects]);
 
   // Load projects on mount

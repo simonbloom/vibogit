@@ -49,6 +49,7 @@ export function ProjectAvatar({
       <img
         src={`data:${favicon.mimeType};base64,${favicon.data}`}
         alt={project.name}
+        draggable={false}
         className={cn("rounded-lg object-cover shrink-0", className)}
         style={{ width: size, height: size }}
       />
