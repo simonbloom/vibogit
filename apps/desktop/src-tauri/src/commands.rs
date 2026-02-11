@@ -637,6 +637,8 @@ pub struct AppConfig {
     pub image_base_path: String,
     pub show_hidden_files: bool,
     pub clean_shot_mode: bool,
+    #[serde(default)]
+    pub auto_execute_prompt: bool,
     pub recent_tabs: Vec<ConfigTab>,
     pub active_tab_id: Option<String>,
 }
@@ -662,6 +664,7 @@ impl Default for AppConfig {
             image_base_path: String::new(),
             show_hidden_files: false,
             clean_shot_mode: false,
+            auto_execute_prompt: false,
             recent_tabs: vec![],
             active_tab_id: None,
         }
@@ -1784,39 +1787,143 @@ pub async fn open_terminal_with_app(
 pub async fn send_to_terminal(
     text: String,
     terminal: Option<String>,
+    auto_execute: Option<bool>,
 ) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         let terminal_app = terminal.unwrap_or_else(|| "Terminal".to_string());
+        let should_execute = auto_execute.unwrap_or(false);
         
-        let script = match terminal_app.as_str() {
-            "iTerm" => format!(
-                r#"tell application "iTerm"
-                    tell current session of current window
-                        write text "{}"
-                    end tell
-                end tell"#,
-                text.replace("\"", "\\\"")
-            ),
-            _ => format!(
-                r#"tell application "{}"
-                    activate
-                end tell
-                delay 0.2
-                tell application "System Events"
-                    keystroke "{}"
-                    key code 36
-                end tell"#,
-                terminal_app,
-                text.replace("\"", "\\\"")
-            ),
-        };
+        match terminal_app.as_str() {
+            "iTerm" => {
+                let newline_flag = if should_execute { "" } else { " without newline" };
+                let script = format!(
+                    r#"tell application "iTerm"
+                        activate
+                        tell current session of current window
+                            write text "{}"{}
+                        end tell
+                    end tell"#,
+                    text.replace("\"", "\\\""),
+                    newline_flag
+                );
+                Command::new("osascript")
+                    .args(["-e", &script])
+                    .output()
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            },
+            _ => {
+                // Check and prompt for Accessibility permission (required for CGEvent keystroke).
+                // Uses CoreFoundation directly to avoid objc macro issues.
+                {
+                    extern "C" {
+                        fn AXIsProcessTrustedWithOptions(options: *const std::ffi::c_void) -> bool;
+                        fn CFStringCreateWithCString(allocator: *const std::ffi::c_void, cStr: *const i8, encoding: u32) -> *const std::ffi::c_void;
+                        fn CFBooleanGetValue(boolean: *const std::ffi::c_void) -> bool;
+                        fn CFDictionaryCreate(
+                            allocator: *const std::ffi::c_void,
+                            keys: *const *const std::ffi::c_void,
+                            values: *const *const std::ffi::c_void,
+                            numValues: i64,
+                            keyCallBacks: *const std::ffi::c_void,
+                            valueCallBacks: *const std::ffi::c_void,
+                        ) -> *const std::ffi::c_void;
+                        static kCFTypeDictionaryKeyCallBacks: std::ffi::c_void;
+                        static kCFTypeDictionaryValueCallBacks: std::ffi::c_void;
+                        static kCFBooleanTrue: *const std::ffi::c_void;
+                    }
 
-        Command::new("osascript")
-            .args(["-e", &script])
-            .output()
-            .map(|_| ())
-            .map_err(|e| e.to_string())
+                    let trusted = unsafe {
+                        let key = CFStringCreateWithCString(
+                            std::ptr::null(),
+                            b"AXTrustedCheckOptionPrompt\0".as_ptr() as *const i8,
+                            0x08000100, // kCFStringEncodingUTF8
+                        );
+                        let keys = [key];
+                        let values = [kCFBooleanTrue];
+                        let options = CFDictionaryCreate(
+                            std::ptr::null(),
+                            keys.as_ptr(),
+                            values.as_ptr(),
+                            1,
+                            &kCFTypeDictionaryKeyCallBacks as *const _,
+                            &kCFTypeDictionaryValueCallBacks as *const _,
+                        );
+                        AXIsProcessTrustedWithOptions(options)
+                    };
+
+                    if !trusted {
+                        return Err("ViboGit needs Accessibility permission to paste into terminals. Please enable it in System Settings > Privacy & Security > Accessibility, then try again.".to_string());
+                    }
+                }
+
+                // Copy text to clipboard via pbcopy
+                let mut pbcopy = Command::new("pbcopy")
+                    .stdin(std::process::Stdio::piped())
+                    .spawn()
+                    .map_err(|e| e.to_string())?;
+                if let Some(mut stdin) = pbcopy.stdin.take() {
+                    use std::io::Write;
+                    stdin.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+                }
+                pbcopy.wait().map_err(|e| e.to_string())?;
+
+                // Small delay to ensure clipboard is committed
+                std::thread::sleep(std::time::Duration::from_millis(100));
+
+                // Activate the terminal app via AppleScript (this only needs Apple Events, not Accessibility)
+                let activate_script = format!(
+                    r#"tell application "{}" to activate"#,
+                    terminal_app
+                );
+                Command::new("osascript")
+                    .args(["-e", &activate_script])
+                    .output()
+                    .map_err(|e| e.to_string())?;
+
+                // Wait for terminal to come to foreground
+                std::thread::sleep(std::time::Duration::from_millis(500));
+
+                // Use CGEvent to send Cmd+V (requires Accessibility permission)
+                use core_graphics::event::{CGEvent, CGEventFlags, CGKeyCode};
+                use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+
+                let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
+                    .map_err(|_| "Failed to create CGEventSource".to_string())?;
+
+                // Key code 9 = 'v'
+                let key_v: CGKeyCode = 9;
+
+                let key_down = CGEvent::new_keyboard_event(source.clone(), key_v, true)
+                    .map_err(|_| "Failed to create key down event".to_string())?;
+                key_down.set_flags(CGEventFlags::CGEventFlagCommand);
+                key_down.post(core_graphics::event::CGEventTapLocation::HID);
+
+                std::thread::sleep(std::time::Duration::from_millis(50));
+
+                let key_up = CGEvent::new_keyboard_event(source.clone(), key_v, false)
+                    .map_err(|_| "Failed to create key up event".to_string())?;
+                key_up.set_flags(CGEventFlags::CGEventFlagCommand);
+                key_up.post(core_graphics::event::CGEventTapLocation::HID);
+
+                if should_execute {
+                    std::thread::sleep(std::time::Duration::from_millis(150));
+                    // Key code 36 = Return
+                    let return_down = CGEvent::new_keyboard_event(source.clone(), 36, true)
+                        .map_err(|_| "Failed to create return key event".to_string())?;
+                    return_down.post(core_graphics::event::CGEventTapLocation::HID);
+
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+
+                    let return_up = CGEvent::new_keyboard_event(source, 36, false)
+                        .map_err(|_| "Failed to create return key up event".to_string())?;
+                    return_up.post(core_graphics::event::CGEventTapLocation::HID);
+                }
+
+                Ok(())
+            }
+        }
     }
 
     #[cfg(not(target_os = "macos"))]

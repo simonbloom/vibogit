@@ -42,6 +42,7 @@ export interface Settings {
   theme: "dark" | "light";
   imageBasePath: string;
   showHiddenFiles: boolean;
+  autoExecutePrompt: boolean;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -52,6 +53,7 @@ const DEFAULT_SETTINGS: Settings = {
   theme: "dark",
   imageBasePath: "",
   showHiddenFiles: false,
+  autoExecutePrompt: false,
 };
 
 const SETTINGS_KEY = "vibogit-settings";

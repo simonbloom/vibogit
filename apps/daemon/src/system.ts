@@ -51,30 +51,35 @@ export class SystemService {
     await $`open ${url}`;
   }
 
-  async sendToTerminal(text: string, terminal: string = "Terminal"): Promise<void> {
+  async sendToTerminal(text: string, terminal: string = "Terminal", autoExecute: boolean = false): Promise<void> {
     // Escape text for AppleScript
     const escapedText = text.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
     
     let script: string;
     
     if (terminal === "iTerm" || terminal === "iTerm2") {
-      // iTerm2 has native write text command
+      const newlineFlag = autoExecute ? "" : " without newline";
       script = `
         tell application "iTerm"
           activate
           tell current session of current window
-            write text "${escapedText}" without newline
+            write text "${escapedText}"${newlineFlag}
           end tell
         end tell
       `;
     } else {
-      // Terminal.app, Ghostty, and others - use clipboard + paste
-      const pbcopy = Bun.spawn(["pbcopy"], { stdin: "pipe" });
-      pbcopy.stdin.write(text);
-      pbcopy.stdin.end();
-      await pbcopy.exited;
+      // Terminal.app, Ghostty, and others - write to temp file, copy to clipboard, paste
+      const tmpDir = "/tmp/vibogit";
+      await $`mkdir -p ${tmpDir}`;
+      const cmdFile = `${tmpDir}/cmd.txt`;
+      await Bun.write(cmdFile, text);
+      await $`cat ${cmdFile} | tr -d '\n' | pbcopy`;
+      
+      // Small delay to ensure clipboard is committed
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       const appName = terminal === "Ghostty" ? "Ghostty" : terminal;
+      const enterPart = autoExecute ? `\n            delay 0.1\n            keystroke return` : "";
       
       script = `
         tell application "${appName}"
@@ -83,7 +88,7 @@ export class SystemService {
         delay 0.3
         tell application "System Events"
           tell process "${appName}"
-            keystroke "v" using command down
+            keystroke "v" using command down${enterPart}
           end tell
         end tell
       `;

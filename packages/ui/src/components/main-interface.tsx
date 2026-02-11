@@ -129,9 +129,14 @@ export function MainInterface() {
     });
 
     try {
-      await send("sendToTerminal", { text: text.trim(), terminal: terminalApp });
+      await send("sendToTerminal", { text: text.trim(), terminal: terminalApp, autoExecute: settings.autoExecutePrompt });
     } catch (error) {
-      console.error("Failed to send to terminal:", error);
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes("Accessibility")) {
+        toast.error("ViboGit needs Accessibility permission to paste into terminals. Enable it in System Settings > Privacy & Security > Accessibility.");
+      } else {
+        console.error("Failed to send to terminal:", error);
+      }
     }
   };
 

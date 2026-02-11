@@ -385,8 +385,8 @@ async function handleMessage(
       }
 
       case "sendToTerminal": {
-        const { text, terminal } = payload as { text: string; terminal?: string };
-        await systemService.sendToTerminal(text, terminal);
+        const { text, terminal, autoExecute } = payload as { text: string; terminal?: string; autoExecute?: boolean };
+        await systemService.sendToTerminal(text, terminal, autoExecute ?? false);
         response = { success: true };
         break;
       }

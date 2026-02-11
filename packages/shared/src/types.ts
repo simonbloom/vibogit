@@ -318,6 +318,7 @@ export interface Config {
   imageBasePath: string;
   showHiddenFiles: boolean;
   cleanShotMode: boolean;
+  autoExecutePrompt: boolean;
   recentTabs: ConfigTab[];
   activeTabId: string | null;
 }
@@ -333,6 +334,7 @@ export const DEFAULT_CONFIG: Config = {
   imageBasePath: "",
   showHiddenFiles: false,
   cleanShotMode: false,
+  autoExecutePrompt: false,
   recentTabs: [],
   activeTabId: null,
 };

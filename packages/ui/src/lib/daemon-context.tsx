@@ -266,7 +266,8 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
     case "sendToTerminal": {
       const text = args?.text as string || "";
       const terminal = args?.terminal as string | undefined;
-      await tauriInvoke("send_to_terminal", { text, terminal });
+      const autoExecute = args?.autoExecute as boolean | undefined;
+      await tauriInvoke("send_to_terminal", { text, terminal, autoExecute });
       return {} as T;
     }
     

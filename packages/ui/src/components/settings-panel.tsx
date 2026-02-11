@@ -172,6 +172,33 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
             </select>
           </div>
 
+          {/* Auto Execute Prompt */}
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium text-foreground">
+                Press Enter after paste
+              </label>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={config.autoExecutePrompt}
+                onClick={() => handleSave({ autoExecutePrompt: !config.autoExecutePrompt })}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  config.autoExecutePrompt ? "bg-primary" : "bg-muted-foreground/30"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    config.autoExecutePrompt ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              When enabled, automatically presses Enter after pasting the prompt into the terminal.
+            </p>
+          </div>
+
           {/* Theme */}
           <ThemeToggle />
 
