@@ -596,7 +596,7 @@ export function PromptBox({
   return (
     <div
       ref={containerRef}
-      className="relative rounded-lg border-[3px] border-black bg-card"
+      className="relative rounded-none border-[3px] border-black bg-card"
       {...dropzone.handlers}
     >
       <CollapsibleHeader

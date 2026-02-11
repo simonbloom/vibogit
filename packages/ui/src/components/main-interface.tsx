@@ -543,7 +543,7 @@ export function MainInterface() {
       </div>
 
       {/* Prompt Box - Bottom */}
-      <div className="px-4 py-2 border-t bg-muted/30">
+      <div className="border-t bg-muted/30">
         <PromptBox
           projectFiles={projectFiles}
           uploadEndpoint="/api/upload"
