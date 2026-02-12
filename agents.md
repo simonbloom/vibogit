@@ -87,4 +87,14 @@ cd apps/desktop/src-tauri && cargo tauri build --bundles dmg
 3. **Tailwind classes missing in production**: The `@config` directive in `packages/ui/src/index.css` points to `packages/ui/tailwind.config.ts` for content scanning.
 4. **`@/` path aliases**: The UI package uses `@/` aliases resolved via webpack config in `next.config.js` (desktop) and `next.config.mjs` (web). These map `@/components`, `@/lib`, `@/providers` to `packages/ui/src/`.
 
+### macOS Gatekeeper (unsigned app warning)
+When distributing the DMG to other machines, macOS will block the app with "Apple could not verify" warning. To bypass this, run:
+```bash
+# After copying to Applications
+xattr -cr /Applications/ViboGit.app
+
+# Or on the DMG before opening
+xattr -cr /path/to/ViboGit_0.1.0_aarch64.dmg
+```
+
 

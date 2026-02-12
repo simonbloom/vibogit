@@ -130,6 +130,14 @@ bun run dev
 
 ## Troubleshooting
 
+### macOS "Apple could not verify" warning
+
+When opening the desktop app for the first time, macOS may block it. Run this command to allow it:
+
+```bash
+xattr -cr /Applications/ViboGit.app
+```
+
 ### Port 9111 already in use
 
 ```bash
