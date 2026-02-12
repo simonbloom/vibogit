@@ -38,28 +38,14 @@ export function AddRepositoryDialog({ isOpen, onClose }: AddProjectDialogProps) 
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleBrowse = async () => {
-    // Try Tauri native dialog first
-    const tauriResult = await openTauriFolderPicker();
-    if (tauriResult) {
-      setPath(tauriResult);
-      setError(null);
-      return;
-    }
-    // Fallback: use daemon's pickFolder (AppleScript native folder picker)
-    try {
-      const response = await send<{ path: string | null }>("pickFolder");
-      if (response.path) {
-        setPath(response.path);
-        setError(null);
-      }
-    } catch (err) {
-      console.error("Failed to open folder picker:", err);
-    }
+  const handleClose = () => {
+    setPath("");
+    setError(null);
+    onClose();
   };
 
-  const handleSubmit = async () => {
-    if (!path) {
+  const addSelectedProject = async (selectedPath: string) => {
+    if (!selectedPath) {
       setError("Please enter a project path");
       return;
     }
@@ -68,9 +54,8 @@ export function AddRepositoryDialog({ isOpen, onClose }: AddProjectDialogProps) 
     setError(null);
 
     try {
-      await addProject(path);
-      setPath("");
-      onClose();
+      await addProject(selectedPath);
+      handleClose();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to add project";
       setError(message);
@@ -79,10 +64,34 @@ export function AddRepositoryDialog({ isOpen, onClose }: AddProjectDialogProps) 
     }
   };
 
-  const handleClose = () => {
-    setPath("");
-    setError(null);
-    onClose();
+  const handleBrowse = async () => {
+    if (isLoading) return;
+
+    let selectedPath: string | null = null;
+
+    // Try Tauri native dialog first
+    const tauriResult = await openTauriFolderPicker();
+    if (tauriResult) {
+      selectedPath = tauriResult;
+    } else {
+      // Fallback: use daemon's pickFolder (AppleScript native folder picker)
+      try {
+        const response = await send<{ path: string | null }>("pickFolder");
+        selectedPath = response.path;
+      } catch (err) {
+        console.error("Failed to open folder picker:", err);
+      }
+    }
+
+    if (selectedPath) {
+      setPath(selectedPath);
+      setError(null);
+      await addSelectedProject(selectedPath);
+    }
+  };
+
+  const handleSubmit = async () => {
+    await addSelectedProject(path);
   };
 
   return (
@@ -110,6 +119,7 @@ export function AddRepositoryDialog({ isOpen, onClose }: AddProjectDialogProps) 
               variant="outline" 
               onClick={handleBrowse}
               type="button"
+              disabled={isLoading}
             >
               <Folder className="h-4 w-4 mr-2" />
               Browse
