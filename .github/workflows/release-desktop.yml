@@ -15,8 +15,17 @@ env:
 
 jobs:
   build-macos:
-    runs-on: macos-latest
-    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+
+    runs-on: ${{ matrix.runner }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,6 +37,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-action@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -37,45 +48,25 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Build Tauri app
-        working-directory: apps/desktop
-        run: bun run build
+      - name: Build and release with tauri-action
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-
-      - name: Upload DMG artifact
-        uses: actions/upload-artifact@v4
         with:
-          name: ViboGit-macos-dmg
-          path: apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg
-
-      - name: Upload App artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ViboGit-macos-app
-          path: apps/desktop/src-tauri/target/release/bundle/macos/*.app
-
-  create-release:
-    needs: build-macos
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            ViboGit-macos-dmg/*.dmg
-          draft: true
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          projectPath: apps/desktop
+          tauriScript: node_modules/.bin/tauri
+          args: --target ${{ matrix.target }}
+          tagName: ${{ github.ref_name }}
+          releaseName: 'ViboGit ${{ github.ref_name }}'
+          releaseBody: 'See the assets to download and install this version.'
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true

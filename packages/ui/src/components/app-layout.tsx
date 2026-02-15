@@ -3,10 +3,12 @@
 import { useState, useEffect } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { useProjects } from "@/lib/projects-context";
+import { useAutoUpdate } from "@/lib/use-auto-update";
 import { Sidebar } from "@/components/sidebar/sidebar";
 import { ProjectList } from "@/components/sidebar/project-list";
 import { AddRepositoryDialog } from "@/components/sidebar/add-repository-dialog";
 import { SettingsPanel } from "@/components/settings-panel";
+import { UpdateBanner } from "@/components/update-banner";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -17,6 +19,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { state: projectsState, addProject } = useProjects();
   const [showAddRepo, setShowAddRepo] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const autoUpdate = useAutoUpdate();
 
   // Sync selected project with DaemonContext
   useEffect(() => {
@@ -53,8 +56,11 @@ export function AppLayout({ children }: AppLayoutProps) {
         )}
       </Sidebar>
       
-      <div className="flex-1 overflow-hidden">
-        {children}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        <UpdateBanner {...autoUpdate} />
+        <div className="flex-1 overflow-hidden">
+          {children}
+        </div>
       </div>
 
       <AddRepositoryDialog 
@@ -63,7 +69,8 @@ export function AppLayout({ children }: AppLayoutProps) {
       />
       <SettingsPanel 
         isOpen={showSettings} 
-        onClose={() => setShowSettings(false)} 
+        onClose={() => setShowSettings(false)}
+        updateState={autoUpdate}
       />
     </div>
   );

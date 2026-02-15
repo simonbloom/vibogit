@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TERMINAL_OPTIONS, EDITOR_OPTIONS } from "@/lib/settings";
 import { useConfig } from "@/lib/config-context";
 import { useDaemon } from "@/lib/daemon-context";
@@ -8,18 +8,32 @@ import { AI_PROVIDERS } from "@/lib/ai-service";
 import { PathSelector } from "@/components/path-selector";
 import { ThemeToggle } from "@/components/settings/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { X, Eye, EyeOff, ExternalLink, Monitor } from "lucide-react";
+import { X, Eye, EyeOff, ExternalLink, Monitor, RefreshCw, Loader2 } from "lucide-react";
 import type { Config } from "@vibogit/shared";
+import type { AutoUpdateState, AutoUpdateActions } from "@/lib/use-auto-update";
 
 interface SettingsPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  updateState?: AutoUpdateState & AutoUpdateActions;
 }
 
-export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
+export function SettingsPanel({ isOpen, onClose, updateState }: SettingsPanelProps) {
   const { config, setConfig, isLoading } = useConfig();
   const { state } = useDaemon();
   const [showApiKey, setShowApiKey] = useState(false);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { getVersion } = await import("@tauri-apps/api/app");
+        setAppVersion(await getVersion());
+      } catch {
+        // not in Tauri environment
+      }
+    })();
+  }, []);
 
   const handleSave = (updates: Partial<Config>) => {
     setConfig(updates);
@@ -239,6 +253,59 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
               When enabled, pasted images are matched to files already saved by CleanShot instead of creating duplicates.
             </p>
           </div>
+
+          {/* Updates */}
+          {appVersion && (
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Updates
+              </label>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 border border-border rounded-lg">
+                  <span className="text-foreground text-sm">
+                    Current version: <span className="font-mono font-medium">{appVersion}</span>
+                  </span>
+                  {updateState && (
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {updateState.status === "idle" && "Up to date"}
+                      {updateState.status === "checking" && "Checking..."}
+                      {updateState.status === "update-available" && `v${updateState.version} available`}
+                      {updateState.status === "downloading" && `Downloading... ${updateState.progress}%`}
+                      {updateState.status === "ready" && "Restart to apply"}
+                      {updateState.status === "error" && updateState.error}
+                    </span>
+                  )}
+                </div>
+                {updateState && (
+                  <div className="flex gap-2">
+                    {updateState.status === "update-available" && (
+                      <Button size="sm" onClick={updateState.startUpdate}>
+                        Update Now
+                      </Button>
+                    )}
+                    {updateState.status === "ready" && (
+                      <Button size="sm" onClick={updateState.restartApp}>
+                        Restart Now
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={updateState.checkForUpdate}
+                      disabled={updateState.status === "checking" || updateState.status === "downloading"}
+                    >
+                      {updateState.status === "checking" ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4" />
+                      )}
+                      Check for Updates
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-border">

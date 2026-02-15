@@ -1,5 +1,5 @@
 cask "vibogit" do
-  version "3.0.1"
+  version "3.1.0"
   sha256 "e247c8cf8f43f7a732db8ab53f20498e179d58f83a288dc8bd5e68ad6e98f68b"
 
   url "https://github.com/vibogit/vibogit/releases/download/v#{version}/ViboGit_#{version}_aarch64.dmg"
