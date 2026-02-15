@@ -40,3 +40,4 @@ coverage
 # Yarn
 .yarn/install-state.gz
 .yarnrc.yml
+.vercel
