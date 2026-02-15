@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": { "script": "bun run dev", "cwd": "../frontend" },
     "beforeBuildCommand": { "script": "bun run build", "cwd": "../frontend" },
-    "devUrl": "http://localhost:3002",
+    "devUrl": "http://localhost:4158",
     "frontendDist": "../frontend/out"
   },
   "app": {
