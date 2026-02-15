@@ -1210,6 +1210,7 @@ pub struct DevServerConfig {
     pub command: String,
     pub args: Vec<String>,
     pub port: Option<u16>,
+    pub explicit_port: Option<u16>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -1238,6 +1239,139 @@ impl Default for DevServerManager {
     }
 }
 
+fn parse_explicit_port_from_dev_script(dev_script: &str) -> Option<u16> {
+    let parts: Vec<&str> = dev_script.split_whitespace().collect();
+    if parts.is_empty() {
+        return None;
+    }
+
+    for (index, part) in parts.iter().enumerate() {
+        if *part == "-p" || *part == "--port" {
+            if let Some(next) = parts.get(index + 1) {
+                if let Ok(port) = next.parse::<u16>() {
+                    return Some(port);
+                }
+            }
+            continue;
+        }
+
+        if let Some(value) = part.strip_prefix("--port=") {
+            if let Ok(port) = value.parse::<u16>() {
+                return Some(port);
+            }
+            continue;
+        }
+
+        if let Some(value) = part.strip_prefix("-p") {
+            if !value.is_empty() {
+                if let Ok(port) = value.parse::<u16>() {
+                    return Some(port);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn infer_default_dev_port(dev_script: &str) -> Option<u16> {
+    if dev_script.contains("next") {
+        Some(3000)
+    } else if dev_script.contains("vite") {
+        Some(5173)
+    } else if dev_script.contains("remix") {
+        Some(3000)
+    } else {
+        Some(3000)
+    }
+}
+
+fn update_explicit_port_in_dev_script(dev_script: &str, port: u16) -> Result<String, String> {
+    let mut parts: Vec<String> = dev_script
+        .split_whitespace()
+        .map(|part| part.to_string())
+        .collect();
+
+    if parts.is_empty() {
+        return Err("Dev script is empty".to_string());
+    }
+
+    for index in 0..parts.len() {
+        if parts[index] == "-p" || parts[index] == "--port" {
+            if index + 1 >= parts.len() {
+                return Err("Dev script has a port flag without a value".to_string());
+            }
+            parts[index + 1] = port.to_string();
+            return Ok(parts.join(" "));
+        }
+
+        if parts[index].starts_with("--port=") {
+            parts[index] = format!("--port={}", port);
+            return Ok(parts.join(" "));
+        }
+
+        if let Some(value) = parts[index].strip_prefix("-p") {
+            if !value.is_empty() && value.chars().all(|char| char.is_ascii_digit()) {
+                parts[index] = format!("-p{}", port);
+                return Ok(parts.join(" "));
+            }
+        }
+    }
+
+    Err("Dev script does not define an explicit port flag".to_string())
+}
+
+fn resolve_agents_file_path(repo_path: &str) -> PathBuf {
+    let base = PathBuf::from(repo_path);
+    let agents_paths = ["AGENTS.md", "agents.md", ".agents.md"];
+
+    for file_name in &agents_paths {
+        let full_path = base.join(file_name);
+        if full_path.exists() {
+            return full_path;
+        }
+    }
+
+    base.join("AGENTS.md")
+}
+
+#[cfg(test)]
+mod dev_script_port_tests {
+    use super::{parse_explicit_port_from_dev_script, update_explicit_port_in_dev_script};
+
+    #[test]
+    fn parses_space_separated_short_flag() {
+        assert_eq!(parse_explicit_port_from_dev_script("next dev -p 7842"), Some(7842));
+    }
+
+    #[test]
+    fn parses_space_separated_long_flag() {
+        assert_eq!(parse_explicit_port_from_dev_script("next dev --port 7842"), Some(7842));
+    }
+
+    #[test]
+    fn parses_equals_long_flag() {
+        assert_eq!(parse_explicit_port_from_dev_script("next dev --port=7842"), Some(7842));
+    }
+
+    #[test]
+    fn parses_compact_short_flag() {
+        assert_eq!(parse_explicit_port_from_dev_script("next dev -p7842"), Some(7842));
+    }
+
+    #[test]
+    fn returns_none_when_not_explicit() {
+        assert_eq!(parse_explicit_port_from_dev_script("next dev"), None);
+    }
+
+    #[test]
+    fn updates_short_flag_value() {
+        let updated = update_explicit_port_in_dev_script("next dev -p 3000", 7842)
+            .expect("script should be updated");
+        assert_eq!(updated, "next dev -p 7842");
+    }
+}
+
 #[tauri::command]
 pub async fn dev_server_detect(path: String) -> Result<Option<DevServerConfig>, String> {
     let package_json = PathBuf::from(&path).join("package.json");
@@ -1259,18 +1393,8 @@ pub async fn dev_server_detect(path: String) -> Result<Option<DevServerConfig>, 
             // Parse the dev script
             let parts: Vec<&str> = dev_script.split_whitespace().collect();
             if !parts.is_empty() {
-                // Try to detect port from script
-                let port = parts.iter()
-                    .position(|&p| p == "-p" || p == "--port")
-                    .and_then(|i| parts.get(i + 1))
-                    .and_then(|p| p.parse::<u16>().ok())
-                    .or_else(|| {
-                        // Check for common patterns like "next dev" -> 3000
-                        if dev_script.contains("next") { Some(3000) }
-                        else if dev_script.contains("vite") { Some(5173) }
-                        else if dev_script.contains("remix") { Some(3000) }
-                        else { Some(3000) }
-                    });
+                let explicit_port = parse_explicit_port_from_dev_script(dev_script);
+                let port = explicit_port.or_else(|| infer_default_dev_port(dev_script));
 
                 let command = if package_manager.as_deref().unwrap_or("").starts_with("pnpm") {
                     "pnpm"
@@ -1292,6 +1416,7 @@ pub async fn dev_server_detect(path: String) -> Result<Option<DevServerConfig>, 
                     command: command.to_string(),
                     args,
                     port,
+                    explicit_port,
                 }));
             }
         }
@@ -1577,24 +1702,37 @@ pub async fn read_agents_config(repo_path: String) -> Result<AgentsConfig, Strin
         if full_path.exists() {
             let content = std::fs::read_to_string(&full_path).map_err(|e| e.to_string())?;
             
-            // Parse for port - check standard format first "- Port: 7777"
-            // Then fall back to other formats
-            let port = content.lines()
-                .find(|l| {
-                    let lower = l.to_lowercase();
-                    // Standard format: "- Port: 7777" under "## Development Server"
-                    lower.trim().starts_with("- port:") ||
-                    lower.contains("dev server port") || 
-                    (lower.contains("port") && !lower.contains("server port"))
-                })
-                .and_then(|l| {
-                    // Extract number from line like "- Port: 7777" or "- Dev server port: 7777"
-                    l.chars()
-                        .filter(|c| c.is_ascii_digit())
-                        .collect::<String>()
-                        .parse::<u16>()
-                        .ok()
-                });
+            // Parse port from explicit labels only to avoid false matches like "supporting".
+            let port = content.lines().find_map(|line| {
+                let trimmed = line.trim();
+                let lower = trimmed.to_ascii_lowercase();
+                let has_port_label = lower.starts_with("- port:")
+                    || lower.starts_with("port:")
+                    || lower.starts_with("- dev server port:")
+                    || lower.starts_with("dev server port:");
+
+                if !has_port_label {
+                    return None;
+                }
+
+                let (_, value) = trimmed.split_once(':')?;
+                let mut digits = String::new();
+                let mut started = false;
+                for ch in value.chars() {
+                    if ch.is_ascii_digit() {
+                        digits.push(ch);
+                        started = true;
+                    } else if started {
+                        break;
+                    }
+                }
+
+                if digits.is_empty() {
+                    None
+                } else {
+                    digits.parse::<u16>().ok()
+                }
+            });
 
             // Parse for command (look for "Command": `bun run dev -- -p 7777`)
             let (dev_command, dev_args) = content.lines()
@@ -1642,7 +1780,7 @@ pub async fn write_agents_config(
     repo_path: String,
     port: u16,
 ) -> Result<(), String> {
-    let agents_path = PathBuf::from(&repo_path).join("AGENTS.md");
+    let agents_path = resolve_agents_file_path(&repo_path);
     
     let content = if agents_path.exists() {
         let existing = std::fs::read_to_string(&agents_path).map_err(|e| e.to_string())?;
@@ -1655,13 +1793,22 @@ pub async fn write_agents_config(
             let mut port_updated = false;
             
             for line in &mut lines {
-                if line.starts_with("## Development Server") {
+                let trimmed = line.trim_start();
+                let lower_trimmed = trimmed.to_ascii_lowercase();
+
+                if lower_trimmed.starts_with("## development server") {
                     in_dev_section = true;
-                } else if line.starts_with("## ") {
+                } else if trimmed.starts_with("## ") {
                     in_dev_section = false;
                 }
                 
-                if in_dev_section && line.trim().to_lowercase().starts_with("- port:") {
+                let lower_line = line.trim().to_ascii_lowercase();
+                let is_port_line = lower_line.starts_with("- port:")
+                    || lower_line.starts_with("port:")
+                    || lower_line.starts_with("- dev server port:")
+                    || lower_line.starts_with("dev server port:");
+
+                if in_dev_section && is_port_line {
                     *line = format!("- Port: {}", port);
                     port_updated = true;
                 }
@@ -1672,7 +1819,7 @@ pub async fn write_agents_config(
                 let mut new_lines = Vec::new();
                 for line in lines {
                     new_lines.push(line.clone());
-                    if line.starts_with("## Development Server") {
+                    if line.trim_start().to_ascii_lowercase().starts_with("## development server") {
                         new_lines.push(format!("- Port: {}", port));
                     }
                 }
@@ -1690,6 +1837,37 @@ pub async fn write_agents_config(
     };
 
     std::fs::write(&agents_path, content).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn write_dev_script_port(
+    repo_path: String,
+    port: u16,
+) -> Result<(), String> {
+    let package_json_path = PathBuf::from(&repo_path).join("package.json");
+    if !package_json_path.exists() {
+        return Err("package.json not found".to_string());
+    }
+
+    let content = std::fs::read_to_string(&package_json_path).map_err(|e| e.to_string())?;
+    let mut json: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+
+    let scripts = json
+        .get_mut("scripts")
+        .and_then(|scripts| scripts.as_object_mut())
+        .ok_or_else(|| "package.json is missing scripts".to_string())?;
+
+    let dev_script = scripts
+        .get("dev")
+        .and_then(|dev| dev.as_str())
+        .ok_or_else(|| "package.json is missing scripts.dev".to_string())?;
+
+    let updated_dev_script = update_explicit_port_in_dev_script(dev_script, port)?;
+    scripts.insert("dev".to_string(), serde_json::Value::String(updated_dev_script));
+
+    let updated_content = serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?;
+    std::fs::write(&package_json_path, updated_content).map_err(|e| e.to_string())?;
     Ok(())
 }
 

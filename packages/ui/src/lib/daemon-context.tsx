@@ -321,6 +321,13 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
       return {} as T;
     }
 
+    case "writeDevScriptPort": {
+      const targetRepoPath = args.repoPath as string;
+      const port = args.port as number;
+      await tauriInvoke("write_dev_script_port", { repoPath: targetRepoPath, port });
+      return {} as T;
+    }
+
     case "readAgentsConfig": {
       const result = await tauriInvoke("read_agents_config", { repoPath });
       return { config: result } as T;

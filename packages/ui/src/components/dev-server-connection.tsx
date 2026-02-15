@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,8 +10,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Loader2, RefreshCw, X, AlertTriangle, ChevronDown, Globe, Settings } from "lucide-react";
-import { clsx } from "clsx";
 import { toast } from "sonner";
+import { PortMismatchModal, type PortSource } from "@/components/port-mismatch-modal";
 import type { DevServerState, DevServerConfig } from "@vibogit/shared";
 
 type Status = "disconnected" | "connecting" | "restarting" | "connected" | "error";
@@ -32,13 +32,31 @@ interface Props {
   onMonorepoChange?: (isMonorepo: boolean) => void;
 }
 
+interface MismatchPromptState {
+  agentsPort: number;
+  scriptPort: number;
+}
+
+type MismatchDecision =
+  | { action: "sync"; port: number; source: PortSource }
+  | { action: "skip" }
+  | { action: "cancel" };
+
+interface ResolvedStartConfig {
+  targetPort: number;
+  devCommand?: string;
+  devArgs?: string[];
+  stalePorts: number[];
+}
+
 export function DevServerConnection({ repoPath, onPortChange, onRequestPortPrompt, onMonorepoChange }: Props) {
   const { send, state: daemonState } = useDaemon();
   const [status, setStatus] = useState<Status>("disconnected");
   const [port, setPort] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [detectedPort, setDetectedPort] = useState<number | null>(null);
-  const [isMonorepo, setIsMonorepo] = useState(false);
+  const [mismatchPrompt, setMismatchPrompt] = useState<MismatchPromptState | null>(null);
+  const mismatchResolverRef = useRef<((decision: MismatchDecision) => void) | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const portCheckRef = useRef<AbortController | null>(null);
@@ -60,8 +78,6 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     }
   }, []);
 
-
-
   const checkServerState = useCallback(async () => {
     if (!repoPath || daemonState.connection !== "connected") return;
 
@@ -69,8 +85,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
       const response = await send<{ state: DevServerState }>("devServerState", {
         path: repoPath,
       });
-      
-      // Rust now checks both process AND port listening
+
       if (response.state.running && response.state.port) {
         clearPolling();
         setStatus("connected");
@@ -82,84 +97,64 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     }
   }, [repoPath, daemonState.connection, send, clearPolling, onPortChange]);
 
-  // Check server state on tab switch (repoPath change)
   useEffect(() => {
     clearPolling();
     setStatus("disconnected");
     setPort(null);
     setDetectedPort(null);
-    setIsMonorepo(false);
     setErrorMessage(null);
     onPortChange?.(null);
 
     if (!repoPath || daemonState.connection !== "connected") return;
 
-    // Fetch agents config to get detected port and monorepo status
     const fetchConfig = async () => {
       try {
         const configResponse = await send<{ config: AgentsConfig }>("readAgentsConfig", {
           repoPath,
         });
-        setDetectedPort(configResponse.config.port ?? null);
-        setIsMonorepo(configResponse.config.isMonorepo);
+        const configuredPort = configResponse.config.port ?? null;
+        setDetectedPort(configuredPort);
+        onPortChange?.(configuredPort);
         onMonorepoChange?.(configResponse.config.isMonorepo);
       } catch {
         // Config fetch failed, leave as unknown
       }
     };
-    fetchConfig();
+    void fetchConfig();
 
-    // Check if a server is already running for this project
-    const checkExisting = async () => {
-      try {
-        const response = await send<{ state: DevServerState }>("devServerState", {
-          path: repoPath,
-        });
-        
-        // Rust now checks both process AND port listening
-        if (response.state.running && response.state.port) {
-          setStatus("connected");
-          setPort(response.state.port);
-          onPortChange?.(response.state.port);
-        }
-      } catch {
-        // No server running, stay disconnected
-      }
-    };
-
-    checkExisting();
+    void checkServerState();
 
     return () => {
       clearPolling();
     };
-  }, [repoPath, daemonState.connection, send, clearPolling, onPortChange]);
+  }, [repoPath, daemonState.connection, send, clearPolling, onPortChange, onMonorepoChange, checkServerState]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       clearPolling();
+      if (mismatchResolverRef.current) {
+        mismatchResolverRef.current({ action: "cancel" });
+        mismatchResolverRef.current = null;
+      }
     };
   }, [clearPolling]);
 
   const startPolling = useCallback((targetPort: number, targetRepoPath: string) => {
     clearPolling();
-    
-    // Set 30 second timeout
+
     timeoutRef.current = setTimeout(() => {
       clearPolling();
       setStatus("error");
       setErrorMessage("Server start timeout (30s)");
     }, 30000);
 
-    // Poll daemon's devServerState every 1 second
     pollingRef.current = setInterval(async () => {
       try {
         const response = await send<{ state: DevServerState }>("devServerState", {
           path: targetRepoPath,
         });
-        
+
         if (response.state.running && response.state.port) {
-          // Backend already verified port is listening via TCP check
           clearPolling();
           setStatus("connected");
           setPort(response.state.port);
@@ -171,6 +166,100 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     }, 1000);
   }, [clearPolling, onPortChange, send]);
 
+  const openMismatchPrompt = useCallback((agentsPort: number, scriptPort: number): Promise<MismatchDecision> => {
+    return new Promise<MismatchDecision>((resolve) => {
+      mismatchResolverRef.current = resolve;
+      setMismatchPrompt({ agentsPort, scriptPort });
+    });
+  }, []);
+
+  const resolveMismatchPrompt = useCallback((decision: MismatchDecision) => {
+    const resolver = mismatchResolverRef.current;
+    mismatchResolverRef.current = null;
+    setMismatchPrompt(null);
+    resolver?.(decision);
+  }, []);
+
+  const killPorts = useCallback(async (ports: number[]) => {
+    const uniquePorts = [...new Set(ports.filter((value): value is number => Number.isInteger(value) && value > 0))];
+    for (const killPort of uniquePorts) {
+      try {
+        await send("killPort", { port: killPort });
+      } catch {
+        // Best effort cleanup; continue startup.
+      }
+    }
+  }, [send]);
+
+  const resolveStartConfig = useCallback(async (activePort?: number): Promise<ResolvedStartConfig | null> => {
+    if (!repoPath) return null;
+
+    const [configResponse, detectResponse] = await Promise.all([
+      send<{ config: AgentsConfig }>("readAgentsConfig", { repoPath }),
+      send<{ config: DevServerConfig | null }>("devServerDetect", { path: repoPath }),
+    ]);
+
+    const agentsConfig = configResponse.config;
+    const detectedConfig = detectResponse.config;
+
+    let agentsPort = agentsConfig.port;
+    const scriptPort = detectedConfig?.explicitPort;
+    const fallbackDetectedPort = detectedConfig?.port;
+    const stalePorts = new Set<number>();
+
+    if (typeof agentsPort === "number") stalePorts.add(agentsPort);
+    if (typeof scriptPort === "number") stalePorts.add(scriptPort);
+    if (typeof activePort === "number") stalePorts.add(activePort);
+
+    let targetPort: number | undefined;
+
+    if (typeof agentsPort === "number" && typeof scriptPort === "number" && agentsPort !== scriptPort) {
+      const decision = await openMismatchPrompt(agentsPort, scriptPort);
+
+      if (decision.action === "cancel") {
+        return null;
+      }
+
+      if (decision.action === "skip") {
+        targetPort = scriptPort;
+      } else {
+        await send("writeAgentsConfig", { repoPath, port: decision.port });
+        await send("writeDevScriptPort", { repoPath, port: decision.port });
+        agentsPort = decision.port;
+        targetPort = decision.port;
+        setDetectedPort(decision.port);
+        onPortChange?.(decision.port);
+        toast.success(`Synced dev port to :${decision.port}`);
+      }
+    }
+
+    if (!targetPort) {
+      targetPort = scriptPort ?? agentsPort ?? fallbackDetectedPort;
+    }
+
+    if (!targetPort) {
+      onRequestPortPrompt?.(agentsConfig.isMonorepo);
+      return null;
+    }
+
+    stalePorts.delete(targetPort);
+
+    const preferDetectedCommand = typeof scriptPort === "number";
+    const devCommand = preferDetectedCommand
+      ? (detectedConfig?.command ?? agentsConfig.devCommand)
+      : (agentsConfig.devCommand ?? detectedConfig?.command);
+    const devArgs = preferDetectedCommand
+      ? (detectedConfig?.args ?? agentsConfig.devArgs)
+      : (agentsConfig.devArgs ?? detectedConfig?.args);
+
+    return {
+      targetPort,
+      devCommand,
+      devArgs,
+      stalePorts: [...stalePorts],
+    };
+  }, [repoPath, send, onPortChange, onRequestPortPrompt, openMismatchPrompt]);
+
   const handleConnect = async () => {
     if (!repoPath || daemonState.connection !== "connected") return;
 
@@ -178,52 +267,26 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     setErrorMessage(null);
 
     try {
-      // 1. Read agents config to get port
-      const configResponse = await send<{ config: AgentsConfig }>("readAgentsConfig", {
-        repoPath,
-      });
-
-      let targetPort = configResponse.config.port;
-      let devCommand = configResponse.config.devCommand;
-      let devArgs = configResponse.config.devArgs;
-
-      // If no port found, request port prompt
-      if (!targetPort) {
-        // Try to detect from package.json
-        const detectResponse = await send<{ config: DevServerConfig | null }>("devServerDetect", {
-          path: repoPath,
-        });
-        
-        if (detectResponse.config?.port) {
-          targetPort = detectResponse.config.port;
-          devCommand = detectResponse.config.command;
-          devArgs = detectResponse.config.args;
-        } else {
-          // Show port prompt modal
-          setStatus("disconnected");
-          onRequestPortPrompt?.();
-          return;
-        }
+      const resolved = await resolveStartConfig();
+      if (!resolved) {
+        setStatus("disconnected");
+        return;
       }
 
-      // 2. Kill any existing process on the port and clean up lock files
-      await send("killPort", { port: targetPort });
+      await killPorts([resolved.targetPort, ...resolved.stalePorts]);
       await send("cleanupDevLocks", { path: repoPath });
 
-      // 3. Start dev server
       await send("devServerStart", {
         path: repoPath,
         config: {
-          command: devCommand || "bun",
-          args: devArgs || ["run", "dev"],
-          port: targetPort,
+          command: resolved.devCommand || "bun",
+          args: resolved.devArgs || ["run", "dev"],
+          port: resolved.targetPort,
         },
       });
 
-      // 4. Start polling with 30s timeout
-      startPolling(targetPort, repoPath);
+      startPolling(resolved.targetPort, repoPath);
 
-      // Set timeout for connection (use ref to check current status)
       timeoutRef.current = setTimeout(() => {
         if (statusRef.current === "connecting") {
           setStatus("error");
@@ -235,7 +298,6 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
           clearPolling();
         }
       }, 30000);
-
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Failed to connect";
       setStatus("error");
@@ -254,30 +316,26 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     setErrorMessage(null);
 
     try {
-      // 1. Stop the current server
+      const resolved = await resolveStartConfig(port);
+      if (!resolved) {
+        setStatus("connected");
+        return;
+      }
+
       await send("devServerStop", { path: repoPath });
-
-      // 2. Kill the port and clean up lock files
-      await send("killPort", { port });
+      await killPorts([port, resolved.targetPort, ...resolved.stalePorts]);
       await send("cleanupDevLocks", { path: repoPath });
-
-      // 3. Get config and restart
-      const configResponse = await send<{ config: AgentsConfig }>("readAgentsConfig", {
-        repoPath,
-      });
 
       await send("devServerStart", {
         path: repoPath,
         config: {
-          command: configResponse.config.devCommand || "bun",
-          args: configResponse.config.devArgs || ["run", "dev"],
-          port,
+          command: resolved.devCommand || "bun",
+          args: resolved.devArgs || ["run", "dev"],
+          port: resolved.targetPort,
         },
       });
 
-      // 4. Start polling
-      startPolling(port, repoPath);
-
+      startPolling(resolved.targetPort, repoPath);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Failed to restart";
       setStatus("error");
@@ -304,17 +362,35 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     clearPolling();
     setStatus("disconnected");
     setPort(null);
-    onPortChange?.(null);
+    onPortChange?.(detectedPort ?? null);
   };
 
-  // Don't render if daemon not connected
+  const handleOpenBrowser = async () => {
+    if (port) {
+      await send("openBrowser", { url: `http://localhost:${port}` });
+    }
+  };
+
+  const renderWithModal = (content: ReactNode) => (
+    <>
+      {content}
+      <PortMismatchModal
+        isOpen={mismatchPrompt !== null}
+        scriptPort={mismatchPrompt?.scriptPort ?? 3000}
+        agentsPort={mismatchPrompt?.agentsPort ?? 3000}
+        onConfirm={(selectedPort, source) => resolveMismatchPrompt({ action: "sync", port: selectedPort, source })}
+        onSkip={() => resolveMismatchPrompt({ action: "skip" })}
+        onCancel={() => resolveMismatchPrompt({ action: "cancel" })}
+      />
+    </>
+  );
+
   if (daemonState.connection !== "connected" || !repoPath) {
     return null;
   }
 
-  // Disconnected state
   if (status === "disconnected") {
-    return (
+    return renderWithModal(
       <div className="flex items-center gap-1">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -340,9 +416,8 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     );
   }
 
-  // Connecting state
   if (status === "connecting") {
-    return (
+    return renderWithModal(
       <div className="flex items-center gap-1.5 px-3 py-1 text-sm bg-yellow-500 text-white rounded-md">
         <Loader2 className="w-3.5 h-3.5 animate-spin" />
         Connecting...
@@ -350,9 +425,8 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     );
   }
 
-  // Restarting state
   if (status === "restarting") {
-    return (
+    return renderWithModal(
       <div className="flex items-center gap-1.5 px-3 py-1 text-sm bg-yellow-500 text-white rounded-md">
         <Loader2 className="w-3.5 h-3.5 animate-spin" />
         Restarting...
@@ -360,15 +434,8 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     );
   }
 
-  const handleOpenBrowser = async () => {
-    if (port) {
-      await send("openBrowser", { url: `http://localhost:${port}` });
-    }
-  };
-
-  // Connected state
   if (status === "connected") {
-    return (
+    return renderWithModal(
       <div className="flex items-center gap-1">
         <button
           type="button"
@@ -422,9 +489,8 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     );
   }
 
-  // Error state
   if (status === "error") {
-    return (
+    return renderWithModal(
       <div className="flex items-center gap-1.5" title={errorMessage || undefined}>
         <div className="flex items-center gap-1.5 px-2 py-1 text-sm text-destructive">
           <AlertTriangle className="w-3.5 h-3.5" />
@@ -442,5 +508,5 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     );
   }
 
-  return null;
+  return renderWithModal(null);
 }

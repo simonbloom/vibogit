@@ -103,6 +103,7 @@ pub fn run() {
             // Agents config commands
             commands::read_agents_config,
             commands::write_agents_config,
+            commands::write_dev_script_port,
             // Skills commands
             commands::list_skills,
             // Autostart commands

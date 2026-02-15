@@ -537,6 +537,7 @@ export function MainInterface() {
         onClose={() => setShowPortPrompt(false)}
         defaultPort={devServerPort || 3000}
         isMonorepo={isMonorepo}
+        hasConfiguredPort={devServerPort !== null}
         onSubmit={async (port, saveToConfig) => {
           if (saveToConfig && repoPath) {
             try {

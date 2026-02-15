@@ -273,6 +273,7 @@ export interface DevServerConfig {
   command: string;
   args: string[];
   port?: number;
+  explicitPort?: number;
 }
 
 export interface DevServerState {

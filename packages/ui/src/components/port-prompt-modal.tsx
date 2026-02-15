@@ -10,9 +10,17 @@ interface Props {
   onSubmit: (port: number, saveToConfig: boolean) => void;
   defaultPort?: number;
   isMonorepo?: boolean;
+  hasConfiguredPort?: boolean;
 }
 
-export function PortPromptModal({ isOpen, onClose, onSubmit, defaultPort = 3000, isMonorepo = false }: Props) {
+export function PortPromptModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  defaultPort = 3000,
+  isMonorepo = false,
+  hasConfiguredPort = false,
+}: Props) {
   const [port, setPort] = useState(defaultPort.toString());
   const [saveToConfig, setSaveToConfig] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +97,9 @@ export function PortPromptModal({ isOpen, onClose, onSubmit, defaultPort = 3000,
         <p className="text-sm text-muted-foreground mb-4">
           {isMonorepo 
             ? "Enter the port to monitor for the main application."
-            : "No port configuration found in agents.md. Please enter the port your dev server runs on."}
+            : hasConfiguredPort
+              ? "Update the port your dev server runs on."
+              : "No port configuration found in agents.md. Please enter the port your dev server runs on."}
         </p>
 
         {/* Form */}
