@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { useDaemon } from "@/lib/daemon-context";
 import { useProjects } from "@/lib/projects-context";
 import { useAutoUpdate } from "@/lib/use-auto-update";
 import { Sidebar } from "@/components/sidebar/sidebar";
 import { ProjectList } from "@/components/sidebar/project-list";
-import { AddRepositoryDialog } from "@/components/sidebar/add-repository-dialog";
 import { SettingsPanel } from "@/components/settings-panel";
 import { UpdateBanner } from "@/components/update-banner";
 
@@ -15,9 +15,8 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const { state: daemonState, setRepoPath } = useDaemon();
+  const { state: daemonState, setRepoPath, send } = useDaemon();
   const { state: projectsState, addProject } = useProjects();
-  const [showAddRepo, setShowAddRepo] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const autoUpdate = useAutoUpdate();
 
@@ -42,10 +41,44 @@ export function AppLayout({ children }: AppLayoutProps) {
     setRepoPath(path);
   };
 
+  const handleAddRepository = async () => {
+    let selectedPath: string | null = null;
+
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      if (typeof open === "function") {
+        const result = await open({ directory: true, multiple: false, title: "Select a Project Folder" });
+        if (typeof result === "string") {
+          selectedPath = result;
+        }
+      }
+    } catch {
+      // Fall back to backend picker
+    }
+
+    if (!selectedPath) {
+      try {
+        const response = await send<{ path: string | null }>("pickFolder");
+        selectedPath = response.path;
+      } catch (err) {
+        console.error("Failed to open folder picker:", err);
+      }
+    }
+
+    if (!selectedPath) return;
+
+    try {
+      await addProject(selectedPath);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to add project";
+      toast.error(message);
+    }
+  };
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar
-        onAddRepository={() => setShowAddRepo(true)}
+        onAddRepository={() => void handleAddRepository()}
         onOpenSettings={() => setShowSettings(true)}
       >
         {(isCollapsed) => (
@@ -63,10 +96,6 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
       </div>
 
-      <AddRepositoryDialog 
-        isOpen={showAddRepo} 
-        onClose={() => setShowAddRepo(false)} 
-      />
       <SettingsPanel 
         isOpen={showSettings} 
         onClose={() => setShowSettings(false)}
