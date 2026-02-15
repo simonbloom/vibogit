@@ -17,7 +17,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const { state: daemonState, setRepoPath, send } = useDaemon();
   const { state: projectsState, addProject } = useProjects();
-  const [showSettings, setShowSettings] = useState(false);
+  const [activePane, setActivePane] = useState<"project" | "settings">("project");
   const autoUpdate = useAutoUpdate();
 
   // Sync selected project with DaemonContext
@@ -39,6 +39,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const handleProjectSelect = (path: string) => {
     setRepoPath(path);
+    setActivePane("project");
   };
 
   const handleAddRepository = async () => {
@@ -69,6 +70,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
     try {
       await addProject(selectedPath);
+      setActivePane("project");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to add project";
       toast.error(message);
@@ -79,7 +81,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     <div className="flex h-screen overflow-hidden">
       <Sidebar
         onAddRepository={() => void handleAddRepository()}
-        onOpenSettings={() => setShowSettings(true)}
+        onOpenSettings={() => setActivePane("settings")}
+        isSettingsActive={activePane === "settings"}
       >
         {(isCollapsed) => (
           <ProjectList 
@@ -92,15 +95,9 @@ export function AppLayout({ children }: AppLayoutProps) {
       <div className="flex-1 overflow-hidden flex flex-col">
         <UpdateBanner {...autoUpdate} />
         <div className="flex-1 overflow-hidden">
-          {children}
+          {activePane === "settings" ? <SettingsPanel updateState={autoUpdate} /> : children}
         </div>
       </div>
-
-      <SettingsPanel 
-        isOpen={showSettings} 
-        onClose={() => setShowSettings(false)}
-        updateState={autoUpdate}
-      />
     </div>
   );
 }

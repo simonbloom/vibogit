@@ -6,6 +6,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
 import { useDaemon } from "./daemon-context";
@@ -18,6 +19,8 @@ interface ConfigContextValue {
   config: Config;
   setConfig: (partial: Partial<Config>) => Promise<void>;
   isLoading: boolean;
+  isSaving: boolean;
+  lastSaveError: string | null;
 }
 
 const ConfigContext = createContext<ConfigContextValue | null>(null);
@@ -48,6 +51,9 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const { state, send } = useDaemon();
   const [config, setConfigState] = useState<Config>(getLocalConfig);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaveError, setLastSaveError] = useState<string | null>(null);
+  const saveRequestIdRef = useRef(0);
 
   // Fetch config from daemon when connected
   useEffect(() => {
@@ -61,6 +67,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
         const response = await send<{ config: Config }>("getConfig");
         setConfigState(response.config);
         saveLocalConfig(response.config); // Keep localStorage in sync
+        setLastSaveError(null);
       } catch (err) {
         console.error("[Config] Failed to fetch from daemon:", err);
         // Fall back to localStorage
@@ -81,9 +88,15 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
 
   const setConfig = useCallback(
     async (partial: Partial<Config>) => {
-      const newConfig = { ...config, ...partial };
-      setConfigState(newConfig);
-      saveLocalConfig(newConfig); // Always save to localStorage as backup
+      setConfigState((current) => {
+        const next = { ...current, ...partial };
+        saveLocalConfig(next);
+        return next;
+      });
+
+      const requestId = ++saveRequestIdRef.current;
+      setIsSaving(true);
+      setLastSaveError(null);
 
       if (state.connection === "connected") {
         try {
@@ -92,17 +105,27 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
           });
           setConfigState(response.config);
           saveLocalConfig(response.config);
+          if (saveRequestIdRef.current === requestId) {
+            setLastSaveError(null);
+          }
         } catch (err) {
           console.error("[Config] Failed to save to daemon:", err);
-          // Already saved to localStorage, so UI state is correct
+          if (saveRequestIdRef.current === requestId) {
+            const message = err instanceof Error ? err.message : "Failed to save settings to daemon";
+            setLastSaveError(message);
+          }
         }
       }
+
+      if (saveRequestIdRef.current === requestId) {
+        setIsSaving(false);
+      }
     },
-    [config, state.connection, send]
+    [state.connection, send]
   );
 
   return (
-    <ConfigContext.Provider value={{ config, setConfig, isLoading }}>
+    <ConfigContext.Provider value={{ config, setConfig, isLoading, isSaving, lastSaveError }}>
       {children}
     </ConfigContext.Provider>
   );

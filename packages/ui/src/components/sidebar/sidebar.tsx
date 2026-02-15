@@ -1,22 +1,49 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
-import { Settings, Plus, PanelLeftClose, PanelLeft } from "lucide-react";
+import { useTheme } from "next-themes";
+import { Settings, Plus, PanelLeftClose, PanelLeft, Sun, Moon, Flame, Binary, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
   children?: ReactNode | ((isCollapsed: boolean) => ReactNode);
   onAddRepository?: () => void;
   onOpenSettings?: () => void;
+  isSettingsActive?: boolean;
   className?: string;
+}
+
+const THEME_SEQUENCE = ["light", "dark", "ember", "matrix", "system"] as const;
+type ThemeMode = (typeof THEME_SEQUENCE)[number];
+
+const THEME_ICON_MAP: Record<
+  ThemeMode,
+  {
+    icon: (props: { className?: string }) => JSX.Element;
+    label: string;
+  }
+> = {
+  light: { icon: Sun, label: "Light" },
+  dark: { icon: Moon, label: "Dark" },
+  ember: { icon: Flame, label: "Ember" },
+  matrix: { icon: Binary, label: "Matrix" },
+  system: { icon: Monitor, label: "System" },
+};
+
+function normalizeTheme(theme: string | undefined): ThemeMode {
+  if (theme && THEME_SEQUENCE.includes(theme as ThemeMode)) {
+    return theme as ThemeMode;
+  }
+  return "system";
 }
 
 export function Sidebar({ 
   children, 
   onAddRepository, 
   onOpenSettings,
+  isSettingsActive = false,
   className 
 }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -25,11 +52,26 @@ export function Sidebar({
     }
     return false;
   });
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
 
   const toggleCollapsed = () => {
     const newState = !isCollapsed;
     setIsCollapsed(newState);
     localStorage.setItem("vibogit-sidebar-collapsed", String(newState));
+  };
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const currentTheme = normalizeTheme(theme);
+  const currentIndex = THEME_SEQUENCE.indexOf(currentTheme);
+  const nextTheme = THEME_SEQUENCE[(currentIndex + 1) % THEME_SEQUENCE.length];
+  const ThemeIcon = THEME_ICON_MAP[currentTheme].icon;
+  const nextThemeLabel = THEME_ICON_MAP[nextTheme].label;
+
+  const handleThemeCycle = () => {
+    setTheme(nextTheme);
   };
 
   return (
@@ -89,18 +131,33 @@ export function Sidebar({
       <div className="border-t p-2">
         <div className={cn(
           "flex items-center",
-          isCollapsed ? "justify-center" : "justify-between"
+          isCollapsed ? "justify-center gap-2" : "justify-between"
         )}>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onOpenSettings}
-            className="h-8 w-8"
-            title="Settings"
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
-
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onOpenSettings}
+              className={cn("h-8 w-8", isSettingsActive && "bg-muted text-foreground")}
+              title="Settings"
+              aria-pressed={isSettingsActive}
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+            {mounted && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleThemeCycle}
+                className="h-8 w-8"
+                title={`Theme: ${THEME_ICON_MAP[currentTheme].label} (next: ${nextThemeLabel})`}
+                aria-label={`Switch to ${nextThemeLabel} theme`}
+              >
+                <ThemeIcon className="h-4 w-4" />
+              </Button>
+            )}
+            {!mounted && <Button variant="ghost" size="icon" className="h-8 w-8" disabled><Sun className="h-4 w-4" /></Button>}
+          </div>
           {!isCollapsed && (
             <span className="pr-1 text-[10px] text-muted-foreground/50">v3.3.0</span>
           )}
