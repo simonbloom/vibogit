@@ -10,6 +10,9 @@ on:
         description: 'Version to release (e.g., 0.1.0)'
         required: true
 
+permissions:
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -20,9 +23,9 @@ jobs:
       matrix:
         include:
           - target: aarch64-apple-darwin
-            runner: macos-latest
+            runner: macos-14
           - target: x86_64-apple-darwin
-            runner: macos-latest
+            runner: macos-13
 
     runs-on: ${{ matrix.runner }}
 
