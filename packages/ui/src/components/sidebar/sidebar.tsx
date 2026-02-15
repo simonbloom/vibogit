@@ -122,7 +122,7 @@ export function Sidebar({
             {!isCollapsed && <span>Add project</span>}
           </Button>
         </div>
-        <div className="flex-1 overflow-y-auto px-1">
+        <div className="flex-1 overflow-y-auto">
           {typeof children === "function" ? children(isCollapsed) : children}
         </div>
       </div>

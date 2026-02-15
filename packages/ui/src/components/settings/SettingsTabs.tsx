@@ -81,7 +81,7 @@ export function SettingsTabs({ activeTab, onTabChange, className }: SettingsTabs
         className
       )}
     >
-      <div className="mx-auto flex w-full max-w-3xl gap-2 overflow-x-auto">
+      <div className="flex w-full gap-2 overflow-x-auto">
         {SETTINGS_TABS.map((tab) => {
           const isActive = tab.id === activeTab;
           const Icon = tab.Icon;

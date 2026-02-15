@@ -590,21 +590,14 @@
     text-shadow: 0 0 5px hsl(136 100% 50% / 0.5);
   }
 
-  /* Matrix graph colors - force all to green */
-  .matrix svg line {
+  /* Matrix graph colors - scoped to graph elements only */
+  .matrix .graph-line path {
     stroke: #00FF41 !important;
-    filter: drop-shadow(0 0 3px rgba(0, 255, 65, 0.6)) !important;
   }
   
-  .matrix svg path {
-    stroke: #00FF41 !important;
-    filter: drop-shadow(0 0 3px rgba(0, 255, 65, 0.6)) !important;
-  }
-  
-  .matrix svg circle {
+  .matrix .graph-node circle {
     stroke: #00FF41 !important;
     fill: #00FF41 !important;
-    filter: drop-shadow(0 0 4px rgba(0, 255, 65, 0.8)) !important;
   }
 
   /* Matrix commit hash colors - override inline styles */

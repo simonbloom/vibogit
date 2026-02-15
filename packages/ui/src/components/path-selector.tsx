@@ -94,9 +94,7 @@ export function PathSelector({ value, onChange, homeDir = "" }: PathSelectorProp
 
       {/* Quick Select */}
       <div>
-        <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
-          <span>⚡</span> Quick Select
-        </div>
+        <div className="mb-2 text-xs font-medium text-muted-foreground">Quick Select</div>
         <div className="flex flex-wrap gap-2">
           {quickPaths.map((quick) => (
             <Button
@@ -115,9 +113,7 @@ export function PathSelector({ value, onChange, homeDir = "" }: PathSelectorProp
 
       {/* Detected Apps */}
       <div>
-        <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
-          <span>📷</span> Screenshot Apps
-        </div>
+        <div className="mb-2 text-xs font-medium text-muted-foreground">Screenshot Apps</div>
         <div className="bg-muted rounded-lg border border-border divide-y divide-border">
           {detectedApps.map((app) => (
             <button
@@ -163,7 +159,6 @@ export function PathSelector({ value, onChange, homeDir = "" }: PathSelectorProp
 
       {/* Tip */}
       <div className="flex items-start gap-2 text-xs text-muted-foreground bg-accent rounded-lg px-3 py-2">
-        <span>💡</span>
         <span>This path is used when copying prompts with pasted images</span>
       </div>
     </div>

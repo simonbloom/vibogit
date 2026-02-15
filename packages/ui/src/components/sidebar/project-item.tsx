@@ -82,7 +82,7 @@ export function ProjectItem({
       return (
         <div
           className={cn(
-            "w-full flex flex-col items-center py-2 px-1 rounded-md transition-colors cursor-pointer",
+            "w-full flex flex-col items-center py-2 px-1 transition-colors cursor-pointer",
             "hover:bg-accent",
             isSelected && "bg-accent"
           )}
@@ -108,7 +108,7 @@ export function ProjectItem({
     return (
       <div
         className={cn(
-          "w-full flex items-center gap-3 p-2 rounded-md transition-colors text-left cursor-pointer",
+          "w-full flex items-center gap-3 p-2 transition-colors text-left cursor-pointer",
           "hover:bg-accent",
           isSelected && "bg-accent"
         )}

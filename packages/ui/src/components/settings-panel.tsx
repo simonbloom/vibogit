@@ -110,10 +110,8 @@ export function SettingsPanel({ updateState }: SettingsPanelProps) {
   return (
     <div className="flex h-full flex-col bg-background">
       <div className="border-b border-border px-6 py-4">
-        <div className="mx-auto w-full max-w-3xl">
-          <h2 className="text-lg font-semibold text-foreground">Settings</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Preferences for ViboGit on this machine.</p>
-        </div>
+        <h2 className="text-lg font-semibold text-foreground">Settings</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Preferences for ViboGit on this machine.</p>
       </div>
 
       <SettingsTabs activeTab={activeTab} onTabChange={setActiveTab} />
@@ -123,18 +121,14 @@ export function SettingsPanel({ updateState }: SettingsPanelProps) {
           role="tabpanel"
           id={`settings-panel-${activeTab}`}
           aria-labelledby={`settings-tab-${activeTab}`}
-          className="mx-auto w-full max-w-3xl"
+          className="w-full"
         >
           {isLoading ? (
-            <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
-              <div className="space-y-4 animate-pulse">
-                <div className="h-4 w-32 rounded bg-muted" />
-                <div className="h-3 w-56 rounded bg-muted" />
-                <div className="h-10 w-full rounded bg-muted" />
-                <div className="h-10 w-full rounded bg-muted" />
-                <div className="h-20 w-full rounded bg-muted" />
-              </div>
-            </section>
+            <div className="space-y-4 animate-pulse">
+              <div className="h-10 w-full rounded bg-muted" />
+              <div className="h-10 w-full rounded bg-muted" />
+              <div className="h-20 w-full rounded bg-muted" />
+            </div>
           ) : (
             renderTabPanel()
           )}
@@ -142,9 +136,7 @@ export function SettingsPanel({ updateState }: SettingsPanelProps) {
       </div>
 
       <div className="border-t border-border px-6 py-3">
-        <div className="mx-auto w-full max-w-3xl">
-          <SaveStatusBar status={saveStatus} errorMessage={lastSaveError} />
-        </div>
+        <SaveStatusBar status={saveStatus} errorMessage={lastSaveError} />
       </div>
     </div>
   );
