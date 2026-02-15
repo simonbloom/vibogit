@@ -1,29 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Loader2, RefreshCw, X, AlertTriangle, ChevronDown, Globe, Settings } from "lucide-react";
-import { clsx } from "clsx";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertTriangle, ChevronDown, Globe, Loader2, RefreshCw, Settings, X } from "lucide-react";
 import { toast } from "sonner";
-import type { DevServerState, DevServerConfig } from "@vibogit/shared";
+import type { AgentsConfig, DevServerConfig, DevServerDiagnostic, DevServerReasonCode, DevServerState } from "@vibogit/shared";
 
 type Status = "disconnected" | "connecting" | "restarting" | "connected" | "error";
 
-interface AgentsConfig {
-  port?: number;
-  devCommand?: string;
-  devArgs?: string[];
-  found: boolean;
-  filePath?: string;
-  isMonorepo: boolean;
-}
+const DIAGNOSTIC_PREFIX = "DEV_SERVER_DIAGNOSTIC::";
 
 interface Props {
   repoPath: string | null;
@@ -37,19 +24,119 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
   const [status, setStatus] = useState<Status>("disconnected");
   const [port, setPort] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [diagnostic, setDiagnostic] = useState<DevServerDiagnostic | null>(null);
   const [detectedPort, setDetectedPort] = useState<number | null>(null);
+  const [agentsConfig, setAgentsConfig] = useState<AgentsConfig | null>(null);
   const [isMonorepo, setIsMonorepo] = useState(false);
+  const [preferredUrl, setPreferredUrl] = useState<string | null>(null);
+  const [connectStage, setConnectStage] = useState("Starting dev server...");
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const portCheckRef = useRef<AbortController | null>(null);
-  const statusRef = useRef<Status>(status);
-  statusRef.current = status;
+  const connectSnapshotRef = useRef<{ command?: string; cwd?: string; port?: number }>({});
+
+  const trackEvent = useCallback((event: string, payload: Record<string, unknown> = {}) => {
+    console.info("[dev-server-telemetry]", {
+      event,
+      repoPath,
+      at: new Date().toISOString(),
+      ...payload,
+    });
+  }, [repoPath]);
+
+  const parseDiagnostic = useCallback((value: unknown): DevServerDiagnostic | null => {
+    const raw = typeof value === "string" ? value : value instanceof Error ? value.message : JSON.stringify(value);
+    if (!raw) {
+      return null;
+    }
+
+    const payload = raw.includes(DIAGNOSTIC_PREFIX)
+      ? raw.slice(raw.indexOf(DIAGNOSTIC_PREFIX) + DIAGNOSTIC_PREFIX.length)
+      : raw.trim().startsWith("{")
+        ? raw
+        : null;
+
+    if (!payload) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(payload) as DevServerDiagnostic;
+      return parsed?.reasonCode ? parsed : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const reasonTitle = useCallback((reason: DevServerReasonCode) => {
+    switch (reason) {
+      case "MONOREPO_WRONG_CWD":
+        return "We started in the wrong folder";
+      case "PORT_MISMATCH":
+        return "Your app started on a different port";
+      case "STARTUP_TIMEOUT":
+        return "Your app is still starting";
+      case "COMMAND_FAILED":
+        return "The dev command could not run";
+      case "PROTOCOL_MISMATCH":
+        return "Server responded with a different protocol";
+      case "NOT_PREVIEWABLE":
+        return "This project may not support localhost preview";
+      default:
+        return "Connection failed";
+    }
+  }, []);
+
+  const reasonSteps = useCallback((reason: DevServerReasonCode): string[] => {
+    switch (reason) {
+      case "MONOREPO_WRONG_CWD":
+        return ["Choose the app folder suggested in project config.", "Retry connect."];
+      case "PORT_MISMATCH":
+        return ["Use the observed port from logs.", "Enable strict port in your dev server and retry."];
+      case "STARTUP_TIMEOUT":
+        return ["Retry with more time.", "Check logs for install/build delays."];
+      case "COMMAND_FAILED":
+        return ["Install dependencies.", "Verify the dev command and package manager."];
+      case "PROTOCOL_MISMATCH":
+        return ["Try the suggested URL.", "Check HTTP/HTTPS server settings."];
+      case "NOT_PREVIEWABLE":
+        return ["Confirm this repo has a web app.", "If monorepo, select the frontend folder."];
+      default:
+        return ["Retry connect."];
+    }
+  }, []);
+
+  const buildAiPrompt = useCallback((item: DevServerDiagnostic | null) => {
+    const reasonCode = item?.reasonCode ?? "COMMAND_FAILED";
+    const expectedPort = item?.expectedPort ?? connectSnapshotRef.current.port ?? agentsConfig?.port ?? "unknown";
+    const command = item?.command ?? connectSnapshotRef.current.command ?? agentsConfig?.devCommand ?? "<unknown>";
+    const cwd = item?.cwd ?? connectSnapshotRef.current.cwd ?? repoPath ?? "<repo-root>";
+    const suggested = item?.suggestedCwd ?? agentsConfig?.workingDir ?? agentsConfig?.suggestedWorkingDirs?.[0] ?? "unknown";
+    const urls = item?.urlAttempts?.join(", ") || "none";
+    const logs = item?.logsTail?.join("\n") || "<no logs available>";
+
+    return [
+      "I’m trying to run a local web preview and it fails.",
+      "",
+      `Reason code: ${reasonCode}`,
+      `Repo: ${repoPath ?? "unknown"}`,
+      `Command run: ${command}`,
+      `Working directory used: ${cwd}`,
+      `Suggested working directory: ${suggested}`,
+      `Expected port: ${expectedPort}`,
+      `Observed port: ${item?.observedPort ?? "unknown"}`,
+      `URL attempts: ${urls}`,
+      "Recent logs:",
+      logs,
+      "",
+      "Please give:",
+      "1) the exact corrected command,",
+      "2) the correct working directory,",
+      "3) any AGENTS.md settings I should add,",
+      "4) how to verify success in 3 quick checks.",
+    ].join("\n");
+  }, [agentsConfig, repoPath]);
 
   const clearPolling = useCallback(() => {
-    if (portCheckRef.current) {
-      portCheckRef.current.abort();
-      portCheckRef.current = null;
-    }
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
@@ -60,237 +147,251 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     }
   }, []);
 
-
-
-  const checkServerState = useCallback(async () => {
-    if (!repoPath || daemonState.connection !== "connected") return;
-
-    try {
-      const response = await send<{ state: DevServerState }>("devServerState", {
-        path: repoPath,
-      });
-      
-      // Rust now checks both process AND port listening
-      if (response.state.running && response.state.port) {
-        clearPolling();
-        setStatus("connected");
-        setPort(response.state.port);
-        onPortChange?.(response.state.port);
-      }
-    } catch {
-      // Silent fail on check
-    }
-  }, [repoPath, daemonState.connection, send, clearPolling, onPortChange]);
-
-  // Check server state on tab switch (repoPath change)
   useEffect(() => {
     clearPolling();
     setStatus("disconnected");
     setPort(null);
+    setPreferredUrl(null);
+    setDiagnostic(null);
     setDetectedPort(null);
+    setAgentsConfig(null);
     setIsMonorepo(false);
     setErrorMessage(null);
     onPortChange?.(null);
 
-    if (!repoPath || daemonState.connection !== "connected") return;
+    if (!repoPath || daemonState.connection !== "connected") {
+      return;
+    }
 
-    // Fetch agents config to get detected port and monorepo status
     const fetchConfig = async () => {
       try {
-        const configResponse = await send<{ config: AgentsConfig }>("readAgentsConfig", {
-          repoPath,
-        });
+        const configResponse = await send<{ config: AgentsConfig }>("readAgentsConfig", { repoPath });
+        setAgentsConfig(configResponse.config);
         setDetectedPort(configResponse.config.port ?? null);
         setIsMonorepo(configResponse.config.isMonorepo);
         onMonorepoChange?.(configResponse.config.isMonorepo);
+
+        if (!configResponse.config.previewSuitable && configResponse.config.suitabilityReason) {
+          setDiagnostic({
+            reasonCode: "NOT_PREVIEWABLE",
+            message: configResponse.config.suitabilityReason,
+            expectedPort: configResponse.config.port,
+            observedPort: undefined,
+            command: configResponse.config.devCommand,
+            cwd: repoPath,
+            suggestedCwd: configResponse.config.workingDir ?? configResponse.config.suggestedWorkingDirs?.[0],
+            urlAttempts: [],
+            preferredUrl: undefined,
+            logsTail: [],
+          });
+        }
       } catch {
-        // Config fetch failed, leave as unknown
+        // ignore
       }
     };
-    fetchConfig();
 
-    // Check if a server is already running for this project
     const checkExisting = async () => {
       try {
-        const response = await send<{ state: DevServerState }>("devServerState", {
-          path: repoPath,
-        });
-        
-        // Rust now checks both process AND port listening
+        const response = await send<{ state: DevServerState }>("devServerState", { path: repoPath });
         if (response.state.running && response.state.port) {
           setStatus("connected");
           setPort(response.state.port);
+          setPreferredUrl(response.state.diagnostic?.preferredUrl ?? `http://localhost:${response.state.port}`);
           onPortChange?.(response.state.port);
         }
       } catch {
-        // No server running, stay disconnected
+        // ignore
       }
     };
 
-    checkExisting();
+    void fetchConfig();
+    void checkExisting();
 
-    return () => {
-      clearPolling();
-    };
-  }, [repoPath, daemonState.connection, send, clearPolling, onPortChange]);
+    return () => clearPolling();
+  }, [clearPolling, daemonState.connection, onMonorepoChange, onPortChange, repoPath, send]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      clearPolling();
-    };
-  }, [clearPolling]);
+  useEffect(() => () => clearPolling(), [clearPolling]);
 
   const startPolling = useCallback((targetPort: number, targetRepoPath: string) => {
     clearPolling();
-    
-    // Set 30 second timeout
+
     timeoutRef.current = setTimeout(() => {
       clearPolling();
+      const timeoutDiagnostic: DevServerDiagnostic = {
+        reasonCode: "STARTUP_TIMEOUT",
+        message: "Server did not start within 30 seconds.",
+        expectedPort: targetPort,
+        observedPort: undefined,
+        command: connectSnapshotRef.current.command,
+        cwd: connectSnapshotRef.current.cwd,
+        suggestedCwd: agentsConfig?.workingDir ?? agentsConfig?.suggestedWorkingDirs?.[0],
+        urlAttempts: [`http://localhost:${targetPort}`, `https://localhost:${targetPort}`],
+        preferredUrl: undefined,
+        logsTail: [],
+      };
+      setDiagnostic(timeoutDiagnostic);
       setStatus("error");
-      setErrorMessage("Server start timeout (30s)");
+      setErrorMessage(timeoutDiagnostic.message);
+      trackEvent("connect_failure_reason", { reasonCode: timeoutDiagnostic.reasonCode });
     }, 30000);
 
-    // Poll daemon's devServerState every 1 second
     pollingRef.current = setInterval(async () => {
       try {
-        const response = await send<{ state: DevServerState }>("devServerState", {
-          path: targetRepoPath,
-        });
-        
+        const response = await send<{ state: DevServerState }>("devServerState", { path: targetRepoPath });
         if (response.state.running && response.state.port) {
-          // Backend already verified port is listening via TCP check
           clearPolling();
           setStatus("connected");
           setPort(response.state.port);
+          setDiagnostic(null);
+          setErrorMessage(null);
+          setPreferredUrl(response.state.diagnostic?.preferredUrl ?? `http://localhost:${response.state.port}`);
           onPortChange?.(response.state.port);
+          trackEvent("retry_success", { port: response.state.port });
+          return;
+        }
+
+        if (response.state.diagnostic) {
+          clearPolling();
+          setDiagnostic(response.state.diagnostic);
+          setStatus("error");
+          setErrorMessage(response.state.diagnostic.message);
+          trackEvent("connect_failure_reason", { reasonCode: response.state.diagnostic.reasonCode });
         }
       } catch {
-        // Daemon error, continue polling
+        // ignore while polling
       }
     }, 1000);
-  }, [clearPolling, onPortChange, send]);
+  }, [agentsConfig?.suggestedWorkingDirs, agentsConfig?.workingDir, clearPolling, onPortChange, send, trackEvent]);
 
-  const handleConnect = async () => {
-    if (!repoPath || daemonState.connection !== "connected") return;
+  const handleConnect = useCallback(async () => {
+    if (!repoPath || daemonState.connection !== "connected") {
+      return;
+    }
 
     setStatus("connecting");
+    setConnectStage("Reading project settings...");
+    setDiagnostic(null);
     setErrorMessage(null);
+    trackEvent("connect_attempt");
 
     try {
-      // 1. Read agents config to get port
-      const configResponse = await send<{ config: AgentsConfig }>("readAgentsConfig", {
-        repoPath,
-      });
+      const configResponse = await send<{ config: AgentsConfig }>("readAgentsConfig", { repoPath });
+      const config = configResponse.config;
+      setAgentsConfig(config);
 
-      let targetPort = configResponse.config.port;
-      let devCommand = configResponse.config.devCommand;
-      let devArgs = configResponse.config.devArgs;
+      let targetPort = config.port;
+      let devCommand = config.devCommand;
+      let devArgs = config.devArgs;
+      let workingDir = config.workingDir;
 
-      // If no port found, request port prompt
-      if (!targetPort) {
-        // Try to detect from package.json
-        const detectResponse = await send<{ config: DevServerConfig | null }>("devServerDetect", {
-          path: repoPath,
-        });
-        
-        if (detectResponse.config?.port) {
-          targetPort = detectResponse.config.port;
-          devCommand = detectResponse.config.command;
-          devArgs = detectResponse.config.args;
-        } else {
-          // Show port prompt modal
+      if (!targetPort || !devCommand || !devArgs?.length) {
+        const detectPath = workingDir ? (workingDir.startsWith("/") ? workingDir : `${repoPath}/${workingDir}`) : repoPath;
+        setConnectStage("Detecting dev script...");
+        const detectResponse = await send<{ config: DevServerConfig | null }>("devServerDetect", { path: detectPath });
+
+        if (detectResponse.config) {
+          targetPort = targetPort ?? detectResponse.config.port;
+          devCommand = devCommand ?? detectResponse.config.command;
+          devArgs = devArgs ?? detectResponse.config.args;
+          workingDir = detectResponse.config.workingDir ?? workingDir;
+        }
+
+        if (!targetPort) {
           setStatus("disconnected");
-          onRequestPortPrompt?.();
+          onRequestPortPrompt?.(config.isMonorepo);
           return;
         }
       }
 
-      // 2. Kill any existing process on the port and clean up lock files
+      connectSnapshotRef.current = {
+        command: devCommand ? `${devCommand} ${(devArgs || []).join(" ")}`.trim() : "<unknown>",
+        cwd: workingDir ? (workingDir.startsWith("/") ? workingDir : `${repoPath}/${workingDir}`) : repoPath,
+        port: targetPort,
+      };
+
+      setConnectStage("Starting dev server...");
       await send("killPort", { port: targetPort });
       await send("cleanupDevLocks", { path: repoPath });
 
-      // 3. Start dev server
       await send("devServerStart", {
         path: repoPath,
         config: {
-          command: devCommand || "bun",
-          args: devArgs || ["run", "dev"],
+          command: devCommand ?? "",
+          args: devArgs ?? [],
           port: targetPort,
+          workingDir,
         },
       });
 
-      // 4. Start polling with 30s timeout
+      setConnectStage("Checking localhost reachability...");
       startPolling(targetPort, repoPath);
-
-      // Set timeout for connection (use ref to check current status)
-      timeoutRef.current = setTimeout(() => {
-        if (statusRef.current === "connecting") {
-          setStatus("error");
-          setErrorMessage("Server did not start within 30 seconds");
-          toast.error("Dev server timeout", {
-            description: "Server did not start within 30 seconds",
-            duration: 5000,
-          });
-          clearPolling();
-        }
-      }, 30000);
-
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : "Failed to connect";
-      setStatus("error");
-      setErrorMessage(errorMsg);
-      toast.error("Dev server failed", {
-        description: errorMsg,
-        duration: 5000,
-      });
-    }
-  };
+      const backendDiagnostic = parseDiagnostic(error);
+      const fallback = error instanceof Error ? error.message : "Failed to connect";
+      const nextDiagnostic: DevServerDiagnostic = backendDiagnostic ?? {
+        reasonCode: "COMMAND_FAILED",
+        message: fallback,
+        expectedPort: connectSnapshotRef.current.port,
+        observedPort: undefined,
+        command: connectSnapshotRef.current.command,
+        cwd: connectSnapshotRef.current.cwd,
+        suggestedCwd: agentsConfig?.workingDir ?? agentsConfig?.suggestedWorkingDirs?.[0],
+        urlAttempts: connectSnapshotRef.current.port ? [`http://localhost:${connectSnapshotRef.current.port}`] : [],
+        preferredUrl: undefined,
+        logsTail: [],
+      };
 
-  const handleRestart = async () => {
-    if (!repoPath || !port || daemonState.connection !== "connected") return;
+      setDiagnostic(nextDiagnostic);
+      setStatus("error");
+      setErrorMessage(nextDiagnostic.message);
+      trackEvent("connect_failure_reason", { reasonCode: nextDiagnostic.reasonCode });
+      toast.error("Dev server failed", { description: nextDiagnostic.message, duration: 5000 });
+    }
+  }, [agentsConfig, daemonState.connection, onRequestPortPrompt, parseDiagnostic, repoPath, send, startPolling, trackEvent]);
+
+  const handleRestart = useCallback(async () => {
+    if (!repoPath || !port || daemonState.connection !== "connected") {
+      return;
+    }
 
     setStatus("restarting");
+    setDiagnostic(null);
     setErrorMessage(null);
 
     try {
-      // 1. Stop the current server
       await send("devServerStop", { path: repoPath });
-
-      // 2. Kill the port and clean up lock files
       await send("killPort", { port });
       await send("cleanupDevLocks", { path: repoPath });
 
-      // 3. Get config and restart
-      const configResponse = await send<{ config: AgentsConfig }>("readAgentsConfig", {
-        repoPath,
-      });
+      const configResponse = await send<{ config: AgentsConfig }>("readAgentsConfig", { repoPath });
+      const config = configResponse.config;
+      setAgentsConfig(config);
 
       await send("devServerStart", {
         path: repoPath,
         config: {
-          command: configResponse.config.devCommand || "bun",
-          args: configResponse.config.devArgs || ["run", "dev"],
+          command: config.devCommand ?? "",
+          args: config.devArgs ?? [],
           port,
+          workingDir: config.workingDir,
         },
       });
 
-      // 4. Start polling
       startPolling(port, repoPath);
-
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : "Failed to restart";
+      const backendDiagnostic = parseDiagnostic(error);
+      const message = backendDiagnostic?.message || (error instanceof Error ? error.message : "Failed to restart");
+      setDiagnostic(backendDiagnostic);
       setStatus("error");
-      setErrorMessage(errorMsg);
-      toast.error("Dev server restart failed", {
-        description: errorMsg,
-        duration: 5000,
-      });
+      setErrorMessage(message);
+      toast.error("Dev server restart failed", { description: message, duration: 5000 });
     }
-  };
+  }, [daemonState.connection, parseDiagnostic, port, repoPath, send, startPolling]);
 
-  const handleDisconnect = async () => {
-    if (!repoPath || daemonState.connection !== "connected") return;
+  const handleDisconnect = useCallback(async () => {
+    if (!repoPath || daemonState.connection !== "connected") {
+      return;
+    }
 
     try {
       await send("devServerStop", { path: repoPath });
@@ -298,59 +399,77 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
         await send("killPort", { port });
       }
     } catch {
-      // Silent fail
+      // ignore
     }
 
     clearPolling();
     setStatus("disconnected");
     setPort(null);
     onPortChange?.(null);
-  };
+  }, [clearPolling, daemonState.connection, onPortChange, port, repoPath, send]);
 
-  // Don't render if daemon not connected
+  const handleOpenBrowser = useCallback(async () => {
+    if (!port) {
+      return;
+    }
+    const url = preferredUrl || diagnostic?.preferredUrl || `http://localhost:${port}`;
+    await send("openBrowser", { url });
+  }, [diagnostic?.preferredUrl, port, preferredUrl, send]);
+
+  const handleCopyPrompt = useCallback(async () => {
+    const prompt = buildAiPrompt(diagnostic);
+    await navigator.clipboard.writeText(prompt);
+    trackEvent("action_clicked", { action: "copy_ai_prompt", reasonCode: diagnostic?.reasonCode });
+    toast.success("Troubleshooting prompt copied");
+  }, [buildAiPrompt, diagnostic, trackEvent]);
+
   if (daemonState.connection !== "connected" || !repoPath) {
     return null;
   }
 
-  // Disconnected state
   if (status === "disconnected") {
     return (
-      <div className="flex items-center gap-1">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="flex items-center gap-1 px-2 py-1 text-sm bg-muted text-muted-foreground rounded-md font-mono hover:bg-muted/80 transition-colors"
-            >
-              :{detectedPort ?? "????"}
-              <ChevronDown className="w-3 h-3" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuItem onClick={() => onRequestPortPrompt?.()}>
-              <Settings className="w-4 h-4 mr-2" />
-              Edit port...
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <Button variant="destructive" size="sm" onClick={handleConnect}>
-          Connect
-        </Button>
+      <div className="flex flex-col items-end gap-1">
+        {!agentsConfig?.previewSuitable && agentsConfig?.suitabilityReason && (
+          <div className="text-[11px] px-2 py-1 rounded bg-yellow-500/15 text-yellow-700 max-w-[340px] truncate" title={agentsConfig.suitabilityReason}>
+            Not previewable? {agentsConfig.suitabilityReason}
+          </div>
+        )}
+        <div className="flex items-center gap-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-1 px-2 py-1 text-sm bg-muted text-muted-foreground rounded-md font-mono hover:bg-muted/80 transition-colors"
+              >
+                :{detectedPort ?? "????"}
+                <ChevronDown className="w-3 h-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={() => onRequestPortPrompt?.(isMonorepo)}>
+                <Settings className="w-4 h-4 mr-2" />
+                Edit port...
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button variant="destructive" size="sm" onClick={handleConnect}>
+            Connect
+          </Button>
+        </div>
       </div>
     );
   }
 
-  // Connecting state
   if (status === "connecting") {
     return (
       <div className="flex items-center gap-1.5 px-3 py-1 text-sm bg-yellow-500 text-white rounded-md">
         <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        Connecting...
+        {connectStage}
       </div>
     );
   }
 
-  // Restarting state
   if (status === "restarting") {
     return (
       <div className="flex items-center gap-1.5 px-3 py-1 text-sm bg-yellow-500 text-white rounded-md">
@@ -360,13 +479,6 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     );
   }
 
-  const handleOpenBrowser = async () => {
-    if (port) {
-      await send("openBrowser", { url: `http://localhost:${port}` });
-    }
-  };
-
-  // Connected state
   if (status === "connected") {
     return (
       <div className="flex items-center gap-1">
@@ -394,50 +506,53 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
               <Globe className="w-4 h-4 mr-2" />
               Open in browser
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onRequestPortPrompt?.()}>
+            <DropdownMenuItem onClick={() => onRequestPortPrompt?.(isMonorepo)}>
               <Settings className="w-4 h-4 mr-2" />
               Edit port...
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={handleRestart}
-          title="Restart server"
-        >
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleRestart} title="Restart server">
           <RefreshCw className="w-3.5 h-3.5" />
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 hover:text-destructive"
-          onClick={handleDisconnect}
-          title="Stop server"
-        >
+        <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" onClick={handleDisconnect} title="Stop server">
           <X className="w-3.5 h-3.5" />
         </Button>
       </div>
     );
   }
 
-  // Error state
   if (status === "error") {
+    const title = diagnostic ? reasonTitle(diagnostic.reasonCode) : "Failed";
+    const steps = diagnostic ? reasonSteps(diagnostic.reasonCode) : [];
+
     return (
-      <div className="flex items-center gap-1.5" title={errorMessage || undefined}>
-        <div className="flex items-center gap-1.5 px-2 py-1 text-sm text-destructive">
+      <div className="flex items-start gap-2" title={errorMessage || undefined}>
+        <div className="flex items-center gap-1.5 px-2 py-1 text-sm text-destructive shrink-0">
           <AlertTriangle className="w-3.5 h-3.5" />
-          Failed
+          {title}
         </div>
-        {errorMessage && (
-          <span className="text-xs text-destructive/80 truncate max-w-[220px]">
-            {errorMessage}
-          </span>
-        )}
-        <Button variant="ghost" size="sm" className="text-destructive" onClick={handleConnect}>
-          Retry
-        </Button>
+        <div className="flex flex-col gap-1 max-w-[360px]">
+          {errorMessage && <span className="text-xs text-destructive/80">{errorMessage}</span>}
+          {steps.length > 0 && (
+            <ol className="text-[11px] text-muted-foreground list-decimal pl-4 space-y-0.5">
+              {steps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+          )}
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" className="text-destructive" onClick={handleConnect}>
+              Retry
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => onRequestPortPrompt?.(isMonorepo)}>
+              Edit settings
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleCopyPrompt}>
+              Copy AI prompt
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }

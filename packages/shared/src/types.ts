@@ -273,12 +273,48 @@ export interface DevServerConfig {
   command: string;
   args: string[];
   port?: number;
+  workingDir?: string;
+}
+
+export type DevServerReasonCode =
+  | "MONOREPO_WRONG_CWD"
+  | "PORT_MISMATCH"
+  | "STARTUP_TIMEOUT"
+  | "COMMAND_FAILED"
+  | "PROTOCOL_MISMATCH"
+  | "NOT_PREVIEWABLE";
+
+export interface DevServerDiagnostic {
+  reasonCode: DevServerReasonCode;
+  message: string;
+  expectedPort?: number;
+  observedPort?: number;
+  command?: string;
+  cwd?: string;
+  suggestedCwd?: string;
+  urlAttempts: string[];
+  preferredUrl?: string;
+  logsTail: string[];
 }
 
 export interface DevServerState {
   running: boolean;
   port?: number;
   logs: string[];
+  diagnostic?: DevServerDiagnostic;
+}
+
+export interface AgentsConfig {
+  port?: number;
+  devCommand?: string;
+  devArgs?: string[];
+  workingDir?: string;
+  suggestedWorkingDirs: string[];
+  found: boolean;
+  filePath?: string;
+  isMonorepo: boolean;
+  previewSuitable: boolean;
+  suitabilityReason?: string;
 }
 
 // Stash

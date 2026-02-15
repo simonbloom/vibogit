@@ -2,7 +2,7 @@ use crate::git::{self, Commit, FileDiff, GitError, ProjectState, SaveResult, Shi
 use crate::watcher;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::process::{Command, Child, Stdio};
 use std::io::{BufRead, BufReader};
@@ -1204,12 +1204,378 @@ fn base64_encode(data: &[u8]) -> String {
 
 // Dev Server Commands
 
+const DIAGNOSTIC_PREFIX: &str = "DEV_SERVER_DIAGNOSTIC::";
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum DevServerReasonCode {
+    MonorepoWrongCwd,
+    PortMismatch,
+    StartupTimeout,
+    CommandFailed,
+    ProtocolMismatch,
+    NotPreviewable,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DevServerDiagnostic {
+    pub reason_code: DevServerReasonCode,
+    pub message: String,
+    pub expected_port: Option<u16>,
+    pub observed_port: Option<u16>,
+    pub command: Option<String>,
+    pub cwd: Option<String>,
+    pub suggested_cwd: Option<String>,
+    pub url_attempts: Vec<String>,
+    pub preferred_url: Option<String>,
+    pub logs_tail: Vec<String>,
+}
+
+fn diagnostic_error(diagnostic: DevServerDiagnostic) -> String {
+    match serde_json::to_string(&diagnostic) {
+        Ok(serialized) => format!("{}{}", DIAGNOSTIC_PREFIX, serialized),
+        Err(_) => diagnostic.message,
+    }
+}
+
+fn parse_command_line(command: &str) -> Option<(String, Vec<String>)> {
+    let parts: Vec<&str> = command.split_whitespace().collect();
+    if parts.is_empty() {
+        return None;
+    }
+    Some((
+        parts[0].to_string(),
+        parts[1..].iter().map(|s| s.to_string()).collect(),
+    ))
+}
+
+fn default_dev_args_for_manager(manager: &str) -> Vec<String> {
+    if manager == "yarn" {
+        vec!["dev".to_string()]
+    } else {
+        vec!["run".to_string(), "dev".to_string()]
+    }
+}
+
+fn normalize_package_manager(raw: &str) -> Option<String> {
+    let pm = raw.to_lowercase();
+    if pm.starts_with("pnpm") {
+        Some("pnpm".to_string())
+    } else if pm.starts_with("npm") {
+        Some("npm".to_string())
+    } else if pm.starts_with("yarn") {
+        Some("yarn".to_string())
+    } else if pm.starts_with("bun") {
+        Some("bun".to_string())
+    } else {
+        None
+    }
+}
+
+fn detect_port_from_text(line: &str) -> Option<u16> {
+    let mut current = String::new();
+    for c in line.chars() {
+        if c.is_ascii_digit() {
+            current.push(c);
+        } else {
+            if current.len() >= 2 {
+                if let Ok(port) = current.parse::<u16>() {
+                    if port > 0 {
+                        return Some(port);
+                    }
+                }
+            }
+            current.clear();
+        }
+    }
+
+    if current.len() >= 2 {
+        if let Ok(port) = current.parse::<u16>() {
+            if port > 0 {
+                return Some(port);
+            }
+        }
+    }
+
+    None
+}
+
+fn detect_port_from_logs(logs: &[String]) -> Option<u16> {
+    logs.iter().rev().find_map(|line| {
+        if line.contains("localhost:")
+            || line.contains("127.0.0.1:")
+            || line.to_lowercase().contains("port")
+        {
+            detect_port_from_text(line)
+        } else {
+            None
+        }
+    })
+}
+
+fn detect_preferred_url_from_logs(logs: &[String], fallback_port: Option<u16>) -> Option<String> {
+    for line in logs.iter().rev() {
+        if let Some(idx) = line.find("http://") {
+            let candidate = line[idx..].split_whitespace().next().unwrap_or_default();
+            if !candidate.is_empty() {
+                return Some(candidate.trim_end_matches([')', '.', ',']).to_string());
+            }
+        }
+        if let Some(idx) = line.find("https://") {
+            let candidate = line[idx..].split_whitespace().next().unwrap_or_default();
+            if !candidate.is_empty() {
+                return Some(candidate.trim_end_matches([')', '.', ',']).to_string());
+            }
+        }
+    }
+
+    fallback_port.map(|port| format!("http://localhost:{}", port))
+}
+
+fn probe_port(host: &str, port: u16) -> bool {
+    use std::net::{TcpStream, ToSocketAddrs};
+    use std::time::Duration;
+
+    let endpoint = if host.contains(':') {
+        format!("[{}]:{}", host, port)
+    } else {
+        format!("{}:{}", host, port)
+    };
+
+    if let Ok(addrs) = endpoint.to_socket_addrs() {
+        for addr in addrs {
+            if TcpStream::connect_timeout(&addr, Duration::from_millis(350)).is_ok() {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+fn collect_url_attempts(port: Option<u16>) -> Vec<String> {
+    let mut attempts = Vec::new();
+    if let Some(p) = port {
+        attempts.push(format!("http://localhost:{}", p));
+        attempts.push(format!("http://127.0.0.1:{}", p));
+        attempts.push(format!("http://[::1]:{}", p));
+        attempts.push(format!("https://localhost:{}", p));
+        attempts.push(format!("https://127.0.0.1:{}", p));
+        attempts.push(format!("https://[::1]:{}", p));
+    }
+    attempts
+}
+
+fn logs_tail(logs: &[String], limit: usize) -> Vec<String> {
+    let start = logs.len().saturating_sub(limit);
+    logs[start..].to_vec()
+}
+
+fn detect_package_manager(json: &serde_json::Value) -> Option<String> {
+    json.get("packageManager")
+        .and_then(|pm| pm.as_str())
+        .and_then(normalize_package_manager)
+}
+
+fn infer_package_manager_for_path(path: &Path) -> Option<String> {
+    let mut current = Some(path.to_path_buf());
+
+    while let Some(dir) = current {
+        let package_json = dir.join("package.json");
+        if package_json.exists() {
+            if let Ok(content) = std::fs::read_to_string(&package_json) {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(manager) = detect_package_manager(&json) {
+                        return Some(manager);
+                    }
+                }
+            }
+        }
+
+        if dir.join("bun.lockb").exists() || dir.join("bun.lock").exists() {
+            return Some("bun".to_string());
+        }
+        if dir.join("pnpm-lock.yaml").exists() || dir.join("pnpm-workspace.yaml").exists() {
+            return Some("pnpm".to_string());
+        }
+        if dir.join("yarn.lock").exists() {
+            return Some("yarn".to_string());
+        }
+        if dir.join("package-lock.json").exists() || dir.join("npm-shrinkwrap.json").exists() {
+            return Some("npm".to_string());
+        }
+
+        current = dir.parent().map(|parent| parent.to_path_buf());
+    }
+
+    None
+}
+
+fn script_has_web_hint(script: &str, json: &serde_json::Value) -> bool {
+    let script_lower = script.to_lowercase();
+    if ["next", "vite", "webpack", "nuxt", "astro", "react-scripts", "svelte"].iter().any(|hint| script_lower.contains(hint)) {
+        return true;
+    }
+
+    let dependency_sections = ["dependencies", "devDependencies", "peerDependencies"];
+    dependency_sections.iter().any(|key| {
+        json.get(*key)
+            .and_then(|v| v.as_object())
+            .map(|deps| {
+                ["next", "react", "react-dom", "vite", "@vitejs/plugin-react", "svelte", "vue", "nuxt", "astro"].iter().any(|dep| deps.contains_key(*dep))
+            })
+            .unwrap_or(false)
+    })
+}
+
+fn discover_workspace_package_json(base: &Path) -> Vec<PathBuf> {
+    let mut matches = Vec::new();
+
+    let root_pkg = base.join("package.json");
+    if root_pkg.exists() {
+        matches.push(root_pkg);
+    }
+
+    for top in ["apps", "packages"] {
+        let top_path = base.join(top);
+        if !top_path.exists() {
+            continue;
+        }
+
+        if let Ok(entries) = std::fs::read_dir(&top_path) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_dir() {
+                    continue;
+                }
+
+                let package_json = path.join("package.json");
+                if package_json.exists() {
+                    matches.push(package_json);
+                }
+
+                if let Ok(inner_entries) = std::fs::read_dir(&path) {
+                    for inner in inner_entries.flatten() {
+                        let inner_path = inner.path();
+                        if !inner_path.is_dir() {
+                            continue;
+                        }
+                        let inner_pkg = inner_path.join("package.json");
+                        if inner_pkg.exists() {
+                            matches.push(inner_pkg);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    matches
+}
+
+fn infer_suitability(base: &Path) -> (bool, Option<String>, Vec<String>) {
+    let package_files = discover_workspace_package_json(base);
+    let mut suggested_dirs: Vec<String> = Vec::new();
+    let mut any_dev_script = false;
+    let mut any_web_dev_script = false;
+
+    for package_path in package_files {
+        if let Ok(content) = std::fs::read_to_string(&package_path) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                let dev_script = json
+                    .get("scripts")
+                    .and_then(|s| s.as_object())
+                    .and_then(|scripts| scripts.get("dev"))
+                    .and_then(|v| v.as_str());
+
+                if let Some(script) = dev_script {
+                    any_dev_script = true;
+                    let rel = package_path
+                        .parent()
+                        .and_then(|dir| dir.strip_prefix(base).ok())
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|| ".".to_string());
+
+                    suggested_dirs.push(rel.clone());
+
+                    if script_has_web_hint(script, &json) {
+                        any_web_dev_script = true;
+                    }
+                }
+            }
+        }
+    }
+
+    suggested_dirs.sort();
+    suggested_dirs.dedup();
+
+    if any_web_dev_script {
+        return (true, None, suggested_dirs);
+    }
+
+    if any_dev_script {
+        return (
+            false,
+            Some("Dev scripts were found, but they do not look like a localhost web preview app.".to_string()),
+            suggested_dirs,
+        );
+    }
+
+    if base.join("Cargo.toml").exists() && !base.join("package.json").exists() {
+        return (
+            false,
+            Some("This project appears to be native/backend-only and may not support localhost preview.".to_string()),
+            suggested_dirs,
+        );
+    }
+
+    (
+        false,
+        Some("No dev server script detected for a local web preview.".to_string()),
+        suggested_dirs,
+    )
+}
+
+fn extract_backtick_content(line: &str) -> Option<String> {
+    let start = line.find('`')?;
+    let end = line[start + 1..].find('`').map(|idx| start + 1 + idx)?;
+    if end > start + 1 {
+        Some(line[start + 1..end].trim().to_string())
+    } else {
+        None
+    }
+}
+
+fn extract_working_dir(line: &str) -> Option<String> {
+    let lower = line.to_lowercase();
+    let from_idx = lower.find("(from")?;
+    let raw = line[from_idx + 5..]
+        .trim()
+        .trim_start_matches(':')
+        .trim_start();
+
+    let end = raw.find(')').unwrap_or(raw.len());
+    let mut value = raw[..end].trim().to_string();
+
+    if value.starts_with('`') && value.ends_with('`') && value.len() >= 2 {
+        value = value[1..value.len() - 1].to_string();
+    }
+
+    if value.is_empty() {
+        None
+    } else {
+        Some(value)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DevServerConfig {
     pub command: String,
     pub args: Vec<String>,
     pub port: Option<u16>,
+    pub working_dir: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -1218,12 +1584,15 @@ pub struct DevServerState {
     pub running: bool,
     pub port: Option<u16>,
     pub logs: Vec<String>,
+    pub diagnostic: Option<DevServerDiagnostic>,
 }
 
 pub struct DevServerProcess {
     pub child: Option<Child>,
     pub port: Option<u16>,
     pub logs: Arc<Mutex<Vec<String>>>,
+    pub command_line: String,
+    pub working_dir: String,
 }
 
 pub struct DevServerManager {
@@ -1248,10 +1617,8 @@ pub async fn dev_server_detect(path: String) -> Result<Option<DevServerConfig>, 
 
     let content = std::fs::read_to_string(&package_json).map_err(|e| e.to_string())?;
     let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-    let package_manager = json
-        .get("packageManager")
-        .and_then(|pm| pm.as_str())
-        .map(|pm| pm.to_lowercase());
+    let package_manager = infer_package_manager_for_path(Path::new(&path))
+        .or_else(|| detect_package_manager(&json));
 
     // Look for dev script
     if let Some(scripts) = json.get("scripts").and_then(|s| s.as_object()) {
@@ -1272,26 +1639,28 @@ pub async fn dev_server_detect(path: String) -> Result<Option<DevServerConfig>, 
                         else { Some(3000) }
                     });
 
-                let command = if package_manager.as_deref().unwrap_or("").starts_with("pnpm") {
-                    "pnpm"
-                } else if package_manager.as_deref().unwrap_or("").starts_with("npm") {
-                    "npm"
-                } else if package_manager.as_deref().unwrap_or("").starts_with("yarn") {
-                    "yarn"
-                } else {
-                    "bun"
-                };
+                let manager = package_manager.ok_or_else(|| {
+                    diagnostic_error(DevServerDiagnostic {
+                        reason_code: DevServerReasonCode::CommandFailed,
+                        message: "Dev script found, but package manager could not be inferred from lockfiles or package metadata.".to_string(),
+                        expected_port: port,
+                        observed_port: None,
+                        command: Some(dev_script.to_string()),
+                        cwd: Some(path.clone()),
+                        suggested_cwd: None,
+                        url_attempts: collect_url_attempts(port),
+                        preferred_url: None,
+                        logs_tail: vec![],
+                    })
+                })?;
 
-                let args = if command == "yarn" {
-                    vec!["dev".to_string()]
-                } else {
-                    vec!["run".to_string(), "dev".to_string()]
-                };
+                let args = default_dev_args_for_manager(&manager);
 
                 return Ok(Some(DevServerConfig {
-                    command: command.to_string(),
+                    command: manager,
                     args,
                     port,
+                    working_dir: None,
                 }));
             }
         }
@@ -1319,18 +1688,64 @@ pub async fn dev_server_start(
         }
     }
 
-    let fallback_command = if config.command == "bun" { "npm" } else { "bun" };
-    let fallback_args = if fallback_command == "yarn" {
-        vec!["dev".to_string()]
+    let launch_dir = if let Some(working_dir) = &config.working_dir {
+        let candidate = PathBuf::from(working_dir);
+        let resolved = if candidate.is_absolute() {
+            candidate
+        } else {
+            PathBuf::from(&path).join(candidate)
+        };
+
+        if !resolved.exists() || !resolved.is_dir() {
+            return Err(diagnostic_error(DevServerDiagnostic {
+                reason_code: DevServerReasonCode::MonorepoWrongCwd,
+                message: format!("Working directory '{}' was not found.", resolved.display()),
+                expected_port: config.port,
+                observed_port: None,
+                command: Some(format!("{} {}", config.command, config.args.join(" "))),
+                cwd: Some(path.clone()),
+                suggested_cwd: Some(working_dir.clone()),
+                url_attempts: collect_url_attempts(config.port),
+                preferred_url: None,
+                logs_tail: vec![],
+            }));
+        }
+
+        resolved
     } else {
-        vec!["run".to_string(), "dev".to_string()]
+        PathBuf::from(&path)
+    };
+
+    let command_name = if config.command.trim().is_empty() {
+        infer_package_manager_for_path(&launch_dir).ok_or_else(|| {
+            diagnostic_error(DevServerDiagnostic {
+                reason_code: DevServerReasonCode::CommandFailed,
+                message: "Dev command not provided and package manager could not be inferred from lockfiles or package metadata.".to_string(),
+                expected_port: config.port,
+                observed_port: None,
+                command: None,
+                cwd: Some(launch_dir.to_string_lossy().to_string()),
+                suggested_cwd: config.working_dir.clone(),
+                url_attempts: collect_url_attempts(config.port),
+                preferred_url: None,
+                logs_tail: vec![],
+            })
+        })?
+    } else {
+        config.command.clone()
+    };
+
+    let command_args = if config.args.is_empty() {
+        default_dev_args_for_manager(&command_name)
+    } else {
+        config.args.clone()
     };
 
     // Start new server
-    let mut command = Command::new(&config.command);
+    let mut command = Command::new(&command_name);
     command
-        .args(&config.args)
-        .current_dir(&path)
+        .args(&command_args)
+        .current_dir(&launch_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -1349,42 +1764,26 @@ pub async fn dev_server_start(
         command.env("PATH", merged_path);
     }
 
-    let mut child = match command.spawn() {
-        Ok(child) => child,
-        Err(err) => {
-            let mut fallback = Command::new(fallback_command);
-            fallback
-                .args(&fallback_args)
-                .current_dir(&path)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
-
-            // Set PORT env var for fallback too
-            if let Some(port) = config.port {
-                fallback.env("PORT", port.to_string());
-            }
-
-            #[cfg(target_os = "macos")]
-            {
-                let default_path = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin";
-                let merged_path = match std::env::var("PATH") {
-                    Ok(path) => format!("{}:{}", path, default_path),
-                    Err(_) => default_path.to_string(),
-                };
-                fallback.env("PATH", merged_path);
-            }
-
-            fallback.spawn().map_err(|fallback_err| {
-                format!(
-                    "Failed to start dev server with '{}' ({err}). Fallback '{}' failed: {fallback_err}",
-                    config.command, fallback_command
-                )
-            })?
-        }
-    };
+    let mut child = command.spawn().map_err(|err| {
+        diagnostic_error(DevServerDiagnostic {
+            reason_code: DevServerReasonCode::CommandFailed,
+            message: format!(
+                "Failed to start dev server with '{}': {err}",
+                command_name
+            ),
+            expected_port: config.port,
+            observed_port: None,
+            command: Some(format!("{} {}", command_name, command_args.join(" "))),
+            cwd: Some(launch_dir.to_string_lossy().to_string()),
+            suggested_cwd: config.working_dir.clone(),
+            url_attempts: collect_url_attempts(config.port),
+            preferred_url: None,
+            logs_tail: vec![],
+        })
+    })?;
 
     // Create shared log storage
-    let started_command = format!("{} {}", config.command, config.args.join(" "));
+    let started_command = format!("{} {}", command_name, command_args.join(" "));
     let logs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![
         format!("[{}] > {}", chrono::Local::now().format("%H:%M:%S"), started_command)
     ]));
@@ -1427,6 +1826,8 @@ pub async fn dev_server_start(
         child: Some(child),
         port: config.port,
         logs,
+        command_line: started_command,
+        working_dir: launch_dir.to_string_lossy().to_string(),
     });
 
     Ok(())
@@ -1467,43 +1868,115 @@ pub async fn dev_server_state(
     if let Some(server) = servers.get(&path) {
         let process_alive = server.child.as_ref()
             .map(|c| {
-                // Check if process is still running
                 let mut cmd = Command::new("kill");
                 cmd.args(["-0", &c.id().to_string()]);
                 cmd.output().map(|o| o.status.success()).unwrap_or(false)
             })
             .unwrap_or(false);
 
-        // Also check if the port is actually listening (TCP connect test)
-        let port_listening = server.port
-            .map(|p| {
-                use std::net::TcpStream;
-                use std::time::Duration;
-                TcpStream::connect_timeout(
-                    &format!("127.0.0.1:{}", p).parse().unwrap(),
-                    Duration::from_millis(500)
-                ).is_ok()
-            })
-            .unwrap_or(false);
-
-        // Only report running if BOTH process is alive AND port is listening
-        let running = process_alive && port_listening;
-
-        // Get logs from Arc<Mutex<Vec<String>>>
         let logs = server.logs.lock()
             .map(|l| l.clone())
             .unwrap_or_default();
 
+        let expected_port = server.port;
+        let observed_port = detect_port_from_logs(&logs);
+
+        let expected_listening = expected_port.map(|port| {
+            probe_port("localhost", port) || probe_port("127.0.0.1", port) || probe_port("::1", port)
+        }).unwrap_or(false);
+
+        let observed_listening = observed_port
+            .filter(|port| Some(*port) != expected_port)
+            .map(|port| probe_port("localhost", port) || probe_port("127.0.0.1", port) || probe_port("::1", port))
+            .unwrap_or(false);
+
+        let active_port = if expected_listening {
+            expected_port
+        } else if observed_listening {
+            observed_port
+        } else {
+            None
+        };
+
+        let mut diagnostic: Option<DevServerDiagnostic> = None;
+
+        if process_alive {
+            if !expected_listening {
+                if let (Some(expected), Some(observed)) = (expected_port, observed_port) {
+                    if expected != observed && observed_listening {
+                        diagnostic = Some(DevServerDiagnostic {
+                            reason_code: DevServerReasonCode::PortMismatch,
+                            message: format!("Expected port {}, but app appears to be listening on {}.", expected, observed),
+                            expected_port: Some(expected),
+                            observed_port: Some(observed),
+                            command: Some(server.command_line.clone()),
+                            cwd: Some(server.working_dir.clone()),
+                            suggested_cwd: None,
+                            url_attempts: collect_url_attempts(Some(expected)),
+                            preferred_url: detect_preferred_url_from_logs(&logs, Some(observed)),
+                            logs_tail: logs_tail(&logs, 40),
+                        });
+                    }
+                }
+
+                if diagnostic.is_none() {
+                    let lower_logs = logs.join("\n").to_lowercase();
+                    let reason_code = if lower_logs.contains("https://") {
+                        DevServerReasonCode::ProtocolMismatch
+                    } else {
+                        DevServerReasonCode::StartupTimeout
+                    };
+
+                    diagnostic = Some(DevServerDiagnostic {
+                        reason_code,
+                        message: "Process is running but localhost preview is not reachable yet.".to_string(),
+                        expected_port,
+                        observed_port,
+                        command: Some(server.command_line.clone()),
+                        cwd: Some(server.working_dir.clone()),
+                        suggested_cwd: None,
+                        url_attempts: collect_url_attempts(expected_port.or(observed_port)),
+                        preferred_url: detect_preferred_url_from_logs(&logs, observed_port.or(expected_port)),
+                        logs_tail: logs_tail(&logs, 40),
+                    });
+                }
+            }
+        } else if !logs.is_empty() {
+            let lower_logs = logs.join("\n").to_lowercase();
+            if lower_logs.contains("not found")
+                || lower_logs.contains("enoent")
+                || lower_logs.contains("failed")
+                || lower_logs.contains("error")
+            {
+                diagnostic = Some(DevServerDiagnostic {
+                    reason_code: DevServerReasonCode::CommandFailed,
+                    message: "Dev command exited before the preview became reachable.".to_string(),
+                    expected_port,
+                    observed_port,
+                    command: Some(server.command_line.clone()),
+                    cwd: Some(server.working_dir.clone()),
+                    suggested_cwd: None,
+                    url_attempts: collect_url_attempts(expected_port.or(observed_port)),
+                    preferred_url: detect_preferred_url_from_logs(&logs, observed_port.or(expected_port)),
+                    logs_tail: logs_tail(&logs, 40),
+                });
+            }
+        }
+
+        let running = process_alive && active_port.is_some();
+
         Ok(DevServerState {
             running,
-            port: server.port,
+            port: active_port.or(expected_port),
             logs,
+            diagnostic,
         })
     } else {
         Ok(DevServerState {
             running: false,
             port: None,
             logs: vec![],
+            diagnostic: None,
         })
     }
 }
@@ -1556,9 +2029,13 @@ pub struct AgentsConfig {
     pub port: Option<u16>,
     pub dev_command: Option<String>,
     pub dev_args: Option<Vec<String>>,
+    pub working_dir: Option<String>,
+    pub suggested_working_dirs: Vec<String>,
     pub found: bool,
     pub file_path: Option<String>,
     pub is_monorepo: bool,
+    pub preview_suitable: bool,
+    pub suitability_reason: Option<String>,
 }
 
 #[tauri::command]
@@ -1571,6 +2048,8 @@ pub async fn read_agents_config(repo_path: String) -> Result<AgentsConfig, Strin
         || base.join("nx.json").exists()
         || base.join("lerna.json").exists()
         || (base.join("pnpm-workspace.yaml").exists() && base.join("packages").exists());
+
+    let (preview_suitable, suitability_reason, mut suggested_working_dirs) = infer_suitability(&base);
 
     for agents_path in &agents_paths {
         let full_path = base.join(agents_path);
@@ -1596,33 +2075,66 @@ pub async fn read_agents_config(repo_path: String) -> Result<AgentsConfig, Strin
                         .ok()
                 });
 
-            // Parse for command (look for "Command": `bun run dev -- -p 7777`)
-            let (dev_command, dev_args) = content.lines()
-                .find(|l| l.to_lowercase().contains("command") && l.contains('`'))
-                .and_then(|l| {
-                    // Extract content between backticks
-                    let start = l.find('`')?;
-                    let end = l.rfind('`')?;
-                    if end > start + 1 {
-                        let cmd_str = &l[start + 1..end];
-                        let parts: Vec<&str> = cmd_str.split_whitespace().collect();
-                        if !parts.is_empty() {
-                            let command = parts[0].to_string();
-                            let args: Vec<String> = parts[1..].iter().map(|s| s.to_string()).collect();
-                            return Some((Some(command), Some(args)));
-                        }
+            let command_line = content.lines()
+                .find_map(|line| {
+                    let lower = line.to_lowercase();
+                    if (lower.contains("command") || lower.contains("run dev")) && line.contains('`') {
+                        extract_backtick_content(line)
+                    } else {
+                        None
                     }
-                    None
+                });
+
+            let working_dir = content.lines()
+                .find_map(extract_working_dir);
+
+            let resolved_work_dir = working_dir
+                .as_ref()
+                .map(|dir| {
+                    let candidate = PathBuf::from(dir);
+                    if candidate.is_absolute() {
+                        candidate
+                    } else {
+                        base.join(candidate)
+                    }
+                })
+                .filter(|candidate| candidate.exists() && candidate.is_dir());
+
+            let inferred_manager = resolved_work_dir
+                .as_deref()
+                .and_then(infer_package_manager_for_path)
+                .or_else(|| infer_package_manager_for_path(&base));
+
+            let (dev_command, dev_args) = command_line
+                .as_deref()
+                .and_then(parse_command_line)
+                .map(|(command, args)| (Some(command), Some(args)))
+                .or_else(|| {
+                    inferred_manager
+                        .as_ref()
+                        .map(|manager| (Some(manager.clone()), Some(default_dev_args_for_manager(manager))))
                 })
                 .unwrap_or((None, None));
+
+            if let Some(dir) = &working_dir {
+                if !suggested_working_dirs.contains(dir) {
+                    suggested_working_dirs.push(dir.clone());
+                }
+            }
+            suggested_working_dirs.sort();
+            suggested_working_dirs.dedup();
 
             return Ok(AgentsConfig {
                 port,
                 dev_command,
                 dev_args,
+                working_dir,
+                suggested_working_dirs,
                 found: true,
                 file_path: Some(full_path.to_string_lossy().to_string()),
                 is_monorepo,
+                preview_suitable,
+                suitability_reason,
             });
         }
     }
@@ -1631,9 +2143,13 @@ pub async fn read_agents_config(repo_path: String) -> Result<AgentsConfig, Strin
         port: None,
         dev_command: None,
         dev_args: None,
+        working_dir: None,
+        suggested_working_dirs,
         found: false,
         file_path: None,
         is_monorepo,
+        preview_suitable,
+        suitability_reason,
     })
 }
 
