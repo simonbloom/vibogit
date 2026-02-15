@@ -7,7 +7,6 @@ const STORAGE_KEY = "vibogit-recent-projects";
 const MAX_RECENT = 10;
 
 // Local storage based implementation
-// Can be replaced with Convex when configured
 export function useRecentProjects() {
   const [projects, setProjects] = useState<RecentProject[]>([]);
   const [isLoading, setIsLoading] = useState(true);

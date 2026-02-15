@@ -14,7 +14,7 @@ import { AgentationWrapper } from "@vibogit/ui/components/agentation-wrapper";
 
 export const metadata: Metadata = {
   title: "ViboGit",
-  description: "Web-based Git client with local daemon",
+  description: "Desktop Git client powered by Tauri",
   icons: {
     icon: "/favicon.svg",
   },

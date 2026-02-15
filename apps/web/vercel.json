@@ -1,9 +1,0 @@
-{
-  "installCommand": "cd ../.. && bun install",
-  "buildCommand": "cd ../.. && bun run build --filter=@vibogit/web",
-  "build": {
-    "env": {
-      "NEXT_OUTPUT_MODE": "export"
-    }
-  }
-}

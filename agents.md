@@ -11,13 +11,10 @@
 - Run dev: `bun run dev` (from `apps/desktop/frontend`)
 - Build: `bun run build`
 - Typecheck: `bun run typecheck`
-- Daemon: `bun run dev` (from `apps/daemon`, runs on ws://localhost:9111)
 
 ## Monorepo Structure
-- `/apps/web` - Next.js 15 web application (Vercel deployment)
 - `/apps/desktop/frontend` - Next.js 15 frontend (static export for Tauri)
 - `/apps/desktop/src-tauri` - Tauri 2.x Rust backend
-- `/apps/daemon` - Bun-based local daemon (WebSocket server on port 9111)
 - `/packages/shared` - Shared TypeScript types
 - `/packages/ui` - Shared UI components, lib, and styles (imported as `@vibogit/ui`)
 
@@ -74,18 +71,17 @@ cd apps/desktop/frontend && bun run build && cd ../../..
 cd apps/desktop/src-tauri && cargo tauri build --bundles dmg
 ```
 
-### Architecture: Desktop vs Web
-- **Web app** (`apps/web`): connects to daemon via WebSocket. Uses daemon for all git operations.
-- **Desktop app** (`apps/desktop`): in Tauri mode, uses Rust `invoke()` for git operations (NOT the daemon). The daemon is only used as fallback in browser dev mode.
+### Architecture: Desktop
+- **Desktop app** (`apps/desktop`): uses Tauri Rust `invoke()` commands for git operations and local integrations.
 - The Rust backend (`src-tauri/src/git.rs`) has its own git implementation using the `git2` crate.
-- The frontend `tauriSend()` function in `packages/ui/src/lib/daemon-context.tsx` maps daemon message types to Tauri Rust commands.
+- The frontend command bridge in `packages/ui/src/lib/daemon-context.tsx` maps UI actions to Tauri Rust commands.
 - **Any change to Rust code (git.rs, commands.rs, etc.) requires a Rust recompile to appear in the DMG.**
 
 ### Common pitfalls
 1. **Stale Rust binary**: Cargo incremental compilation may not detect changes if fingerprints are cached. Always clean the binary.
 2. **Missing workspace links**: If `@vibogit/ui` imports fail, run `bun install` from the repo root.
 3. **Tailwind classes missing in production**: The `@config` directive in `packages/ui/src/index.css` points to `packages/ui/tailwind.config.ts` for content scanning.
-4. **`@/` path aliases**: The UI package uses `@/` aliases resolved via webpack config in `next.config.js` (desktop) and `next.config.mjs` (web). These map `@/components`, `@/lib`, `@/providers` to `packages/ui/src/`.
+4. **`@/` path aliases**: The UI package uses `@/` aliases resolved via webpack config in `apps/desktop/frontend/next.config.js`. These map `@/components`, `@/lib`, `@/providers` to `packages/ui/src/`.
 
 ### macOS Gatekeeper (unsigned app warning)
 When distributing the DMG to other machines, macOS will block the app with "Apple could not verify" warning. To bypass this, run:

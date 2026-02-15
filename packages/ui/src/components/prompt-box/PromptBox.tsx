@@ -36,8 +36,6 @@ export function PromptBox({
   maxFiles = DEFAULT_MAX_FILES,
   maxImages = DEFAULT_MAX_IMAGES,
   maxImageSize = DEFAULT_MAX_IMAGE_SIZE,
-  uploadEndpoint,
-  onImageUpload,
   imageBasePath,
   onSubmit,
   onCopy,
@@ -180,8 +178,6 @@ export function PromptBox({
   }, [state.text.length])
 
   const { uploadImage, cleanupBlobUrl } = useImageUpload({
-    uploadEndpoint,
-    onImageUpload,
     onAddImage: addImage,
     onUpdateImage: updateImage,
     getNextReferenceNumber,

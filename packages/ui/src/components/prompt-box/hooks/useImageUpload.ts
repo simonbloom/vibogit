@@ -1,10 +1,7 @@
 import { useCallback, useRef, useEffect } from 'react'
-import { isTauri } from '@/platform'
 import type { PromptImage } from '../PromptBox.types'
 
 interface UseImageUploadProps {
-  uploadEndpoint?: string
-  onImageUpload?: (file: File) => Promise<{ url: string; id: string }>
   onAddImage: (image: PromptImage, cursorPosition: number) => void
   onUpdateImage: (id: string, updates: Partial<PromptImage>) => void
   getNextReferenceNumber: () => number
@@ -12,8 +9,6 @@ interface UseImageUploadProps {
 }
 
 export function useImageUpload({
-  uploadEndpoint,
-  onImageUpload,
   onAddImage,
   onUpdateImage,
   getNextReferenceNumber,
@@ -45,96 +40,30 @@ export function useImageUpload({
 
       onAddImage(image, cursorPosition)
 
-      // In Tauri mode, skip upload -- images are local files
-      if (isTauri()) {
-        onUpdateImage(tempId, {
-          url: preview,
-          status: 'uploaded',
-          progress: 100,
-        })
-        return
-      }
-
-      try {
-        let result: { url: string; id: string }
-
-        if (onImageUpload) {
-          result = await onImageUpload(file)
-        } else if (uploadEndpoint) {
-          const formData = new FormData()
-          formData.append('file', file)
-
-          const response = await fetch(uploadEndpoint, {
-            method: 'POST',
-            body: formData,
-          })
-
-          if (!response.ok) {
-            throw new Error('Upload failed')
-          }
-
-          result = await response.json()
-        } else {
-          // No upload configured, just use local preview
-          result = { url: preview, id: tempId }
-        }
-
-        onUpdateImage(tempId, {
-          id: result.id,
-          url: result.url,
-          status: 'uploaded',
-          progress: 100,
-        })
-      } catch (error) {
-        onUpdateImage(tempId, {
-          status: 'error',
-          error: error instanceof Error ? error.message : 'Upload failed',
-        })
-      }
+      onUpdateImage(tempId, {
+        id: tempId,
+        url: preview,
+        status: 'uploaded',
+        progress: 100,
+      })
     },
-    [uploadEndpoint, onImageUpload, onAddImage, onUpdateImage, getNextReferenceNumber, getCursorPosition]
+    [onAddImage, onUpdateImage, getNextReferenceNumber, getCursorPosition]
   )
 
   const retryUpload = useCallback(
     async (image: PromptImage, file: File) => {
       onUpdateImage(image.id, { status: 'uploading', progress: 0, error: undefined })
 
-      try {
-        let result: { url: string; id: string }
-
-        if (onImageUpload) {
-          result = await onImageUpload(file)
-        } else if (uploadEndpoint) {
-          const formData = new FormData()
-          formData.append('file', file)
-
-          const response = await fetch(uploadEndpoint, {
-            method: 'POST',
-            body: formData,
-          })
-
-          if (!response.ok) {
-            throw new Error('Upload failed')
-          }
-
-          result = await response.json()
-        } else {
-          result = { url: image.preview, id: image.id }
-        }
-
-        onUpdateImage(image.id, {
-          url: result.url,
-          status: 'uploaded',
-          progress: 100,
-        })
-      } catch (error) {
-        onUpdateImage(image.id, {
-          status: 'error',
-          error: error instanceof Error ? error.message : 'Upload failed',
-        })
-      }
+      const preview = URL.createObjectURL(file)
+      blobUrlsRef.current.add(preview)
+      onUpdateImage(image.id, {
+        url: preview,
+        preview,
+        status: 'uploaded',
+        progress: 100,
+      })
     },
-    [uploadEndpoint, onImageUpload, onUpdateImage]
+    [onUpdateImage]
   )
 
   // Cleanup blob URLs on unmount

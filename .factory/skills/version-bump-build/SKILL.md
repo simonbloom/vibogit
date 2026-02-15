@@ -19,7 +19,6 @@ All of these must be updated to the new version string. Missing any one causes v
 | `apps/desktop/src-tauri/tauri.conf.json` | `"version"` | `"X.Y.Z"` |
 | `apps/desktop/src-tauri/Cargo.toml` | `version` | `"X.Y.Z"` |
 | `packages/ui/src/components/sidebar/sidebar.tsx` | Display string | `vX.Y.Z` |
-| `apps/daemon/package.json` | `"version"` | `"X.Y.Z"` |
 
 If the user gives a version like "2.2", normalize it to semver: "2.2.0".
 
@@ -30,7 +29,7 @@ The DMG includes two codebases that both must be rebuilt from clean. Skipping an
 ### Step 1: Clean all build artifacts
 
 ```bash
-cd /Users/simonbloom/windsurf/vibogit
+cd /Users/simonbloom/apps-vol11/vibogit
 
 # Frontend
 rm -rf apps/desktop/frontend/.next
@@ -49,14 +48,14 @@ rm -rf apps/desktop/src-tauri/target/release/bundle
 ### Step 2: Install dependencies
 
 ```bash
-cd /Users/simonbloom/windsurf/vibogit
+cd /Users/simonbloom/apps-vol11/vibogit
 bun install
 ```
 
 ### Step 3: Build frontend
 
 ```bash
-cd /Users/simonbloom/windsurf/vibogit/apps/desktop/frontend
+cd /Users/simonbloom/apps-vol11/vibogit/apps/desktop/frontend
 bun run build
 ```
 
@@ -65,7 +64,7 @@ Verify it exits with code 0 and the `out/` directory is created.
 ### Step 4: Build Rust + DMG
 
 ```bash
-cd /Users/simonbloom/windsurf/vibogit/apps/desktop
+cd /Users/simonbloom/apps-vol11/vibogit/apps/desktop
 node_modules/.bin/tauri build --bundles dmg
 ```
 

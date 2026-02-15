@@ -19,9 +19,13 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*", "../../../packages/ui/src/*"],
+      "@vibogit/ui": ["../../../packages/ui/src/index.ts"],
+      "@vibogit/ui/*": ["../../../packages/ui/src/*"],
+      "@vibogit/shared": ["../../../packages/shared/src/index.ts"],
+      "@vibogit/shared/*": ["../../../packages/shared/src/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "convex"]
+  "exclude": ["node_modules"]
 }

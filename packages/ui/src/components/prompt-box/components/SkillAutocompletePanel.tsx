@@ -39,7 +39,7 @@ export function SkillAutocompletePanel({
         style={{ top: position.y, left: position.x }}
       >
         <div className="px-3 py-4 text-sm text-muted-foreground text-center">
-          Connect daemon to see skills
+          Connect desktop backend to see skills
         </div>
       </div>
     )

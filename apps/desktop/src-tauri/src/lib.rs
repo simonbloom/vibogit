@@ -116,6 +116,7 @@ pub fn run() {
             commands::set_config,
             // AI commands
             commands::ai_generate_commit,
+            commands::ai_generate_pr,
             // Clipboard image commands
             commands::save_clipboard_image,
             commands::find_recent_image,

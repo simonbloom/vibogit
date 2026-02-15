@@ -2157,6 +2157,13 @@ pub struct AiCommitResponse {
     pub message: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiPrResponse {
+    pub title: String,
+    pub description: String,
+}
+
 #[tauri::command]
 pub async fn ai_generate_commit(
     diff: String,
@@ -2285,6 +2292,161 @@ pub async fn ai_generate_commit(
     }
 
     Ok(AiCommitResponse { message })
+}
+
+#[tauri::command]
+pub async fn ai_generate_pr(
+    commits: Vec<String>,
+    diff: String,
+    base_branch: String,
+    head_branch: String,
+    provider: String,
+    api_key: String,
+) -> Result<AiPrResponse, String> {
+    let commits_text = if commits.is_empty() {
+        String::from("- No recent commits available")
+    } else {
+        commits.join("\n")
+    };
+
+    let prompt = format!(
+        "Generate a pull request title and description for the following changes.\n\n\
+        Branch: {} → {}\n\n\
+        Commits:\n{}\n\n\
+        Diff summary (truncated):\n{}\n\n\
+        Output format (JSON):\n{{\n  \"title\": \"Short descriptive title (max 72 chars)\",\n  \"description\": \"Markdown description with ## Summary and ## Changes sections\"\n}}\n\n\
+        Output ONLY valid JSON, no markdown code blocks.",
+        head_branch,
+        base_branch,
+        commits_text,
+        if diff.len() > 5000 { &diff[..5000] } else { &diff }
+    );
+
+    let client = reqwest::Client::new();
+
+    let response_text = match provider.as_str() {
+        "anthropic" => {
+            let body = serde_json::json!({
+                "model": "claude-3-5-haiku-latest",
+                "max_tokens": 1000,
+                "messages": [{
+                    "role": "user",
+                    "content": prompt
+                }]
+            });
+
+            let res = client
+                .post("https://api.anthropic.com/v1/messages")
+                .header("x-api-key", &api_key)
+                .header("anthropic-version", "2023-06-01")
+                .header("content-type", "application/json")
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| format!("Request failed: {}", e))?;
+
+            let json: serde_json::Value = res
+                .json()
+                .await
+                .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+            json["content"][0]["text"]
+                .as_str()
+                .unwrap_or("")
+                .to_string()
+        }
+        "openai" => {
+            let body = serde_json::json!({
+                "model": "gpt-4o-mini",
+                "max_tokens": 1000,
+                "messages": [{
+                    "role": "user",
+                    "content": prompt
+                }]
+            });
+
+            let res = client
+                .post("https://api.openai.com/v1/chat/completions")
+                .header("Authorization", format!("Bearer {}", api_key))
+                .header("content-type", "application/json")
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| format!("Request failed: {}", e))?;
+
+            let json: serde_json::Value = res
+                .json()
+                .await
+                .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+            json["choices"][0]["message"]["content"]
+                .as_str()
+                .unwrap_or("")
+                .to_string()
+        }
+        "gemini" => {
+            let url = format!(
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={}",
+                api_key
+            );
+
+            let body = serde_json::json!({
+                "contents": [{
+                    "parts": [{"text": prompt}]
+                }],
+                "generationConfig": {
+                    "maxOutputTokens": 1000
+                }
+            });
+
+            let res = client
+                .post(&url)
+                .header("content-type", "application/json")
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| format!("Request failed: {}", e))?;
+
+            let json: serde_json::Value = res
+                .json()
+                .await
+                .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+            json["candidates"][0]["content"]["parts"][0]["text"]
+                .as_str()
+                .unwrap_or("")
+                .to_string()
+        }
+        _ => return Err(format!("Unknown provider: {}", provider)),
+    };
+
+    let cleaned = response_text
+        .replace("```json", "")
+        .replace("```", "")
+        .trim()
+        .to_string();
+
+    let fallback_title = format!("Merge {} into {}", head_branch, base_branch);
+
+    let parsed = serde_json::from_str::<serde_json::Value>(&cleaned)
+        .unwrap_or_else(|_| serde_json::json!({
+            "title": fallback_title,
+            "description": cleaned,
+        }));
+
+    let title = parsed
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Generated PR")
+        .to_string();
+
+    let description = parsed
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    Ok(AiPrResponse { title, description })
 }
 
 // Clipboard Image Commands

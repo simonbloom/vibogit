@@ -83,33 +83,17 @@ export function CreatePRDialog({
         (c) => `- ${c.hashShort}: ${c.message}`
       );
 
-      // Get diff summary (simplified)
-      const statusResponse = await send<{ status: { staged: unknown[]; unstaged: unknown[] } }>(
-        "status",
-        { repoPath }
-      );
-
       const diffSummary = `Changes in ${currentBranch.name} branch`;
 
-      const response = await fetch("/api/ai/pr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          commits,
-          diff: diffSummary,
-          baseBranch,
-          headBranch: currentBranch.name,
-          provider: settings.aiProvider,
-          apiKey: settings.aiApiKey,
-        }),
+      const { invoke } = await import("@tauri-apps/api/core");
+      const data = await invoke<{ title: string; description: string }>("ai_generate_pr", {
+        commits,
+        diff: diffSummary,
+        baseBranch,
+        headBranch: currentBranch.name,
+        provider: settings.aiProvider,
+        apiKey: settings.aiApiKey,
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to generate PR");
-      }
-
-      const data = await response.json();
       setTitle(data.title);
       setDescription(data.description);
     } catch (err) {
