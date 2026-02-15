@@ -79,13 +79,21 @@ export function Sidebar({
 
       {/* Projects Section */}
       <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-        {!isCollapsed && (
-          <div className="px-3 py-2">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Projects
-            </span>
-          </div>
-        )}
+        <div className="px-2 py-2">
+          <Button
+            variant="ghost"
+            size={isCollapsed ? "icon" : "sm"}
+            onClick={onAddRepository}
+            className={cn(
+              "w-full justify-start gap-2",
+              isCollapsed && "justify-center"
+            )}
+            title="Add project"
+          >
+            <Plus className="h-4 w-4" />
+            {!isCollapsed && <span>Add project</span>}
+          </Button>
+        </div>
         <div className="flex-1 overflow-y-auto px-1">
           {typeof children === "function" ? children(isCollapsed) : children}
         </div>
@@ -93,20 +101,6 @@ export function Sidebar({
 
       {/* Footer */}
       <div className="border-t p-2 space-y-2">
-        <Button
-          variant="ghost"
-          size={isCollapsed ? "icon" : "sm"}
-          onClick={onAddRepository}
-          className={cn(
-            "w-full justify-start gap-2",
-            isCollapsed && "justify-center"
-          )}
-          title="Add project"
-        >
-          <Plus className="h-4 w-4" />
-          {!isCollapsed && <span>Add project</span>}
-        </Button>
-        
         <div className={cn(
           "flex gap-1",
           isCollapsed ? "flex-col" : "flex-row"
@@ -159,7 +153,7 @@ export function Sidebar({
 
         {!isCollapsed && (
           <div className="px-2 pb-1">
-            <span className="text-[10px] text-muted-foreground/50">v3.0.1</span>
+            <span className="text-[10px] text-muted-foreground/50">v3.2.0</span>
           </div>
         )}
       </div>
