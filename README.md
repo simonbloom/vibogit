@@ -27,8 +27,7 @@ cd apps/desktop && bun run dev
 
 ```bash
 bun install
-cd apps/desktop/frontend && bun run build
-cd ../src-tauri && cargo tauri build --bundles dmg
+cd apps/desktop && node_modules/.bin/tauri build --bundles dmg
 ```
 
 ## Repository Layout

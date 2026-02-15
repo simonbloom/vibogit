@@ -79,7 +79,7 @@ jobs:
         run: |
           VERSION="${{ github.event.release.tag_name }}"
           VERSION="${VERSION#v}"
-          DMG_URL="https://github.com/vibogit/vibogit/releases/download/v${VERSION}/ViboGit_${VERSION}_universal.dmg"
+          DMG_URL="https://github.com/vibogit/vibogit/releases/download/v${VERSION}/ViboGit_${VERSION}_aarch64.dmg"
           curl -L -o vibogit.dmg "$DMG_URL"
           SHA256=$(shasum -a 256 vibogit.dmg | cut -d ' ' -f1)
           sed -i '' "s/version \".*\"/version \"${VERSION}\"/" Casks/vibogit.rb

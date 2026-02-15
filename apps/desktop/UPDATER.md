@@ -68,7 +68,8 @@ Return HTTP 204 No Content
 
 4. Build with signing:
    ```bash
-   cargo tauri build
+   cd /Users/simonbloom/apps-vol11/vibogit/apps/desktop
+   node_modules/.bin/tauri build
    ```
 
 ## GitHub Releases Integration

@@ -20,18 +20,19 @@
 
 ## Desktop App (Tauri) Build - CRITICAL
 
-The desktop DMG is built automatically via a git post-commit hook (`.git/hooks/post-commit`).
+The desktop DMG is built manually using the local Tauri CLI.
 
 ### How the build works
 1. `bun install` - links workspace packages (especially `@vibogit/ui`)
 2. `bun run build` (frontend) - Next.js static export to `apps/desktop/frontend/out/`
-3. `cargo tauri build --bundles dmg` - compiles Rust backend + bundles frontend into DMG
+3. `cd apps/desktop && node_modules/.bin/tauri build --bundles dmg` - compiles Rust backend + bundles frontend into DMG
 
 ### DMG Location
-`apps/desktop/src-tauri/target/release/bundle/dmg/ViboGit_0.1.0_aarch64.dmg`
+`apps/desktop/src-tauri/target/release/bundle/dmg/ViboGit_<version>_aarch64.dmg`
 
 ### Build Log
-`/tmp/vibogit-build.log` - watch with `tail -f /tmp/vibogit-build.log`
+No automatic build log file is created. If needed, capture one manually:
+`cd apps/desktop && node_modules/.bin/tauri build --bundles dmg | tee /tmp/vibogit-build.log`
 
 ### CRITICAL: Ensuring the DMG has the latest code
 The DMG includes TWO codebases that BOTH must be rebuilt from clean:
@@ -57,7 +58,7 @@ rm -rf apps/desktop/src-tauri/target/release/incremental/vibogit-*
 rm -rf apps/desktop/src-tauri/target/release/bundle
 ```
 
-The post-commit hook does all of this automatically. If you ever need to build manually:
+Use this full clean build flow when cutting a DMG:
 ```bash
 # Full clean build
 cd /path/to/vibogit
@@ -68,7 +69,7 @@ rm -rf apps/desktop/src-tauri/target/release/incremental/vibogit-*
 rm -rf apps/desktop/src-tauri/target/release/bundle
 bun install
 cd apps/desktop/frontend && bun run build && cd ../../..
-cd apps/desktop/src-tauri && cargo tauri build --bundles dmg
+cd apps/desktop && node_modules/.bin/tauri build --bundles dmg
 ```
 
 ### Architecture: Desktop
@@ -90,7 +91,7 @@ When distributing the DMG to other machines, macOS will block the app with "Appl
 xattr -cr /Applications/ViboGit.app
 
 # Or on the DMG before opening
-xattr -cr /path/to/ViboGit_0.1.0_aarch64.dmg
+xattr -cr /path/to/ViboGit_<version>_aarch64.dmg
 ```
 
 

@@ -159,7 +159,7 @@ export function Sidebar({
 
         {!isCollapsed && (
           <div className="px-2 pb-1">
-            <span className="text-[10px] text-muted-foreground/50">v3.0.0</span>
+            <span className="text-[10px] text-muted-foreground/50">v3.0.1</span>
           </div>
         )}
       </div>

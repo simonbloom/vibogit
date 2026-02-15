@@ -8,7 +8,7 @@ use std::process::{Command, Child, Stdio};
 use std::io::{BufRead, BufReader};
 use std::thread;
 use tauri::{AppHandle, Manager, State};
-use tauri_plugin_autostart::{AutoLaunchManager, ManagerExt};
+use tauri_plugin_autostart::ManagerExt;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProjectInfo {
@@ -1838,7 +1838,6 @@ pub async fn send_to_terminal(
                     extern "C" {
                         fn AXIsProcessTrustedWithOptions(options: *const std::ffi::c_void) -> bool;
                         fn CFStringCreateWithCString(allocator: *const std::ffi::c_void, cStr: *const i8, encoding: u32) -> *const std::ffi::c_void;
-                        fn CFBooleanGetValue(boolean: *const std::ffi::c_void) -> bool;
                         fn CFDictionaryCreate(
                             allocator: *const std::ffi::c_void,
                             keys: *const *const std::ffi::c_void,
@@ -2094,53 +2093,6 @@ pub async fn list_skills() -> Result<Vec<Skill>, String> {
     all_skills.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     
     Ok(all_skills)
-}
-
-// Update Commands
-
-#[derive(Debug, Serialize)]
-pub struct UpdateInfo {
-    pub available: bool,
-    pub version: Option<String>,
-    pub body: Option<String>,
-}
-
-#[tauri::command]
-pub async fn check_for_updates(
-    app: AppHandle,
-) -> Result<UpdateInfo, String> {
-    use tauri_plugin_updater::UpdaterExt;
-    
-    let updater = app.updater().map_err(|e| e.to_string())?;
-    
-    match updater.check().await {
-        Ok(Some(update)) => Ok(UpdateInfo {
-            available: true,
-            version: Some(update.version.clone()),
-            body: update.body.clone(),
-        }),
-        Ok(None) => Ok(UpdateInfo {
-            available: false,
-            version: None,
-            body: None,
-        }),
-        Err(e) => Err(e.to_string()),
-    }
-}
-
-#[tauri::command]
-pub async fn install_update(
-    app: AppHandle,
-) -> Result<(), String> {
-    use tauri_plugin_updater::UpdaterExt;
-    
-    let updater = app.updater().map_err(|e| e.to_string())?;
-    
-    if let Some(update) = updater.check().await.map_err(|e| e.to_string())? {
-        update.download_and_install(|_, _| {}, || {}).await.map_err(|e| e.to_string())?;
-    }
-    
-    Ok(())
 }
 
 // AI Commands

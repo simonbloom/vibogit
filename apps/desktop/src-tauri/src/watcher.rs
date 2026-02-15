@@ -1,9 +1,8 @@
-use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
-use notify_debouncer_mini::{new_debouncer, DebouncedEvent, Debouncer};
+use notify::RecursiveMode;
+use notify_debouncer_mini::new_debouncer;
 use serde::Serialize;
 use std::path::Path;
 use std::sync::mpsc::{channel, Sender};
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};

@@ -1,6 +1,5 @@
 use git2::{
-    Cred, CredentialType, DiffOptions, Error as Git2Error, ErrorCode, FetchOptions, PushOptions,
-    RemoteCallbacks, Repository, Signature, StatusOptions,
+    DiffOptions, Error as Git2Error, ErrorCode, Repository, Signature, StatusOptions,
 };
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -12,8 +11,6 @@ pub enum GitError {
     NotARepository(String),
     #[error("Git error: {0}")]
     Git2(String),
-    #[error("No commits yet")]
-    NoCommits,
     #[error("Nothing to commit")]
     NothingToCommit,
     #[error("No remote configured")]
@@ -139,60 +136,6 @@ pub struct DiffLine {
     pub line_type: String, // "add", "delete", "context"
     pub old_line: Option<u32>,
     pub new_line: Option<u32>,
-}
-
-fn get_credentials_callback<'a>() -> RemoteCallbacks<'a> {
-    let mut callbacks = RemoteCallbacks::new();
-    callbacks.credentials(|url, username_from_url, allowed_types| {
-        eprintln!("Git auth requested for URL: {}, username: {:?}, allowed: {:?}", 
-                  url, username_from_url, allowed_types);
-        
-        if allowed_types.contains(CredentialType::SSH_KEY) {
-            let username = username_from_url.unwrap_or("git");
-            
-            // Try SSH agent first
-            if let Ok(cred) = Cred::ssh_key_from_agent(username) {
-                eprintln!("Using SSH key from agent");
-                return Ok(cred);
-            }
-            
-            // Fall back to default SSH key locations
-            let home = std::env::var("HOME").unwrap_or_default();
-            let key_paths = [
-                format!("{}/.ssh/id_ed25519", home),
-                format!("{}/.ssh/id_rsa", home),
-            ];
-            
-            for key_path in &key_paths {
-                let pub_path = format!("{}.pub", key_path);
-                if std::path::Path::new(key_path).exists() {
-                    eprintln!("Trying SSH key: {}", key_path);
-                    if let Ok(cred) = Cred::ssh_key(
-                        username,
-                        Some(std::path::Path::new(&pub_path)),
-                        std::path::Path::new(key_path),
-                        None,
-                    ) {
-                        return Ok(cred);
-                    }
-                }
-            }
-            
-            Err(git2::Error::from_str("No SSH key found"))
-        } else if allowed_types.contains(CredentialType::USER_PASS_PLAINTEXT) {
-            eprintln!("Trying credential helper for HTTPS");
-            // Try to use credential helper (git credential-osxkeychain on macOS)
-            Cred::credential_helper(
-                &git2::Config::open_default()?,
-                url,
-                username_from_url,
-            )
-        } else {
-            eprintln!("Using default credentials");
-            Cred::default()
-        }
-    });
-    callbacks
 }
 
 pub fn get_status(repo_path: &str) -> Result<ProjectState, GitError> {
@@ -681,7 +624,7 @@ pub fn checkout(repo_path: &str, branch_or_ref: &str) -> Result<(), GitError> {
 
     // Try as commit SHA
     if let Ok(oid) = git2::Oid::from_str(branch_or_ref) {
-        let commit = repo.find_commit(oid)?;
+        repo.find_commit(oid)?;
         repo.set_head_detached(oid)?;
         repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
         return Ok(());
@@ -836,14 +779,6 @@ pub fn get_file_diff(repo_path: &str, file_path: &str, staged: bool) -> Result<D
 
         if let Some(hunk_info) = hunk {
             // Find or create hunk
-            let hunk_header = format!(
-                "@@ -{},{} +{},{} @@",
-                hunk_info.old_start(),
-                hunk_info.old_lines(),
-                hunk_info.new_start(),
-                hunk_info.new_lines()
-            );
-
             let existing_hunk = result.hunks.iter_mut()
                 .find(|h| h.old_start == hunk_info.old_start() && h.new_start == hunk_info.new_start());
 
