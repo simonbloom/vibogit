@@ -129,6 +129,24 @@ source "$SCRIPTS_DIR/validate-artifacts.sh"
 validate_artifacts "$REPO_ROOT" "$VERSION"
 ok "All required artifacts present"
 
+# ── Stage 4.5: Commit & push version bump ────────────────────────────────────
+log "Stage 4.5: Commit and push version bump"
+
+if dry "commit and push version bump"; then
+  :
+else
+  cd "$REPO_ROOT"
+  if [[ -n "$(git status --porcelain)" ]]; then
+    git add -A
+    git commit -m "chore: bump version to $VERSION and publish release"
+    ok "Committed version bump"
+    git push origin "$(git rev-parse --abbrev-ref HEAD)"
+    ok "Pushed to remote"
+  else
+    ok "Working tree clean, nothing to commit"
+  fi
+fi
+
 # ── Stage 5: GitHub release ──────────────────────────────────────────────────
 log "Stage 5: GitHub release v$VERSION"
 
@@ -243,7 +261,5 @@ fi
 echo "  Landing: $LANDING_PAGE (updated)"
 echo ""
 echo "Next steps:"
-echo "  1. git add -A && git commit -m 'chore: bump version to $VERSION and publish release'"
-echo "  2. git push origin main"
-echo "  3. Verify download from landing page"
+echo "  1. Verify download from landing page"
 echo ""

@@ -49,6 +49,7 @@ This runs all stages in order with fail-fast behavior.
 | 2. Version bump | Update tauri.conf.json, Cargo.toml, sidebar.tsx, landing page links |
 | 3. Clean build | Remove stale artifacts, bun install, build frontend, build Rust + DMG |
 | 4. Artifact validation | Verify DMG exists, version strings match across all files |
+| 4.5. Commit & push | Auto-commit version bump and push to remote before tagging |
 | 5. GitHub release | Create/update release `vX.Y.Z`, upload DMG |
 | 6. Landing page | Download links already updated in Stage 2 |
 | 6.5. Wait for CI | Poll until CI uploads `latest.json` + signed updater artifacts (~10 min) |
@@ -67,10 +68,9 @@ If the user gives a version like "2.2", normalize it to semver: "2.2.0".
 
 ## After the script completes
 
-1. Review changes: `git diff`
-2. Commit: `git add -A && git commit -m "chore: bump version to X.Y.Z and publish release"`
-3. Push: `git push origin main`
-4. Verify the download from the landing page works
+The script automatically commits and pushes the version bump before creating the GitHub release tag, ensuring CI builds with the correct version in `tauri.conf.json`.
+
+1. Verify the download from the landing page works
 
 ## Updater flow (in-app upgrades)
 
@@ -87,7 +87,7 @@ For the updater to work fully, the GitHub Actions workflow (`release-desktop.yml
 - Don't skip the clean step when changing Rust code.
 - Don't forget `bun install` before the frontend build.
 - Don't use `cargo tauri build` directly — use `node_modules/.bin/tauri build`.
-- Don't push a tag without first running the release script to validate artifacts.
+- Don't push a tag manually -- the release script handles commit, push, and tag creation in the correct order.
 
 ## Troubleshooting
 
@@ -97,3 +97,4 @@ For the updater to work fully, the GitHub Actions workflow (`release-desktop.yml
 | Stale Rust binary in DMG | Script cleans fingerprints automatically |
 | `@vibogit/ui` import errors | Script runs `bun install` automatically |
 | Landing page link not found | Ensure `page.tsx` has `ViboGit_*_aarch64.dmg` pattern |
+| `latest.json` has old version | Tag was created before version bump was pushed. Delete release+tag, then re-run the script |
