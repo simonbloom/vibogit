@@ -58,6 +58,18 @@ print('SET' if pk else 'EMPTY')
       else
         echo "  [WARN] GitHub release v$VERSION has no assets (may still be uploading)"
       fi
+
+      # Verify latest.json is downloadable
+      local latest_json_url="https://github.com/$GITHUB_REPO/releases/download/v$VERSION/latest.json"
+      local http_status
+      http_status=$(curl -sL -o /dev/null -w "%{http_code}" "$latest_json_url" 2>/dev/null || echo "000")
+      if [[ "$http_status" == "200" ]]; then
+        local latest_ver
+        latest_ver=$(curl -sL "$latest_json_url" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('version','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
+        echo "  [OK] latest.json downloadable (version: $latest_ver)"
+      else
+        echo "  [WARN] latest.json not yet available at $latest_json_url (HTTP $http_status)"
+      fi
     fi
   else
     echo "  [DRY-RUN] Skipping remote release verification"

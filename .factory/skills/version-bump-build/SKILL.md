@@ -51,7 +51,8 @@ This runs all stages in order with fail-fast behavior.
 | 4. Artifact validation | Verify DMG exists, version strings match across all files |
 | 5. GitHub release | Create/update release `vX.Y.Z`, upload DMG |
 | 6. Landing page | Download links already updated in Stage 2 |
-| 7. Verification | Confirm updater endpoint, pubkey, auto-update hook, generate JSON report |
+| 6.5. Wait for CI | Poll until CI uploads `latest.json` + signed updater artifacts (~10 min) |
+| 7. Verification | Confirm updater endpoint, pubkey, auto-update hook, latest.json live, generate JSON report |
 
 ## Files that get version updates
 

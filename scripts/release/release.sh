@@ -164,6 +164,67 @@ else
   ok "Landing page links already updated in Stage 2"
 fi
 
+# ── Stage 6.5: Wait for CI to upload latest.json ─────────────────────────────
+log "Stage 6.5: Waiting for CI to upload latest.json and signed updater artifacts"
+
+if dry "wait for CI workflow to complete"; then
+  :
+else
+  LATEST_JSON_URL="https://github.com/$GITHUB_REPO/releases/download/$TAG/latest.json"
+  MAX_WAIT=900  # 15 minutes
+  POLL_INTERVAL=30
+  ELAPSED=0
+
+  # Wait for the CI workflow run triggered by the tag push
+  log "Waiting for release-desktop.yml CI workflow to complete (up to ${MAX_WAIT}s)..."
+  log "Polling every ${POLL_INTERVAL}s for latest.json on release $TAG..."
+
+  while [[ $ELAPSED -lt $MAX_WAIT ]]; do
+    # Check if latest.json exists on the release
+    ASSET_NAMES=$(gh release view "$TAG" --repo "$GITHUB_REPO" --json assets -q '.assets[].name' 2>/dev/null || echo "")
+    if echo "$ASSET_NAMES" | grep -q "^latest.json$"; then
+      # Verify it's actually downloadable (not a partial upload)
+      HTTP_STATUS=$(curl -sL -o /dev/null -w "%{http_code}" "$LATEST_JSON_URL" 2>/dev/null || echo "000")
+      if [[ "$HTTP_STATUS" == "200" ]]; then
+        ok "latest.json is live on release $TAG (waited ${ELAPSED}s)"
+        break
+      fi
+    fi
+
+    # Check CI run status for early failure detection
+    CI_STATUS=$(gh run list --repo "$GITHUB_REPO" --workflow=release-desktop.yml --limit 1 --json status,headBranch -q ".[0].status" 2>/dev/null || echo "unknown")
+    if [[ "$CI_STATUS" == "completed" ]]; then
+      # CI finished but latest.json still not found -- check for failure
+      CI_CONCLUSION=$(gh run list --repo "$GITHUB_REPO" --workflow=release-desktop.yml --limit 1 --json conclusion -q ".[0].conclusion" 2>/dev/null || echo "unknown")
+      if [[ "$CI_CONCLUSION" != "success" ]]; then
+        warn "CI workflow finished with conclusion: $CI_CONCLUSION"
+        warn "latest.json may not have been uploaded. Check GitHub Actions."
+        break
+      fi
+      # CI succeeded but asset not found yet -- give GitHub a moment to finalize
+      sleep 5
+      ASSET_NAMES=$(gh release view "$TAG" --repo "$GITHUB_REPO" --json assets -q '.assets[].name' 2>/dev/null || echo "")
+      if echo "$ASSET_NAMES" | grep -q "^latest.json$"; then
+        ok "latest.json is live on release $TAG (waited ${ELAPSED}s)"
+        break
+      else
+        warn "CI completed successfully but latest.json not found on release $TAG"
+        warn "This may indicate tauri-action uploaded to a different release (draft). Check GitHub."
+        break
+      fi
+    fi
+
+    echo "  ... waiting (${ELAPSED}s elapsed, CI status: $CI_STATUS)"
+    sleep "$POLL_INTERVAL"
+    ELAPSED=$((ELAPSED + POLL_INTERVAL))
+  done
+
+  if [[ $ELAPSED -ge $MAX_WAIT ]]; then
+    warn "Timed out waiting for latest.json after ${MAX_WAIT}s"
+    warn "CI may still be running. Check: gh run list --repo $GITHUB_REPO --workflow=release-desktop.yml"
+  fi
+fi
+
 # ── Stage 7: Post-release verification ───────────────────────────────────────
 log "Stage 7: Post-release verification"
 
