@@ -1,11 +1,17 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ViboGit",
-  "version": "3.4.1",
+  "version": "3.6.0",
   "identifier": "app.vibogit.desktop",
   "build": {
-    "beforeDevCommand": { "script": "bun run dev", "cwd": "../frontend" },
-    "beforeBuildCommand": { "script": "bun run build", "cwd": "../frontend" },
+    "beforeDevCommand": {
+      "script": "bun run dev",
+      "cwd": "../frontend"
+    },
+    "beforeBuildCommand": {
+      "script": "bun run build",
+      "cwd": "../frontend"
+    },
     "devUrl": "http://localhost:4158",
     "frontendDist": "../frontend/out"
   },
@@ -38,7 +44,10 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "targets": ["dmg", "app"],
+    "targets": [
+      "dmg",
+      "app"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -48,7 +57,7 @@
     "category": "DeveloperTool",
     "shortDescription": "Git for the Vibe Coder",
     "longDescription": "ViboGit is a beautiful, simple Git client designed for developers who want to focus on building, not managing git commands.",
-    "copyright": "© 2026 ViboGit",
+    "copyright": "\u00a9 2026 ViboGit",
     "macOS": {
       "minimumSystemVersion": "10.15",
       "signingIdentity": "-",

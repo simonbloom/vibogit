@@ -1,88 +1,98 @@
 ---
 name: version-bump-build
-version: 1.0.0
+version: 2.0.0
 description: |
-  Bump the ViboGit version number across all required files and rebuild the desktop DMG.
+  Bump the ViboGit version number across all required files, rebuild the desktop DMG,
+  publish a GitHub release, and update landing page download links.
   Use when the user asks to change the version, bump the version, release a new version,
-  or rebuild the desktop app DMG. Handles the full clean build process to ensure the DMG
-  contains fresh frontend and Rust code.
+  or rebuild the desktop app DMG. Handles the full clean build and release process.
 ---
 
-# Version Bump & Desktop Build
+# Version Bump, Build & Release
 
-## Files that need version updates
+## Quick Start
 
-All of these must be updated to the new version string. Missing any one causes version mismatches between the app, the binary, and what the user sees in the UI.
+The canonical release flow is a single script:
+
+```bash
+cd /Users/simonbloom/apps-vol11/vibogit
+./scripts/release/release.sh <X.Y.Z>
+```
+
+This runs all stages in order with fail-fast behavior.
+
+### Options
+
+| Flag | Effect |
+|------|--------|
+| `--dry-run` | Validate and simulate without side effects |
+| `--skip-build` | Skip clean build (use existing artifacts) |
+
+### Examples
+
+```bash
+# Full release
+./scripts/release/release.sh 3.6.0
+
+# Dry run (no writes)
+./scripts/release/release.sh 3.6.0 --dry-run
+
+# Skip build if DMG already exists
+./scripts/release/release.sh 3.6.0 --skip-build
+```
+
+## What the script does
+
+| Stage | Description |
+|-------|-------------|
+| 1. Preflight | Verify gh auth, bun, rustc, required files, link patterns |
+| 2. Version bump | Update tauri.conf.json, Cargo.toml, sidebar.tsx, landing page links |
+| 3. Clean build | Remove stale artifacts, bun install, build frontend, build Rust + DMG |
+| 4. Artifact validation | Verify DMG exists, version strings match across all files |
+| 5. GitHub release | Create/update release `vX.Y.Z`, upload DMG |
+| 6. Landing page | Download links already updated in Stage 2 |
+| 7. Verification | Confirm updater endpoint, pubkey, auto-update hook, generate JSON report |
+
+## Files that get version updates
 
 | File | Field | Format |
 |------|-------|--------|
 | `apps/desktop/src-tauri/tauri.conf.json` | `"version"` | `"X.Y.Z"` |
 | `apps/desktop/src-tauri/Cargo.toml` | `version` | `"X.Y.Z"` |
 | `packages/ui/src/components/sidebar/sidebar.tsx` | Display string | `vX.Y.Z` |
+| `apps/desktop/frontend/src/app/page.tsx` | Download URLs | `ViboGit_X.Y.Z_aarch64.dmg` |
 
 If the user gives a version like "2.2", normalize it to semver: "2.2.0".
 
-## Clean build process
+## After the script completes
 
-The DMG includes two codebases that both must be rebuilt from clean. Skipping any clean step risks shipping stale code.
+1. Review changes: `git diff`
+2. Commit: `git add -A && git commit -m "chore: bump version to X.Y.Z and publish release"`
+3. Push: `git push origin main`
+4. Verify the download from the landing page works
 
-### Step 1: Clean all build artifacts
+## Updater flow (in-app upgrades)
 
-```bash
-cd /Users/simonbloom/apps-vol11/vibogit
-
-# Frontend
-rm -rf apps/desktop/frontend/.next
-rm -rf apps/desktop/frontend/out
-
-# Rust binary + incremental cache + fingerprints
-rm -f  apps/desktop/src-tauri/target/release/vibogit
-rm -f  apps/desktop/src-tauri/target/release/vibogit.d
-rm -rf apps/desktop/src-tauri/target/release/.fingerprint/vibogit-*
-rm -rf apps/desktop/src-tauri/target/release/incremental/vibogit-*
-
-# Bundle/DMG packaging
-rm -rf apps/desktop/src-tauri/target/release/bundle
+The Tauri updater checks:
+```
+https://github.com/simonbloom/vibogit/releases/latest/download/latest.json
 ```
 
-### Step 2: Install dependencies
-
-```bash
-cd /Users/simonbloom/apps-vol11/vibogit
-bun install
-```
-
-### Step 3: Build frontend
-
-```bash
-cd /Users/simonbloom/apps-vol11/vibogit/apps/desktop/frontend
-bun run build
-```
-
-Verify it exits with code 0 and the `out/` directory is created.
-
-### Step 4: Build Rust + DMG
-
-```bash
-cd /Users/simonbloom/apps-vol11/vibogit/apps/desktop
-node_modules/.bin/tauri build --bundles dmg
-```
-
-This takes ~1-2 minutes. The DMG will be at:
-```
-apps/desktop/src-tauri/target/release/bundle/dmg/ViboGit_{VERSION}_aarch64.dmg
-```
-
-## Verify it worked
-
-1. The DMG file exists at the expected path with the correct version in the filename
-2. `grep version apps/desktop/src-tauri/tauri.conf.json` shows the new version
-3. `grep version apps/desktop/src-tauri/Cargo.toml` shows the new version
-4. The sidebar.tsx display string matches
+For the updater to work fully, the GitHub Actions workflow (`release-desktop.yml`) must run with signing keys to produce `latest.json` and signed artifacts. The local release script uploads the DMG for manual downloads; the CI workflow handles updater metadata.
 
 ## What not to do
 
-- Don't use `cargo tauri build` directly -- the cargo subcommand isn't installed. Use `node_modules/.bin/tauri build` from `apps/desktop/`.
-- Don't skip the clean step. Cargo's incremental compilation may reuse a stale binary even after source changes if fingerprints are cached.
-- Don't forget `bun install` before the frontend build. It links the `@vibogit/ui` workspace package which the frontend depends on.
-- Don't run the build without cleaning first when changing Rust code. The fingerprint cache can silently use the old binary.
+- Don't bypass the script with manual commands — use `release.sh` for consistency.
+- Don't skip the clean step when changing Rust code.
+- Don't forget `bun install` before the frontend build.
+- Don't use `cargo tauri build` directly — use `node_modules/.bin/tauri build`.
+- Don't push a tag without first running the release script to validate artifacts.
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `gh not authenticated` | Run `gh auth login` |
+| Stale Rust binary in DMG | Script cleans fingerprints automatically |
+| `@vibogit/ui` import errors | Script runs `bun install` automatically |
+| Landing page link not found | Ensure `page.tsx` has `ViboGit_*_aarch64.dmg` pattern |
