@@ -16,6 +16,7 @@ import { PromptBox } from "@/components/prompt-box";
 import type { PromptData } from "@/components/prompt-box";
 import { Button } from "@/components/ui/button";
 import { getSettings, TERMINAL_OPTIONS, EDITOR_OPTIONS } from "@/lib/settings";
+import { getModelForProvider } from "@/lib/ai-service";
 import {
   ArrowUp,
   ArrowDown,
@@ -252,6 +253,7 @@ export function MainInterface() {
       const result = await invoke<{ message: string }>("ai_generate_commit", {
         diff: combinedDiff,
         provider: settings.aiProvider,
+        model: getModelForProvider(settings.aiProvider, settings.aiModel),
         apiKey: settings.aiApiKey,
       });
       const message = result.message;

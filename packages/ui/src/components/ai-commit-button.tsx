@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { getSettings } from "@/lib/settings";
-import { AI_PROVIDERS } from "@/lib/ai-service";
+import { AI_PROVIDERS, getModelForProvider } from "@/lib/ai-service";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Loader2, AlertCircle } from "lucide-react";
 
@@ -79,6 +79,7 @@ export function AICommitButton({ onMessageGenerated, disabled }: AICommitButtonP
       const result = await invoke<{ message: string }>("ai_generate_commit", {
         diff: combinedDiff,
         provider: settings.aiProvider,
+        model: getModelForProvider(settings.aiProvider, settings.aiModel),
         apiKey: settings.aiApiKey,
       });
       const message = result.message;

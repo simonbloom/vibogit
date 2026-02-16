@@ -25,7 +25,11 @@ export function AISettingsSection({ config, isDaemonConnected, onSave }: AISetti
         <label className="mb-2 block text-sm font-medium text-foreground">AI Provider</label>
         <select
           value={config.aiProvider}
-          onChange={(event) => onSave({ aiProvider: event.target.value as Config["aiProvider"] })}
+          onChange={(event) => {
+            const newProvider = event.target.value as Config["aiProvider"];
+            const provider = AI_PROVIDERS.find((p) => p.id === newProvider);
+            onSave({ aiProvider: newProvider, aiModel: provider?.model || "" });
+          }}
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         >
           {AI_PROVIDERS.map((provider) => (
@@ -35,6 +39,23 @@ export function AISettingsSection({ config, isDaemonConnected, onSave }: AISetti
           ))}
         </select>
       </div>
+
+      {selectedProvider && selectedProvider.models.length > 1 && (
+        <div>
+          <label className="mb-2 block text-sm font-medium text-foreground">Model</label>
+          <select
+            value={config.aiModel || selectedProvider.model}
+            onChange={(event) => onSave({ aiModel: event.target.value })}
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            {selectedProvider.models.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.displayName}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div>
         <div className="mb-2 flex items-center justify-between gap-4">

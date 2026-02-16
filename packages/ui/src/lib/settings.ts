@@ -35,6 +35,7 @@ export const EDITOR_OPTIONS: EditorConfig[] = [
 
 export interface Settings {
   aiProvider: "anthropic" | "openai" | "gemini";
+  aiModel: string;
   aiApiKey: string;
   editor: EditorOption;
   customEditorCommand?: string;
@@ -47,6 +48,7 @@ export interface Settings {
 
 const DEFAULT_SETTINGS: Settings = {
   aiProvider: "anthropic",
+  aiModel: "",
   aiApiKey: "",
   editor: "cursor",
   terminal: "Terminal",

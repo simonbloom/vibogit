@@ -2298,6 +2298,7 @@ pub struct AiPrResponse {
 pub async fn ai_generate_commit(
     diff: String,
     provider: String,
+    model: String,
     api_key: String,
 ) -> Result<AiCommitResponse, String> {
     let prompt = format!(
@@ -2315,7 +2316,7 @@ pub async fn ai_generate_commit(
     let response_text = match provider.as_str() {
         "anthropic" => {
             let body = serde_json::json!({
-                "model": "claude-3-5-haiku-latest",
+                "model": &model,
                 "max_tokens": 500,
                 "messages": [{
                     "role": "user",
@@ -2343,7 +2344,7 @@ pub async fn ai_generate_commit(
         }
         "openai" => {
             let body = serde_json::json!({
-                "model": "gpt-4o-mini",
+                "model": &model,
                 "max_tokens": 500,
                 "messages": [{
                     "role": "user",
@@ -2370,8 +2371,8 @@ pub async fn ai_generate_commit(
         }
         "gemini" => {
             let url = format!(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={}",
-                api_key
+                "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+                model, api_key
             );
             
             let body = serde_json::json!({
@@ -2431,6 +2432,7 @@ pub async fn ai_generate_pr(
     base_branch: String,
     head_branch: String,
     provider: String,
+    model: String,
     api_key: String,
 ) -> Result<AiPrResponse, String> {
     let commits_text = if commits.is_empty() {
@@ -2457,7 +2459,7 @@ pub async fn ai_generate_pr(
     let response_text = match provider.as_str() {
         "anthropic" => {
             let body = serde_json::json!({
-                "model": "claude-3-5-haiku-latest",
+                "model": &model,
                 "max_tokens": 1000,
                 "messages": [{
                     "role": "user",
@@ -2487,7 +2489,7 @@ pub async fn ai_generate_pr(
         }
         "openai" => {
             let body = serde_json::json!({
-                "model": "gpt-4o-mini",
+                "model": &model,
                 "max_tokens": 1000,
                 "messages": [{
                     "role": "user",
@@ -2516,8 +2518,8 @@ pub async fn ai_generate_pr(
         }
         "gemini" => {
             let url = format!(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={}",
-                api_key
+                "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+                model, api_key
             );
 
             let body = serde_json::json!({

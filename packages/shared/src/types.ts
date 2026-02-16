@@ -311,6 +311,7 @@ export interface ConfigTab {
 export interface Config {
   computerName: string;
   aiProvider: AiProvider;
+  aiModel: string;
   aiApiKey: string;
   editor: EditorOption;
   customEditorCommand: string;
@@ -327,6 +328,7 @@ export interface Config {
 export const DEFAULT_CONFIG: Config = {
   computerName: "",
   aiProvider: "anthropic",
+  aiModel: "",
   aiApiKey: "",
   editor: "cursor",
   customEditorCommand: "",

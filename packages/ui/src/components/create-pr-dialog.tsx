@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { getSettings } from "@/lib/settings";
+import { getModelForProvider } from "@/lib/ai-service";
 import { Button } from "@/components/ui/button";
 import { X, Sparkles, Loader2, ExternalLink, GitPullRequest } from "lucide-react";
 import type { GitCommit, GitBranch } from "@vibogit/shared";
@@ -92,6 +93,7 @@ export function CreatePRDialog({
         baseBranch,
         headBranch: currentBranch.name,
         provider: settings.aiProvider,
+        model: getModelForProvider(settings.aiProvider, settings.aiModel),
         apiKey: settings.aiApiKey,
       });
       setTitle(data.title);
