@@ -103,7 +103,18 @@ export default function LandingPage() {
   useEffect(() => {
     if (isTauriRuntime()) {
       router.replace("/app");
+      return;
     }
+    document.documentElement.style.overflow = "auto";
+    document.documentElement.style.height = "auto";
+    document.body.style.overflow = "auto";
+    document.body.style.height = "auto";
+    return () => {
+      document.documentElement.style.overflow = "";
+      document.documentElement.style.height = "";
+      document.body.style.overflow = "";
+      document.body.style.height = "";
+    };
   }, [router]);
 
   return (
