@@ -9,7 +9,6 @@ import { Sidebar } from "@/components/sidebar/sidebar";
 import { ProjectList } from "@/components/sidebar/project-list";
 import { SettingsPanel } from "@/components/settings-panel";
 import { UpdateBanner } from "@/components/update-banner";
-import { WindowDragRegion } from "@/components/window-drag-region";
 import { isMacTauri } from "@/platform";
 
 interface AppLayoutProps {
@@ -101,7 +100,6 @@ export function AppLayout({ children }: AppLayoutProps) {
       </Sidebar>
       
       <div className="flex-1 overflow-hidden flex flex-col">
-        {isMacOverlayChrome && <WindowDragRegion className="h-9" />}
         <UpdateBanner {...autoUpdate} />
         <div className="flex-1 overflow-hidden">
           {activePane === "settings" ? <SettingsPanel updateState={autoUpdate} /> : children}

@@ -13,10 +13,12 @@ import { CodeViewer } from "@/components/code-viewer";
 import { StagedChanges } from "@/components/staged-changes";
 import { PortPromptModal } from "@/components/port-prompt-modal";
 import { PromptBox } from "@/components/prompt-box";
+import { WindowDragRegion } from "@/components/window-drag-region";
 import type { PromptData } from "@/components/prompt-box";
 import { Button } from "@/components/ui/button";
 import { getSettings, TERMINAL_OPTIONS, EDITOR_OPTIONS } from "@/lib/settings";
 import { getModelForProvider } from "@/lib/ai-service";
+import { isMacTauri } from "@/platform";
 import {
   ArrowUp,
   ArrowDown,
@@ -50,6 +52,7 @@ export function MainInterface() {
   const [projectFiles, setProjectFiles] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<{ path: string; name: string } | null>(null);
   const [graphRefreshKey, setGraphRefreshKey] = useState(0);
+  const [isMacOverlayChrome, setIsMacOverlayChrome] = useState(false);
 
   const { status, branches, repoPath } = state;
   const currentBranch = branches.find((b) => b.current);
@@ -64,6 +67,10 @@ export function MainInterface() {
   useEffect(() => {
     setSelectedFile(null);
   }, [repoPath]);
+
+  useEffect(() => {
+    setIsMacOverlayChrome(isMacTauri());
+  }, []);
 
   // Fetch project files for PromptBox @ mentions
   useEffect(() => {
@@ -351,16 +358,19 @@ export function MainInterface() {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
-        <div className="flex items-center gap-3">
-          <BranchSelector currentBranch={currentBranch} branches={branches} />
-          <DevServerConnection 
-            repoPath={repoPath} 
-            onPortChange={setDevServerPort} 
-            onRequestPortPrompt={() => setShowPortPrompt(true)}
-            onMonorepoChange={setIsMonorepo}
-          />
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="flex items-center gap-3 shrink-0">
+            <BranchSelector currentBranch={currentBranch} branches={branches} />
+            <DevServerConnection 
+              repoPath={repoPath} 
+              onPortChange={setDevServerPort} 
+              onRequestPortPrompt={() => setShowPortPrompt(true)}
+              onMonorepoChange={setIsMonorepo}
+            />
+          </div>
+          {isMacOverlayChrome && <WindowDragRegion className="mx-2 h-8 flex-1 min-w-0 rounded-md" />}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           <Button variant="ghost" size="icon" onClick={() => handleQuickLink("finder")} title="Finder">
             <Folder className="w-5 h-5 text-nav-icon-subscriptions" />
           </Button>
