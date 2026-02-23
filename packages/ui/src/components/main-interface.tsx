@@ -532,7 +532,7 @@ export function MainInterface() {
       </div>
 
       {/* Prompt Box - Bottom */}
-      <div className="border-t bg-muted/30">
+      <div className="border-t bg-muted/30 p-4">
         <PromptBox
           projectFiles={projectFiles}
           imageBasePath={getSettings().imageBasePath}
