@@ -2,6 +2,7 @@
 
 import React, { ReactNode, useEffect, useState } from "react";
 import { Logo } from "@/components/logo";
+import { WindowDragRegion } from "@/components/window-drag-region";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
 import { Settings, Plus, PanelLeftClose, PanelLeft, Sun, Moon, Flame, Binary, Monitor } from "lucide-react";
@@ -85,7 +86,7 @@ export function Sidebar({
         className
       )}
     >
-      {isMacOverlayChrome && <div data-tauri-drag-region className="h-9 shrink-0" />}
+      {isMacOverlayChrome && <WindowDragRegion className="h-9" />}
 
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-3 border-b">
