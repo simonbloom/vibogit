@@ -124,11 +124,11 @@ export function CreatePRDialog({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-surface border border-border rounded-xl w-full max-w-2xl shadow-xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-card border border-border rounded-xl w-full max-w-2xl shadow-xl max-h-[90vh] overflow-hidden flex flex-col text-foreground">
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-2">
             <GitPullRequest className="w-5 h-5 text-accent" />
-            <h2 className="text-lg font-semibold text-text-primary">Create Pull Request</h2>
+            <h2 className="text-lg font-semibold text-foreground">Create Pull Request</h2>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
@@ -137,14 +137,14 @@ export function CreatePRDialog({
 
         <div className="p-4 space-y-4 overflow-y-auto flex-1">
           {/* Branch info */}
-          <div className="flex items-center gap-2 text-sm text-text-secondary">
-            <span className="px-2 py-1 bg-surface-light rounded">{currentBranch?.name}</span>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="px-2 py-1 bg-muted rounded">{currentBranch?.name}</span>
             <span>→</span>
             <input
               type="text"
               value={baseBranch}
               onChange={(e) => setBaseBranch(e.target.value)}
-              className="px-2 py-1 bg-background border border-border rounded text-text-primary w-32"
+              className="px-2 py-1 bg-background border border-border rounded text-foreground w-32"
               placeholder="main"
             />
           </div>
@@ -152,7 +152,7 @@ export function CreatePRDialog({
           {/* Title */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-text-secondary">Title</label>
+              <label className="text-sm font-medium text-muted-foreground">Title</label>
               <Button
                 variant="link"
                 size="sm"
@@ -173,13 +173,13 @@ export function CreatePRDialog({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Add a descriptive title..."
-              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent"
+              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-accent"
             />
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-text-secondary mb-2">
+            <label className="block text-sm font-medium text-muted-foreground mb-2">
               Description
             </label>
             <textarea
@@ -187,12 +187,12 @@ export function CreatePRDialog({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Describe your changes..."
               rows={10}
-              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent resize-none font-mono text-sm"
+              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-accent resize-none font-mono text-sm"
             />
           </div>
 
           {error && (
-            <div className="p-3 bg-status-deleted/20 border border-status-deleted/50 rounded-lg text-sm text-status-deleted">
+            <div className="p-3 bg-destructive/10 border border-destructive/50 rounded-lg text-sm text-destructive">
               {error}
             </div>
           )}
