@@ -12,6 +12,7 @@ interface SidebarProps {
   onAddRepository?: () => void;
   onOpenSettings?: () => void;
   isSettingsActive?: boolean;
+  isMacOverlayChrome?: boolean;
   className?: string;
 }
 
@@ -44,6 +45,7 @@ export function Sidebar({
   onAddRepository, 
   onOpenSettings,
   isSettingsActive = false,
+  isMacOverlayChrome = false,
   className 
 }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -76,12 +78,15 @@ export function Sidebar({
 
   return (
     <div 
+      data-sidebar="sidebar"
       className={cn(
-        "flex flex-col h-full bg-background border-r transition-all duration-200 ease-in-out",
+        "flex flex-col h-full bg-sidebar border-r transition-all duration-200 ease-in-out",
         isCollapsed ? "w-16" : "w-[220px]",
         className
       )}
     >
+      {isMacOverlayChrome && <div data-tauri-drag-region className="h-9 shrink-0" />}
+
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-3 border-b">
         {!isCollapsed && (

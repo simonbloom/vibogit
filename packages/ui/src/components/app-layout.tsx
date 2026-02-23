@@ -9,6 +9,7 @@ import { Sidebar } from "@/components/sidebar/sidebar";
 import { ProjectList } from "@/components/sidebar/project-list";
 import { SettingsPanel } from "@/components/settings-panel";
 import { UpdateBanner } from "@/components/update-banner";
+import { isMacTauri } from "@/platform";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -18,7 +19,12 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { state: daemonState, setRepoPath, send } = useDaemon();
   const { state: projectsState, addProject } = useProjects();
   const [activePane, setActivePane] = useState<"project" | "settings">("project");
+  const [isMacOverlayChrome, setIsMacOverlayChrome] = useState(false);
   const autoUpdate = useAutoUpdate();
+
+  useEffect(() => {
+    setIsMacOverlayChrome(isMacTauri());
+  }, []);
 
   // Sync selected project with DaemonContext
   useEffect(() => {
@@ -83,6 +89,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         onAddRepository={() => void handleAddRepository()}
         onOpenSettings={() => setActivePane("settings")}
         isSettingsActive={activePane === "settings"}
+        isMacOverlayChrome={isMacOverlayChrome}
       >
         {(isCollapsed) => (
           <ProjectList 

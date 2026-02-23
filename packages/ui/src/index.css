@@ -49,13 +49,13 @@
 
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 98%;
+    --sidebar-background: 0 0% 94%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 225 95% 60%;
     --sidebar-primary-foreground: 0 0% 98%;
     --sidebar-accent: 225 95% 95%;
     --sidebar-accent-foreground: 225 95% 60%;
-    --sidebar-border: 225 20% 90%;
+    --sidebar-border: 0 0% 86%;
     --sidebar-ring: 265 89% 63%;
     
     /* Nav Icon Colors */
