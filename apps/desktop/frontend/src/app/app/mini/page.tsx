@@ -19,7 +19,7 @@ export default function MiniPage() {
 
   if (state.connection === "connecting") {
     return (
-      <div className="h-12 w-[520px] flex items-center justify-center">
+      <div className="h-12 w-full flex items-center justify-center">
         <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
       </div>
     );
@@ -27,7 +27,7 @@ export default function MiniPage() {
 
   if (state.connection === "error" || state.connection === "disconnected") {
     return (
-      <div className="h-12 w-[520px] flex items-center justify-center text-xs text-muted-foreground">
+      <div className="h-12 w-full flex items-center justify-center text-xs text-muted-foreground">
         Not connected
       </div>
     );

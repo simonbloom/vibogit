@@ -75,13 +75,18 @@ export function MiniView() {
     }
   }, [projectsState.selectedPath, repoPath, setRepoPath]);
 
-  // Dev server: detect and poll
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+  }, []);
+
+  // Dev server: reset and re-check when project changes
   useEffect(() => {
-    if (!repoPath) {
-      setDevStatus("disconnected");
-      setDevPort(null);
-      return;
-    }
+    stopPolling();
+    setDevStatus("disconnected");
+    setDevPort(null);
+
+    if (!repoPath) return;
 
     const checkState = async () => {
       try {
@@ -89,18 +94,12 @@ export function MiniView() {
         if (response.state.running) {
           setDevStatus("connected");
           setDevPort(response.state.port || null);
-          stopPolling();
         }
       } catch { /* ignore */ }
     };
 
     checkState();
-  }, [repoPath, send]);
-
-  const stopPolling = useCallback(() => {
-    if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
-    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
-  }, []);
+  }, [repoPath, send, stopPolling]);
 
   useEffect(() => { return () => stopPolling(); }, [stopPolling]);
 
@@ -294,7 +293,7 @@ export function MiniView() {
   const noApiKey = !getSettings().aiApiKey;
 
   return (
-    <div className="h-12 w-[520px] rounded-xl bg-background/95 backdrop-blur border shadow-lg flex items-center gap-0.5 px-1 select-none">
+    <div className="h-12 w-full rounded-xl bg-background/95 backdrop-blur border shadow-lg flex items-center gap-0.5 px-1.5 select-none">
       {/* Drag region */}
       <div
         onMouseDown={handleDrag}
