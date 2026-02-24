@@ -9,12 +9,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Loader2, RefreshCw, X, AlertTriangle, ChevronDown, ChevronRight, Globe, Settings, Copy, Terminal, Sparkles } from "lucide-react";
+import { Loader2, RefreshCw, X, AlertTriangle, ChevronDown, Globe, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { PortMismatchModal, type PortSource } from "@/components/port-mismatch-modal";
+import { DiagnosticModal } from "@/components/diagnostic-modal";
 import type { DevServerState, DevServerConfig, DevServerDiagnosis } from "@vibogit/shared";
 import { getSettings, TERMINAL_OPTIONS } from "@/lib/settings";
-import { getModelForProvider } from "@/lib/ai-service";
 
 type Status = "disconnected" | "connecting" | "restarting" | "connected" | "error";
 
@@ -58,9 +58,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [detectedPort, setDetectedPort] = useState<number | null>(null);
   const [diagnosis, setDiagnosis] = useState<DevServerDiagnosis | null>(null);
-  const [logsExpanded, setLogsExpanded] = useState(false);
-  const [aiCommands, setAiCommands] = useState<string[] | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
+  const [diagnosticModalOpen, setDiagnosticModalOpen] = useState(false);
   const [mismatchPrompt, setMismatchPrompt] = useState<MismatchPromptState | null>(null);
   const mismatchResolverRef = useRef<((decision: MismatchDecision) => void) | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -76,8 +74,6 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
         port: targetPort,
       });
       setDiagnosis(response.diagnosis);
-      setLogsExpanded(false);
-      setAiCommands(null);
     } catch {
       // Silent fail - keep generic error
     }
@@ -99,37 +95,6 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
       }
     }
   }, [send]);
-
-  const handleAiFix = useCallback(async () => {
-    if (!diagnosis || !repoPath) return;
-    const settings = getSettings();
-    if (!settings.aiApiKey) return;
-
-    setAiLoading(true);
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      const result = await invoke<{ commands: string[] }>("ai_diagnose_dev_server", {
-        provider: settings.aiProvider,
-        model: getModelForProvider(settings.aiProvider, settings.aiModel),
-        apiKey: settings.aiApiKey,
-        path: repoPath,
-        command: "bun",
-        commandArgs: ["run", "dev"],
-        port: port || detectedPort || 3000,
-        diagnosisCode: diagnosis.diagnosisCode,
-        problem: diagnosis.problem,
-        lastLogs: diagnosis.lastLogs,
-      });
-      setAiCommands(result.commands);
-    } catch (error) {
-      toast.error("AI diagnosis failed", {
-        description: error instanceof Error ? error.message : "Could not get AI suggestions",
-        duration: 5000,
-      });
-    } finally {
-      setAiLoading(false);
-    }
-  }, [diagnosis, repoPath, port, detectedPort]);
 
   const clearPolling = useCallback(() => {
     if (portCheckRef.current) {
@@ -334,7 +299,7 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
     setStatus("connecting");
     setErrorMessage(null);
     setDiagnosis(null);
-    setAiCommands(null);
+    setDiagnosticModalOpen(false);
 
     try {
       const resolved = await resolveStartConfig();
@@ -555,127 +520,32 @@ export function DevServerConnection({ repoPath, onPortChange, onRequestPortPromp
   }
 
   if (status === "error") {
-    const hasAiKey = !!getSettings().aiApiKey;
-
     return renderWithModal(
-      <div className="flex flex-col gap-2">
-        {/* Error header row */}
+      <>
         <div className="flex items-center gap-1.5">
-          <div className="flex items-center gap-1.5 px-2 py-1 text-sm text-destructive">
+          <button
+            type="button"
+            onClick={() => diagnosis && setDiagnosticModalOpen(true)}
+            className="flex items-center gap-1.5 px-2 py-1 text-sm text-destructive hover:bg-destructive/10 rounded-md transition-colors cursor-pointer"
+          >
             <AlertTriangle className="w-3.5 h-3.5" />
-            {diagnosis?.problem || "Failed"}
-          </div>
+            <span className="truncate max-w-[250px]">{diagnosis?.problem || "Failed"}</span>
+          </button>
           <Button variant="ghost" size="sm" className="text-destructive" onClick={handleConnect}>
             Retry
           </Button>
         </div>
-
-        {/* Diagnostic card */}
         {diagnosis && (
-          <div className="ml-2 p-3 rounded-md border border-border bg-muted/30 text-sm max-w-[400px]">
-            <p className="text-muted-foreground mb-3">{diagnosis.suggestion}</p>
-
-            {/* Action buttons */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {diagnosis.suggestedCommand && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 h-7 text-xs"
-                  onClick={() => sendCommandToTerminal(diagnosis.suggestedCommand!)}
-                >
-                  <Terminal className="w-3 h-3" />
-                  Run <code className="font-mono">{diagnosis.suggestedCommand}</code>
-                </Button>
-              )}
-              {hasAiKey && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 h-7 text-xs"
-                  onClick={handleAiFix}
-                  disabled={aiLoading}
-                >
-                  {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                  Fix with AI
-                </Button>
-              )}
-              {diagnosis.lastLogs.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setLogsExpanded(!logsExpanded)}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {logsExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                  {logsExpanded ? "Hide logs" : "Show logs"}
-                </button>
-              )}
-            </div>
-
-            {/* AI suggestion */}
-            {aiCommands && aiCommands.length > 0 && (
-              <div className="mt-3 p-2 rounded border border-primary/20 bg-primary/5">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <Sparkles className="w-3 h-3 text-primary" />
-                  <span className="text-xs font-medium">AI Suggestion</span>
-                </div>
-                <pre className="text-xs font-mono whitespace-pre-wrap mb-2">{aiCommands.join("\n")}</pre>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 h-6 text-xs"
-                    onClick={() => sendCommandToTerminal(aiCommands.join(" && "), false)}
-                  >
-                    <Terminal className="w-3 h-3" />
-                    Run in Terminal
-                  </Button>
-                  <button
-                    type="button"
-                    onClick={() => setAiCommands(null)}
-                    className="text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Collapsible logs */}
-            {logsExpanded && diagnosis.lastLogs.length > 0 && (
-              <div className="mt-3">
-                <div
-                  className="rounded overflow-auto max-h-[160px] px-2 py-1.5"
-                  style={{
-                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-                    fontSize: "11px",
-                    lineHeight: "1.5",
-                    background: "#1e1e1e",
-                    color: "#d4d4d4",
-                  }}
-                >
-                  {diagnosis.lastLogs.map((line, i) => (
-                    <div key={i} className="whitespace-pre-wrap break-all">{line}</div>
-                  ))}
-                </div>
-                <div className="flex justify-end mt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(diagnosis.lastLogs.join("\n"));
-                      toast.success("Logs copied to clipboard");
-                    }}
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    <Copy className="w-3 h-3" />
-                    Copy
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          <DiagnosticModal
+            isOpen={diagnosticModalOpen}
+            onClose={() => setDiagnosticModalOpen(false)}
+            onRetry={handleConnect}
+            onRunCommand={sendCommandToTerminal}
+            diagnosis={diagnosis}
+            port={port || detectedPort || 3000}
+          />
         )}
-      </div>
+      </>
     );
   }
 
