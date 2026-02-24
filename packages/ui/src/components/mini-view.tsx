@@ -38,6 +38,7 @@ export function MiniView() {
   const { state, send, refreshStatus, setRepoPath } = useDaemon();
   const { state: projectsState, selectProject } = useProjects();
   const { status, repoPath } = state;
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const [isCommitting, setIsCommitting] = useState(false);
   const [commitIcon, setCommitIcon] = useState<"default" | "loading" | "check">("default");
@@ -351,6 +352,23 @@ export function MiniView() {
     }
   };
 
+  // Auto-resize Tauri window to fit content
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(async (entries) => {
+      const width = Math.ceil(entries[0].contentRect.width) + 8;
+      const height = 56;
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const { LogicalSize } = await import("@tauri-apps/api/dpi");
+        await getCurrentWindow().setSize(new LogicalSize(width, height));
+      } catch { /* not in Tauri */ }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const projects = projectsState.projects;
   const selectedPath = projectsState.selectedPath;
   const selectedName = selectedPath?.split("/").pop() || "No project";
@@ -358,7 +376,7 @@ export function MiniView() {
   const noApiKey = !getSettings().aiApiKey;
 
   return (
-    <div className="h-12 w-full rounded-xl bg-background/95 backdrop-blur border shadow-lg flex items-center gap-0.5 px-1.5 select-none">
+    <div ref={containerRef} className="h-12 w-fit rounded-xl bg-background/95 backdrop-blur border shadow-lg flex items-center gap-0.5 px-1.5 select-none">
       {/* Drag region */}
       <div
         onMouseDown={handleDrag}
