@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useDaemon } from "@/lib/daemon-context";
+import { useWindowActivity } from "@/lib/use-window-activity";
 import { BranchSelector } from "@/components/branch-selector";
 import { DevServerConnection } from "@/components/dev-server-connection";
 import { DevServerLogs } from "@/components/dev-server-logs";
@@ -44,8 +45,11 @@ import { clsx } from "clsx";
 import { toast } from "sonner";
 import type { DevServerConfig, DevServerState } from "@vibogit/shared";
 
+const AUTO_FETCH_INTERVAL_MS = 120_000;
+
 export function MainInterface() {
   const { state, send, refreshStatus, refreshBranches } = useDaemon();
+  const { isForeground } = useWindowActivity();
   const [isPulling, setIsPulling] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
@@ -61,6 +65,8 @@ export function MainInterface() {
   const [isMacOverlayChrome, setIsMacOverlayChrome] = useState(false);
   const [miniViewOpen, setMiniViewOpen] = useState(false);
   const [isTauriEnv, setIsTauriEnv] = useState(false);
+  const lastFetchAtRef = useRef(0);
+  const wasForegroundRef = useRef(isForeground);
 
   const { status, branches, repoPath } = state;
   const currentBranch = branches.find((b) => b.current);
@@ -74,6 +80,7 @@ export function MainInterface() {
   // Clear selected file when repo changes
   useEffect(() => {
     setSelectedFile(null);
+    lastFetchAtRef.current = 0;
   }, [repoPath]);
 
   useEffect(() => {
@@ -230,6 +237,7 @@ export function MainInterface() {
     setIsFetching(true);
     try {
       await send("fetch", { repoPath });
+      lastFetchAtRef.current = Date.now();
       await refreshStatus();
       await refreshBranches();
     } catch (error) {
@@ -239,16 +247,44 @@ export function MainInterface() {
     }
   };
 
-  // Auto-fetch every 60 seconds to keep ahead/behind counts current
-  useEffect(() => {
+  const runAutoFetch = useCallback(async () => {
     if (!repoPath) return;
-    const interval = setInterval(() => {
-      send("fetch", { repoPath })
-        .then(() => refreshStatus())
-        .catch(() => {});
-    }, 60_000);
-    return () => clearInterval(interval);
+    try {
+      await send("fetch", { repoPath });
+      lastFetchAtRef.current = Date.now();
+      await refreshStatus();
+    } catch {
+      // Best effort in background maintenance path.
+    }
   }, [repoPath, send, refreshStatus]);
+
+  // Auto-fetch every 120s while foregrounded.
+  useEffect(() => {
+    if (!repoPath || !isForeground) return;
+
+    const interval = setInterval(() => {
+      void runAutoFetch();
+    }, AUTO_FETCH_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [repoPath, isForeground, runAutoFetch]);
+
+  // On background -> foreground, catch up with a single fetch if stale.
+  useEffect(() => {
+    if (!repoPath) {
+      wasForegroundRef.current = isForeground;
+      return;
+    }
+
+    if (!wasForegroundRef.current && isForeground) {
+      const now = Date.now();
+      if (now - lastFetchAtRef.current >= AUTO_FETCH_INTERVAL_MS) {
+        void runAutoFetch();
+      }
+    }
+
+    wasForegroundRef.current = isForeground;
+  }, [repoPath, isForeground, runAutoFetch]);
 
   const handlePull = async () => {
     if (!repoPath) return;

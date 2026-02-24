@@ -16,6 +16,7 @@ import type {
   GitBranch,
 } from "@vibogit/shared";
 import { MINI_COMMIT_COMPLETE } from "./mini-view-events";
+import { useWindowActivity } from "./use-window-activity";
 
 const isTauri = (): boolean => {
   try {
@@ -397,26 +398,113 @@ interface DaemonContextValue {
 
 const DaemonContext = createContext<DaemonContextValue | null>(null);
 
+const REFRESH_DEBOUNCE_MS = 250;
+const HEARTBEAT_REFRESH_INTERVAL_MS = 10_000;
+const POWER_DEBUG_ENABLED = process.env.NEXT_PUBLIC_VIBOGIT_DEBUG_POWER === "1";
+
 export function DaemonProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(daemonReducer, initialState);
   const repoPathRef = useRef<string | null>(null);
   const fileChangeUnlistenRef = useRef<(() => void) | null>(null);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshInFlightRef = useRef(false);
+  const refreshQueuedRef = useRef(false);
+  const pendingRefreshRef = useRef(false);
+  const debugCountersRef = useRef({
+    watcherEventsReceived: 0,
+    statusRefreshExecuted: 0,
+    statusRefreshSkippedBackground: 0,
+    statusRefreshSkippedInflight: 0,
+  });
+  const { isForeground } = useWindowActivity();
+  const isForegroundRef = useRef(isForeground);
+  const wasForegroundRef = useRef(isForeground);
+
+  const flushDebugCounters = useCallback((reason: string) => {
+    if (!POWER_DEBUG_ENABLED) return;
+    const c = debugCountersRef.current;
+    console.debug("[PowerDebug][daemon]", reason, {
+      watcherEventsReceived: c.watcherEventsReceived,
+      statusRefreshExecuted: c.statusRefreshExecuted,
+      statusRefreshSkippedBackground: c.statusRefreshSkippedBackground,
+      statusRefreshSkippedInflight: c.statusRefreshSkippedInflight,
+    });
+  }, []);
 
   const send = useCallback(<T = unknown,>(type: string, payload?: unknown): Promise<T> => {
     return tauriSend<T>(type, payload);
   }, []);
 
-  const refreshStatusInternal = useCallback(async () => {
+  const refreshStatusNow = useCallback(async (opts?: { allowBackground?: boolean; source?: string }) => {
     const path = repoPathRef.current;
     if (!path) return;
 
+    const allowBackground = opts?.allowBackground ?? false;
+    if (!allowBackground && !isForegroundRef.current) {
+      pendingRefreshRef.current = true;
+      debugCountersRef.current.statusRefreshSkippedBackground += 1;
+      if (debugCountersRef.current.statusRefreshSkippedBackground % 20 === 0) {
+        flushDebugCounters("skip-background");
+      }
+      return;
+    }
+
+    if (refreshInFlightRef.current) {
+      refreshQueuedRef.current = true;
+      debugCountersRef.current.statusRefreshSkippedInflight += 1;
+      if (debugCountersRef.current.statusRefreshSkippedInflight % 20 === 0) {
+        flushDebugCounters("skip-inflight");
+      }
+      return;
+    }
+
+    refreshInFlightRef.current = true;
+    pendingRefreshRef.current = false;
+
     try {
       const response = await send<{ status: GitStatus }>("status", { repoPath: path });
-      dispatch({ type: "SET_STATUS", payload: response.status });
+      if (repoPathRef.current === path) {
+        dispatch({ type: "SET_STATUS", payload: response.status });
+        debugCountersRef.current.statusRefreshExecuted += 1;
+        if (debugCountersRef.current.statusRefreshExecuted % 20 === 0) {
+          flushDebugCounters(opts?.source ?? "refresh");
+        }
+      }
     } catch (err) {
       console.error("[Backend] Failed to refresh status:", err);
+    } finally {
+      refreshInFlightRef.current = false;
+      if (refreshQueuedRef.current) {
+        refreshQueuedRef.current = false;
+        if (refreshTimerRef.current) {
+          clearTimeout(refreshTimerRef.current);
+        }
+        refreshTimerRef.current = setTimeout(() => {
+          refreshTimerRef.current = null;
+          void refreshStatusNow({ source: "queued" });
+        }, REFRESH_DEBOUNCE_MS);
+      }
     }
-  }, [send]);
+  }, [flushDebugCounters, send]);
+
+  const scheduleStatusRefresh = useCallback((source: string) => {
+    if (!repoPathRef.current) return;
+
+    if (!isForegroundRef.current) {
+      pendingRefreshRef.current = true;
+      debugCountersRef.current.statusRefreshSkippedBackground += 1;
+      return;
+    }
+
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+    }
+
+    refreshTimerRef.current = setTimeout(() => {
+      refreshTimerRef.current = null;
+      void refreshStatusNow({ source });
+    }, REFRESH_DEBOUNCE_MS);
+  }, [refreshStatusNow]);
 
   const connect = useCallback(async () => {
     dispatch({ type: "SET_CONNECTION", payload: "connecting" });
@@ -439,11 +527,13 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
         }
 
         const unlistenFile = await tauriListen("file:change", () => {
-          void refreshStatusInternal();
+          debugCountersRef.current.watcherEventsReceived += 1;
+          scheduleStatusRefresh("watcher:file-change");
         });
 
         const unlistenCommit = await tauriListen(MINI_COMMIT_COMPLETE, () => {
-          void refreshStatusInternal();
+          debugCountersRef.current.watcherEventsReceived += 1;
+          scheduleStatusRefresh("watcher:mini-commit");
         });
 
         fileChangeUnlistenRef.current = () => {
@@ -456,13 +546,21 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
       dispatch({ type: "SET_CONNECTION", payload: "error" });
       dispatch({ type: "SET_ERROR", payload: err instanceof Error ? err.message : "Failed to connect to desktop backend" });
     }
-  }, [refreshStatusInternal]);
+  }, [scheduleStatusRefresh]);
 
   const reconnect = useCallback(() => {
     void connect();
   }, [connect]);
 
   const setRepoPath = useCallback(async (path: string | null) => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+    refreshInFlightRef.current = false;
+    refreshQueuedRef.current = false;
+    pendingRefreshRef.current = false;
+
     repoPathRef.current = path;
     dispatch({ type: "SET_REPO_PATH", payload: path });
 
@@ -479,19 +577,18 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
         send<{ branches: GitBranch[] }>("branches", { repoPath: path }),
       ]);
 
-      dispatch({ type: "SET_STATUS", payload: statusResponse.status });
-      dispatch({ type: "SET_BRANCHES", payload: branchResponse.branches });
+      if (repoPathRef.current === path) {
+        dispatch({ type: "SET_STATUS", payload: statusResponse.status });
+        dispatch({ type: "SET_BRANCHES", payload: branchResponse.branches });
+      }
     } catch (err) {
       dispatch({ type: "SET_ERROR", payload: err instanceof Error ? err.message : "Failed to load project state" });
     }
   }, [send]);
 
   const refreshStatus = useCallback(async () => {
-    if (!state.repoPath) return;
-
-    const response = await send<{ status: GitStatus }>("status", { repoPath: state.repoPath });
-    dispatch({ type: "SET_STATUS", payload: response.status });
-  }, [state.repoPath, send]);
+    await refreshStatusNow({ allowBackground: true, source: "manual" });
+  }, [refreshStatusNow]);
 
   const refreshBranches = useCallback(async () => {
     if (!state.repoPath) return;
@@ -501,6 +598,29 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
   }, [state.repoPath, send]);
 
   useEffect(() => {
+    isForegroundRef.current = isForeground;
+
+    if (!wasForegroundRef.current && isForeground && pendingRefreshRef.current) {
+      pendingRefreshRef.current = false;
+      scheduleStatusRefresh("foreground-resume");
+    }
+
+    wasForegroundRef.current = isForeground;
+  }, [isForeground, scheduleStatusRefresh]);
+
+  useEffect(() => {
+    if (!state.repoPath || !isForeground) return;
+
+    const interval = setInterval(() => {
+      scheduleStatusRefresh("heartbeat");
+    }, HEARTBEAT_REFRESH_INTERVAL_MS);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [state.repoPath, isForeground, scheduleStatusRefresh]);
+
+  useEffect(() => {
     void connect();
 
     return () => {
@@ -508,8 +628,13 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
         fileChangeUnlistenRef.current();
         fileChangeUnlistenRef.current = null;
       }
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+      flushDebugCounters("unmount");
     };
-  }, [connect]);
+  }, [connect, flushDebugCounters]);
 
   return (
     <DaemonContext.Provider value={{ state, send, setRepoPath, refreshStatus, refreshBranches, reconnect }}>

@@ -7,6 +7,7 @@ import {
   useEffect,
   useCallback,
   useRef,
+  useMemo,
   type ReactNode,
 } from "react";
 import {
@@ -14,6 +15,7 @@ import {
   MAIN_PROJECT_CHANGED,
   type ProjectChangedPayload,
 } from "./mini-view-events";
+import { useWindowActivity } from "./use-window-activity";
 // Safe invoke that returns null when Tauri is not available (e.g. browser dev mode)
 async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> {
   try {
@@ -60,6 +62,7 @@ type ProjectsAction =
   | { type: "REMOVE_PROJECT"; payload: string }
   | { type: "SELECT_PROJECT"; payload: string | null }
   | { type: "SET_STATUSES"; payload: Record<string, ProjectStatus> }
+  | { type: "MERGE_STATUSES"; payload: Record<string, ProjectStatus> }
   | { type: "SET_FAVICONS"; payload: Record<string, FaviconData | null> }
   | { type: "UPDATE_FAVICON"; payload: { path: string; favicon: FaviconData | null } }
   | { type: "SET_LOADING"; payload: boolean }
@@ -93,6 +96,8 @@ function projectsReducer(state: ProjectsState, action: ProjectsAction): Projects
       return { ...state, selectedPath: action.payload };
     case "SET_STATUSES":
       return { ...state, statuses: action.payload };
+    case "MERGE_STATUSES":
+      return { ...state, statuses: { ...state.statuses, ...action.payload } };
     case "SET_FAVICONS":
       return { ...state, favicons: action.payload };
     case "UPDATE_FAVICON":
@@ -117,12 +122,17 @@ interface ProjectsContextValue {
 
 const ProjectsContext = createContext<ProjectsContextValue | null>(null);
 
-const STATUS_REFRESH_INTERVAL = 5000;
+const SELECTED_STATUS_REFRESH_INTERVAL_MS = 5000;
+const NON_SELECTED_STATUS_REFRESH_INTERVAL_MS = 30000;
+const NON_SELECTED_STATUS_BATCH_SIZE = 3;
 
 export function ProjectsProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(projectsReducer, initialState);
-  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
+  const nonSelectedBatchIndexRef = useRef(0);
+  const { isForeground } = useWindowActivity();
+  const projectPaths = useMemo(() => state.projects.map((project) => project.path), [state.projects]);
+  const isMiniWindow = typeof window !== "undefined" && window.location.pathname.startsWith("/app/mini");
 
   const loadProjects = useCallback(async () => {
     try {
@@ -147,25 +157,34 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const refreshStatuses = useCallback(async () => {
-    if (state.projects.length === 0) return;
-    
+  const refreshStatusesForPaths = useCallback(async (paths: string[], mode: "replace" | "merge" = "merge") => {
+    if (paths.length === 0) return;
+
     try {
-      const paths = state.projects.map(p => p.path);
-      const statusList = await safeInvoke<ProjectStatus[]>("get_all_project_statuses", { paths });
+      const dedupedPaths = Array.from(new Set(paths));
+      const statusList = await safeInvoke<ProjectStatus[]>("get_all_project_statuses", { paths: dedupedPaths });
       if (!statusList) return;
-      
+
       if (isMountedRef.current) {
         const statusMap: Record<string, ProjectStatus> = {};
         for (const status of statusList) {
           statusMap[status.path] = status;
         }
-        dispatch({ type: "SET_STATUSES", payload: statusMap });
+
+        if (mode === "replace") {
+          dispatch({ type: "SET_STATUSES", payload: statusMap });
+        } else {
+          dispatch({ type: "MERGE_STATUSES", payload: statusMap });
+        }
       }
     } catch (err) {
       console.error("[Projects] Failed to refresh statuses:", err);
     }
-  }, [state.projects]);
+  }, []);
+
+  const refreshStatuses = useCallback(async () => {
+    await refreshStatusesForPaths(projectPaths, "replace");
+  }, [projectPaths, refreshStatusesForPaths]);
 
   const loadFavicons = useCallback(async (projects: Project[]) => {
     if (projects.length === 0) return;
@@ -209,8 +228,10 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "SELECT_PROJECT", payload: project.path });
     
     // Refresh statuses and load favicon for the new project
-    setTimeout(refreshStatuses, 100);
-    loadSingleFavicon(project.path);
+    setTimeout(() => {
+      void refreshStatuses();
+    }, 100);
+    void loadSingleFavicon(project.path);
     
     return project;
   }, [refreshStatuses, loadSingleFavicon]);
@@ -247,6 +268,26 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     }
   }, [state.projects]);
 
+  const getNonSelectedBatch = useCallback(() => {
+    const nonSelectedPaths = projectPaths.filter((path) => path !== state.selectedPath);
+    if (nonSelectedPaths.length === 0) return [];
+
+    const start = nonSelectedBatchIndexRef.current % nonSelectedPaths.length;
+    const batchSize = Math.min(NON_SELECTED_STATUS_BATCH_SIZE, nonSelectedPaths.length);
+    const batch: string[] = [];
+
+    for (let index = 0; index < batchSize; index += 1) {
+      batch.push(nonSelectedPaths[(start + index) % nonSelectedPaths.length]);
+    }
+
+    nonSelectedBatchIndexRef.current = (start + batchSize) % nonSelectedPaths.length;
+    return batch;
+  }, [projectPaths, state.selectedPath]);
+
+  useEffect(() => {
+    nonSelectedBatchIndexRef.current = 0;
+  }, [projectPaths, state.selectedPath]);
+
   // Load projects on mount
   useEffect(() => {
     isMountedRef.current = true;
@@ -263,22 +304,43 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     loadFavicons(state.projects);
   }, [state.loading, state.projects.length, loadFavicons]);
 
-  // Auto-refresh statuses
+  // Adaptive auto-refresh: selected repo stays fast, others refresh in slower batches.
   useEffect(() => {
-    if (state.projects.length === 0) return;
-    
-    // Initial refresh
-    refreshStatuses();
-    
-    // Set up interval
-    refreshIntervalRef.current = setInterval(refreshStatuses, STATUS_REFRESH_INTERVAL);
-    
-    return () => {
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
+    if (projectPaths.length === 0 || isMiniWindow || !isForeground) return;
+
+    if (state.selectedPath) {
+      void refreshStatusesForPaths([state.selectedPath], "merge");
+    }
+    const initialBatch = getNonSelectedBatch();
+    if (initialBatch.length > 0) {
+      void refreshStatusesForPaths(initialBatch, "merge");
+    }
+
+    const selectedInterval = setInterval(() => {
+      if (state.selectedPath) {
+        void refreshStatusesForPaths([state.selectedPath], "merge");
       }
+    }, SELECTED_STATUS_REFRESH_INTERVAL_MS);
+
+    const nonSelectedInterval = setInterval(() => {
+      const batch = getNonSelectedBatch();
+      if (batch.length > 0) {
+        void refreshStatusesForPaths(batch, "merge");
+      }
+    }, NON_SELECTED_STATUS_REFRESH_INTERVAL_MS);
+
+    return () => {
+      clearInterval(selectedInterval);
+      clearInterval(nonSelectedInterval);
     };
-  }, [state.projects.length, refreshStatuses]);
+  }, [
+    projectPaths.length,
+    state.selectedPath,
+    isForeground,
+    isMiniWindow,
+    refreshStatusesForPaths,
+    getNonSelectedBatch,
+  ]);
 
   // Migration: auto-add current repo on first launch
   useEffect(() => {

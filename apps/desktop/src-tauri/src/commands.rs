@@ -2,6 +2,7 @@ use crate::git::{self, Commit, FileDiff, GitError, ProjectState, SaveResult, Shi
 use crate::watcher;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::process::{Command, Child, Stdio};
@@ -21,6 +22,7 @@ pub struct AppState {
     pub current_project: Mutex<Option<String>>,
     pub recent_projects: Mutex<Vec<ProjectInfo>>,
     pub watcher_handle: Mutex<Option<watcher::WatcherHandle>>,
+    pub status_cache: Mutex<StatusCache>,
 }
 
 impl Default for AppState {
@@ -29,8 +31,97 @@ impl Default for AppState {
             current_project: Mutex::new(None),
             recent_projects: Mutex::new(Vec::new()),
             watcher_handle: Mutex::new(None),
+            status_cache: Mutex::new(StatusCache::default()),
         }
     }
+}
+
+const STATUS_CACHE_TTL: Duration = Duration::from_millis(1000);
+
+#[derive(Debug, Clone)]
+struct StatusCacheEntry {
+    state: ProjectState,
+    cached_at: Instant,
+}
+
+#[derive(Debug, Default)]
+pub struct StatusCache {
+    entries: HashMap<String, StatusCacheEntry>,
+    hits: u64,
+    misses: u64,
+}
+
+fn is_power_debug_enabled() -> bool {
+    std::env::var("VIBOGIT_DEBUG_POWER")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn maybe_log_cache_debug(cache: &StatusCache, reason: &str) {
+    if !is_power_debug_enabled() {
+        return;
+    }
+
+    let total = cache.hits + cache.misses;
+    if total > 0 && total % 100 == 0 {
+        let hit_rate = (cache.hits as f64 / total as f64) * 100.0;
+        eprintln!(
+            "[PowerDebug][status-cache] reason={} hits={} misses={} hit_rate={:.1}%",
+            reason,
+            cache.hits,
+            cache.misses,
+            hit_rate
+        );
+    }
+}
+
+fn get_status_cached(state: &AppState, path: &str) -> Result<ProjectState, GitError> {
+    let now = Instant::now();
+
+    {
+        let mut cache = state.status_cache.lock().unwrap();
+        if let Some(cached) = cache.entries.get(path).and_then(|entry| {
+            if now.duration_since(entry.cached_at) <= STATUS_CACHE_TTL {
+                Some(entry.state.clone())
+            } else {
+                None
+            }
+        }) {
+            cache.hits += 1;
+            maybe_log_cache_debug(&cache, "hit");
+            return Ok(cached);
+        }
+
+        if cache.entries.contains_key(path) {
+            cache.entries.remove(path);
+        }
+
+        cache.misses += 1;
+        maybe_log_cache_debug(&cache, "miss");
+    }
+
+    let fresh = git::get_status(path)?;
+
+    let mut cache = state.status_cache.lock().unwrap();
+    cache.entries.insert(
+        path.to_string(),
+        StatusCacheEntry {
+            state: fresh.clone(),
+            cached_at: Instant::now(),
+        },
+    );
+
+    Ok(fresh)
+}
+
+fn invalidate_status_cache(state: &AppState, path: &str) {
+    let mut cache = state.status_cache.lock().unwrap();
+    cache.entries.remove(path);
+}
+
+fn invalidate_all_status_cache(state: &AppState) {
+    let mut cache = state.status_cache.lock().unwrap();
+    cache.entries.clear();
 }
 
 pub fn init_state(app: &AppHandle) {
@@ -203,11 +294,14 @@ pub async fn reorder_saved_projects(paths: Vec<String>) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn get_all_project_statuses(paths: Vec<String>) -> Result<Vec<ProjectStatus>, String> {
+pub async fn get_all_project_statuses(
+    paths: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<Vec<ProjectStatus>, String> {
     let mut statuses = Vec::new();
     
     for path in paths {
-        let status = match git::get_status(&path) {
+        let status = match get_status_cached(&state, &path) {
             Ok(state) => {
                 let uncommitted = state.staged_files.len() + state.changed_files.len() + state.untracked_files.len();
                 ProjectStatus {
@@ -252,7 +346,7 @@ pub async fn git_status(
         path
     };
 
-    git::get_status(&project_path)
+    get_status_cached(&state, &project_path)
 }
 
 #[tauri::command]
@@ -272,7 +366,9 @@ pub async fn git_save(
         path
     };
 
-    git::save(&project_path, message)
+    let result = git::save(&project_path, message)?;
+    invalidate_status_cache(&state, &project_path);
+    Ok(result)
 }
 
 #[tauri::command]
@@ -291,7 +387,9 @@ pub async fn git_ship(
         path
     };
 
-    git::ship(&project_path)
+    let result = git::ship(&project_path)?;
+    invalidate_status_cache(&state, &project_path);
+    Ok(result)
 }
 
 #[tauri::command]
@@ -310,7 +408,9 @@ pub async fn git_sync(
         path
     };
 
-    git::sync(&project_path)
+    let result = git::sync(&project_path)?;
+    invalidate_status_cache(&state, &project_path);
+    Ok(result)
 }
 
 #[tauri::command]
@@ -329,7 +429,9 @@ pub async fn git_fetch(
         path
     };
 
-    git::fetch(&project_path)
+    git::fetch(&project_path)?;
+    invalidate_status_cache(&state, &project_path);
+    Ok(())
 }
 
 #[tauri::command]
@@ -379,8 +481,10 @@ pub async fn set_project(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<ProjectInfo, String> {
+    invalidate_all_status_cache(&state);
+
     // Validate it's a git repo
-    git::get_status(&path).map_err(|e| e.to_string())?;
+    get_status_cached(&state, &path).map_err(|e| e.to_string())?;
 
     // Stop existing watcher
     if let Some(handle) = state.watcher_handle.lock().unwrap().take() {
@@ -817,7 +921,9 @@ pub async fn git_stage(
         path
     };
 
-    git::stage(&project_path, &files)
+    git::stage(&project_path, &files)?;
+    invalidate_status_cache(&state, &project_path);
+    Ok(())
 }
 
 #[tauri::command]
@@ -837,7 +943,9 @@ pub async fn git_unstage(
         path
     };
 
-    git::unstage(&project_path, &files)
+    git::unstage(&project_path, &files)?;
+    invalidate_status_cache(&state, &project_path);
+    Ok(())
 }
 
 #[tauri::command]
@@ -857,7 +965,9 @@ pub async fn git_checkout(
         path
     };
 
-    git::checkout(&project_path, &branch)
+    git::checkout(&project_path, &branch)?;
+    invalidate_status_cache(&state, &project_path);
+    Ok(())
 }
 
 #[tauri::command]
@@ -878,7 +988,9 @@ pub async fn git_create_branch(
         path
     };
 
-    git::create_branch(&project_path, &name, checkout.unwrap_or(false))
+    git::create_branch(&project_path, &name, checkout.unwrap_or(false))?;
+    invalidate_status_cache(&state, &project_path);
+    Ok(())
 }
 
 #[tauri::command]
@@ -936,7 +1048,9 @@ pub async fn git_stash_save(
         path
     };
 
-    git::stash_save(&project_path, message)
+    git::stash_save(&project_path, message)?;
+    invalidate_status_cache(&state, &project_path);
+    Ok(())
 }
 
 #[tauri::command]
@@ -955,7 +1069,9 @@ pub async fn git_stash_pop(
         path
     };
 
-    git::stash_pop(&project_path)
+    git::stash_pop(&project_path)?;
+    invalidate_status_cache(&state, &project_path);
+    Ok(())
 }
 
 #[tauri::command]
@@ -980,8 +1096,10 @@ pub async fn git_file_diff(
 }
 
 #[tauri::command]
-pub async fn git_init(path: String) -> Result<(), GitError> {
-    git::init_repo(&path)
+pub async fn git_init(path: String, state: State<'_, AppState>) -> Result<(), GitError> {
+    git::init_repo(&path)?;
+    invalidate_status_cache(&state, &path);
+    Ok(())
 }
 
 // File Operations
