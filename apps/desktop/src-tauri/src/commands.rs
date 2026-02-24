@@ -1240,29 +1240,74 @@ pub async fn get_favicon(path: String) -> Result<FaviconResult, String> {
     const MAX_FILE_SIZE: u64 = 512 * 1024; // 512KB
 
     let favicon_paths = [
-        // Favicons (highest priority)
+        // Next.js app router icons (highest priority)
+        "app/favicon.ico",
+        "app/favicon.png",
+        "app/favicon.svg",
+        "app/icon.ico",
+        "app/icon.png",
+        "app/icon.svg",
+        "src/app/favicon.ico",
+        "src/app/favicon.png",
+        "src/app/favicon.svg",
+        "src/app/icon.ico",
+        "src/app/icon.png",
+        "src/app/icon.svg",
+        // Root/public/static favicons
+        "favicon.ico",
+        "favicon.png",
+        "favicon.svg",
+        "favicon-32x32.png",
+        "favicon-16x16.png",
         "public/favicon.ico",
         "public/favicon.png",
+        "public/favicon.svg",
+        "public/favicon-32x32.png",
+        "public/favicon-16x16.png",
         "static/favicon.ico",
         "static/favicon.png",
+        "static/favicon.svg",
         "src/favicon.ico",
-        "favicon.ico",
+        "src/favicon.png",
+        "src/favicon.svg",
+        // Common nested locations used by many sites
+        "public/images/favicon.ico",
+        "public/images/favicon.png",
+        "public/images/favicon.svg",
+        "public/img/favicon.ico",
+        "public/img/favicon.png",
+        "public/img/favicon.svg",
+        "public/webflow/favicon.ico",
+        "public/webflow/favicon.png",
+        "public/webflow/favicon.svg",
         // Logo files
         "logo.png",
         "logo.svg",
+        "logo.ico",
         "icon.png",
+        "icon.svg",
+        "icon.ico",
         "public/logo.png",
         "public/logo.svg",
+        "public/logo.ico",
         "public/icon.png",
+        "public/icon.svg",
+        "public/icon.ico",
+        "public/images/logo.png",
+        "public/images/logo.svg",
+        "public/images/icon.png",
+        "public/images/icon.svg",
         "assets/logo.png",
+        "assets/logo.svg",
         "assets/icon.png",
+        "assets/icon.svg",
     ];
 
     let base = PathBuf::from(&path);
     
     for favicon_path in &favicon_paths {
         let full_path = base.join(favicon_path);
-        if full_path.exists() {
+        if full_path.is_file() {
             if let Ok(meta) = std::fs::metadata(&full_path) {
                 if meta.len() > MAX_FILE_SIZE {
                     continue;

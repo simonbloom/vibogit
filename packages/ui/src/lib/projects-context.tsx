@@ -232,6 +232,10 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       void refreshStatuses();
     }, 100);
     void loadSingleFavicon(project.path);
+    setTimeout(() => {
+      // Re-check shortly after add to catch repos where icon files appear with a slight delay.
+      void loadSingleFavicon(project.path);
+    }, 1200);
     
     return project;
   }, [refreshStatuses, loadSingleFavicon]);
