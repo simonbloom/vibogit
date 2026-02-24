@@ -165,7 +165,7 @@ export function Sidebar({
             {!mounted && <Button variant="ghost" size="icon" className="h-8 w-8" disabled><Sun className="h-4 w-4" /></Button>}
           </div>
           {!isCollapsed && (
-            <span className="pr-1 text-[10px] text-muted-foreground/50">v3.8.0</span>
+            <span className="pr-1 text-[10px] text-muted-foreground/50">v3.8.1</span>
           )}
         </div>
       </div>
