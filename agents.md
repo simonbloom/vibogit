@@ -94,4 +94,5 @@ xattr -cr /Applications/ViboGit.app
 xattr -cr /path/to/ViboGit_<version>_aarch64.dmg
 ```
 
-
+## Development Server
+- Port: 4158
