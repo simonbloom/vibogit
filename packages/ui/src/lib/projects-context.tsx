@@ -9,6 +9,11 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import {
+  MINI_PROJECT_CHANGED,
+  MAIN_PROJECT_CHANGED,
+  type ProjectChangedPayload,
+} from "./mini-view-events";
 // Safe invoke that returns null when Tauri is not available (e.g. browser dev mode)
 async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> {
   try {
@@ -308,6 +313,40 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     
     migrate();
   }, [state.loading, state.projects.length, addProject]);
+
+  // Listen for cross-window project changes
+  useEffect(() => {
+    let unlistenMini: (() => void) | null = null;
+    let unlistenMain: (() => void) | null = null;
+
+    const setup = async () => {
+      try {
+        if (typeof window === "undefined" || !("__TAURI__" in window)) return;
+        const { listen } = await import("@tauri-apps/api/event");
+
+        unlistenMini = await listen<ProjectChangedPayload>(MINI_PROJECT_CHANGED, (event) => {
+          if (event.payload?.path && event.payload.path !== state.selectedPath) {
+            dispatch({ type: "SELECT_PROJECT", payload: event.payload.path });
+          }
+        });
+
+        unlistenMain = await listen<ProjectChangedPayload>(MAIN_PROJECT_CHANGED, (event) => {
+          if (event.payload?.path && event.payload.path !== state.selectedPath) {
+            dispatch({ type: "SELECT_PROJECT", payload: event.payload.path });
+          }
+        });
+      } catch {
+        // Not in Tauri runtime
+      }
+    };
+
+    setup();
+
+    return () => {
+      unlistenMini?.();
+      unlistenMain?.();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <ProjectsContext.Provider 

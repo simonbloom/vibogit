@@ -36,9 +36,11 @@ pub fn run() {
             // Register global shortcuts
             let save_shortcut = Shortcut::new(Some(Modifiers::SUPER), Code::KeyS);
             let ship_shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyS);
+            let mini_shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyM);
 
             let app_handle_save = app.handle().clone();
             let app_handle_ship = app.handle().clone();
+            let app_handle_mini = app.handle().clone();
 
             app.global_shortcut().on_shortcut(save_shortcut, move |_app, _shortcut, _event| {
                 let _ = app_handle_save.emit("shortcut:save", ());
@@ -46,6 +48,10 @@ pub fn run() {
 
             app.global_shortcut().on_shortcut(ship_shortcut, move |_app, _shortcut, _event| {
                 let _ = app_handle_ship.emit("shortcut:ship", ());
+            })?;
+
+            app.global_shortcut().on_shortcut(mini_shortcut, move |_app, _shortcut, _event| {
+                let _ = app_handle_mini.emit("shortcut:mini-view", ());
             })?;
 
             Ok(())

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { BranchSelector } from "@/components/branch-selector";
 import { DevServerConnection } from "@/components/dev-server-connection";
@@ -18,7 +18,11 @@ import type { PromptData } from "@/components/prompt-box";
 import { Button } from "@/components/ui/button";
 import { getSettings, TERMINAL_OPTIONS, EDITOR_OPTIONS } from "@/lib/settings";
 import { getModelForProvider } from "@/lib/ai-service";
-import { isMacTauri } from "@/platform";
+import { isTauri, isMacTauri } from "@/platform";
+import {
+  emitCrossWindow,
+  MAIN_PROJECT_CHANGED,
+} from "@/lib/mini-view-events";
 import {
   ArrowUp,
   ArrowDown,
@@ -33,6 +37,7 @@ import {
   Github,
   FileEdit,
   ScrollText,
+  PanelTopOpen,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
@@ -53,6 +58,8 @@ export function MainInterface() {
   const [selectedFile, setSelectedFile] = useState<{ path: string; name: string } | null>(null);
   const [graphRefreshKey, setGraphRefreshKey] = useState(0);
   const [isMacOverlayChrome, setIsMacOverlayChrome] = useState(false);
+  const [miniViewOpen, setMiniViewOpen] = useState(false);
+  const [isTauriEnv, setIsTauriEnv] = useState(false);
 
   const { status, branches, repoPath } = state;
   const currentBranch = branches.find((b) => b.current);
@@ -70,7 +77,77 @@ export function MainInterface() {
 
   useEffect(() => {
     setIsMacOverlayChrome(isMacTauri());
+    setIsTauriEnv(isTauri());
   }, []);
+
+  // Toggle mini-view window
+  const toggleMiniView = useCallback(async () => {
+    try {
+      const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+      const existing = await WebviewWindow.getByLabel("mini-view");
+      if (existing) {
+        await existing.setFocus();
+        return;
+      }
+
+      const mini = new WebviewWindow("mini-view", {
+        url: "/app/mini/",
+        width: 520,
+        height: 52,
+        decorations: false,
+        alwaysOnTop: true,
+        resizable: false,
+        transparent: true,
+        skipTaskbar: true,
+        title: "ViboGit Mini",
+      });
+
+      mini.once("tauri://error", () => {
+        toast.error("Failed to open mini-view");
+        setMiniViewOpen(false);
+      });
+
+      mini.once("tauri://created", () => {
+        setMiniViewOpen(true);
+      });
+
+      mini.once("tauri://destroyed", () => {
+        setMiniViewOpen(false);
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to open mini-view");
+    }
+  }, []);
+
+  // Listen for shortcut:mini-view event
+  useEffect(() => {
+    if (!isTauriEnv) return;
+    let unlisten: (() => void) | null = null;
+    const setup = async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        unlisten = await listen("shortcut:mini-view", () => {
+          toggleMiniView();
+        });
+      } catch { /* not in Tauri */ }
+    };
+    setup();
+    return () => { unlisten?.(); };
+  }, [isTauriEnv, toggleMiniView]);
+
+  // Close mini-view when main window closes
+  useEffect(() => {
+    if (!isTauriEnv) return;
+    const handleBeforeUnload = async () => {
+      try {
+        const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+        const existing = await WebviewWindow.getByLabel("mini-view");
+        if (existing) await existing.close();
+      } catch { /* ignore */ }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isTauriEnv]);
 
   // Fetch project files for PromptBox @ mentions
   useEffect(() => {
@@ -386,6 +463,17 @@ export function MainInterface() {
           <Button variant="ghost" size="icon" onClick={() => handleQuickLink("editor")} title="Editor">
             <Code className="w-5 h-5 text-nav-icon-knowledge" />
           </Button>
+          {isTauriEnv && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleMiniView}
+              title="Mini-view"
+              className={miniViewOpen ? "text-primary" : ""}
+            >
+              <PanelTopOpen className="w-5 h-5" />
+            </Button>
+          )}
         </div>
       </div>
 

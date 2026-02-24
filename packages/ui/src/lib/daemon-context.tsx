@@ -15,6 +15,7 @@ import type {
   GitStatus,
   GitBranch,
 } from "@vibogit/shared";
+import { MINI_COMMIT_COMPLETE } from "./mini-view-events";
 
 const isTauri = (): boolean => {
   try {
@@ -437,11 +438,18 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
           fileChangeUnlistenRef.current = null;
         }
 
-        const unlisten = await tauriListen("file:change", () => {
+        const unlistenFile = await tauriListen("file:change", () => {
           void refreshStatusInternal();
         });
 
-        fileChangeUnlistenRef.current = unlisten;
+        const unlistenCommit = await tauriListen(MINI_COMMIT_COMPLETE, () => {
+          void refreshStatusInternal();
+        });
+
+        fileChangeUnlistenRef.current = () => {
+          unlistenFile();
+          unlistenCommit();
+        };
       }
     } catch (err) {
       console.error("[Backend] Failed to connect:", err);
