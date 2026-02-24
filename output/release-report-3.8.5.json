@@ -1,0 +1,11 @@
+{
+  "version": "3.8.5",
+  "timestamp": "2026-02-24T20:34:53.223847+00:00",
+  "dry_run": false,
+  "updater_endpoint": "https://github.com/simonbloom/vibogit/releases/latest/download/latest.json",
+  "updater_pubkey": true,
+  "dmg_path": "/Users/simonbloom/apps-vol11/vibogit/apps/desktop/src-tauri/target/release/bundle/dmg/ViboGit_3.8.5_aarch64.dmg",
+  "web_vibogit_page": "/Users/simonbloom/apps-vol11/web-volume11/src/components/webflow/vibogit/sections.tsx",
+  "github_repo": "simonbloom/vibogit",
+  "errors": 0
+}
