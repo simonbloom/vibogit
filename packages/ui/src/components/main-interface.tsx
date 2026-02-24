@@ -92,7 +92,7 @@ export function MainInterface() {
 
       const mini = new WebviewWindow("mini-view", {
         url: "/app/mini/",
-        width: 540,
+        width: 680,
         height: 56,
         decorations: false,
         alwaysOnTop: true,

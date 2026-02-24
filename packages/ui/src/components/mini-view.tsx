@@ -20,10 +20,14 @@ import {
   Code,
   X,
   GripVertical,
-  Zap,
   Loader2,
   Check,
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  RefreshCw,
+  GitCommitVertical,
+  GitPullRequest,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { DevServerState, DevServerConfig } from "@vibogit/shared";
@@ -36,7 +40,10 @@ export function MiniView() {
   const { status, repoPath } = state;
 
   const [isCommitting, setIsCommitting] = useState(false);
-  const [commitIcon, setCommitIcon] = useState<"zap" | "loading" | "check">("zap");
+  const [commitIcon, setCommitIcon] = useState<"default" | "loading" | "check">("default");
+  const [isPulling, setIsPulling] = useState(false);
+  const [isPushing, setIsPushing] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
 
   // Dev server state
   const [devStatus, setDevStatus] = useState<DevStatus>("disconnected");
@@ -220,6 +227,64 @@ export function MiniView() {
     } catch { /* ignore */ }
   };
 
+  const handlePull = async () => {
+    if (!repoPath || isPulling) return;
+    setIsPulling(true);
+    try {
+      await send("pull", { repoPath });
+      await refreshStatus();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Pull failed");
+    } finally {
+      setIsPulling(false);
+    }
+  };
+
+  const handleFetch = async () => {
+    if (!repoPath || isFetching) return;
+    setIsFetching(true);
+    try {
+      await send("fetch", { repoPath });
+      await refreshStatus();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Fetch failed");
+    } finally {
+      setIsFetching(false);
+    }
+  };
+
+  const handlePush = async () => {
+    if (!repoPath || isPushing) return;
+    setIsPushing(true);
+    try {
+      await send("push", { repoPath });
+      await refreshStatus();
+      toast.success("Pushed successfully");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Push failed");
+    } finally {
+      setIsPushing(false);
+    }
+  };
+
+  const handlePR = async () => {
+    if (!repoPath) return;
+    try {
+      const result = await send<{ remotes: Array<{ name: string; refs: { fetch: string } }> }>("getRemotes", { repoPath });
+      const origin = result.remotes.find((r) => r.name === "origin");
+      if (origin) {
+        let url = origin.refs.fetch;
+        if (url.startsWith("git@")) {
+          url = url.replace("git@github.com:", "https://github.com/").replace(".git", "");
+        } else if (url.endsWith(".git")) {
+          url = url.replace(".git", "");
+        }
+        const branch = state.branches.find((b) => b.current)?.name || "main";
+        await send("openBrowser", { url: `${url}/compare/${branch}?expand=1` });
+      }
+    } catch { /* no remote */ }
+  };
+
   const handleQuickCommit = async () => {
     if (!repoPath || totalChanges === 0 || isCommitting) return;
 
@@ -277,10 +342,10 @@ export function MiniView() {
       await emitCrossWindow(MINI_COMMIT_COMPLETE, { repoPath });
 
       setCommitIcon("check");
-      setTimeout(() => setCommitIcon("zap"), 2000);
+      setTimeout(() => setCommitIcon("default"), 2000);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Commit failed");
-      setCommitIcon("zap");
+      setCommitIcon("default");
     } finally {
       setIsCommitting(false);
     }
@@ -372,22 +437,75 @@ export function MiniView() {
       {/* Divider */}
       <div className="w-px h-5 bg-border/50 mx-1 shrink-0" />
 
-      {/* Quick commit */}
-      <button
-        onClick={handleQuickCommit}
-        disabled={totalChanges === 0 || isCommitting || noApiKey}
-        title={noApiKey ? "Configure AI API key in settings" : `Quick commit (${totalChanges} changes)`}
-        className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors text-xs shrink-0"
-      >
-        {commitIcon === "loading" ? (
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        ) : commitIcon === "check" ? (
-          <Check className="w-3.5 h-3.5 text-green-500" />
-        ) : (
-          <Zap className="w-3.5 h-3.5" />
-        )}
-        <span>{totalChanges}</span>
-      </button>
+      {/* Git actions: Pull | Fetch | Push | Commit | PR */}
+      <div className="flex items-center gap-0 shrink-0">
+        {/* Pull */}
+        <button
+          onClick={handlePull}
+          disabled={!repoPath || isPulling}
+          title={`Pull${status?.behind ? ` (${status.behind} behind)` : ""}`}
+          className="flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors text-xs"
+        >
+          {isPulling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowDown className={`w-3.5 h-3.5 ${status?.behind ? "text-blue-500" : ""}`} />}
+          {status?.behind ? <span className="text-blue-500">{status.behind}</span> : null}
+        </button>
+
+        <div className="w-px h-4 bg-border/40 shrink-0" />
+
+        {/* Fetch */}
+        <button
+          onClick={handleFetch}
+          disabled={!repoPath || isFetching}
+          title="Fetch"
+          className="flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors text-xs"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
+        </button>
+
+        <div className="w-px h-4 bg-border/40 shrink-0" />
+
+        {/* Push */}
+        <button
+          onClick={handlePush}
+          disabled={!repoPath || isPushing || !status?.ahead}
+          title={`Push${status?.ahead ? ` (${status.ahead} ahead)` : ""}`}
+          className="flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors text-xs"
+        >
+          {isPushing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowUp className={`w-3.5 h-3.5 ${status?.ahead ? "text-green-500" : ""}`} />}
+          {status?.ahead ? <span className="text-green-500">{status.ahead}</span> : null}
+        </button>
+
+        <div className="w-px h-4 bg-border/40 shrink-0" />
+
+        {/* Commit */}
+        <button
+          onClick={handleQuickCommit}
+          disabled={totalChanges === 0 || isCommitting || noApiKey}
+          title={noApiKey ? "Configure AI API key in settings" : `Quick commit (${totalChanges} changes)`}
+          className="flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors text-xs"
+        >
+          {commitIcon === "loading" ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : commitIcon === "check" ? (
+            <Check className="w-3.5 h-3.5 text-green-500" />
+          ) : (
+            <GitCommitVertical className={`w-3.5 h-3.5 ${totalChanges > 0 ? "text-orange-500" : ""}`} />
+          )}
+          {totalChanges > 0 ? <span className="text-orange-500">{totalChanges}</span> : null}
+        </button>
+
+        <div className="w-px h-4 bg-border/40 shrink-0" />
+
+        {/* PR */}
+        <button
+          onClick={handlePR}
+          disabled={!repoPath}
+          title="Create Pull Request"
+          className="flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors text-xs"
+        >
+          <GitPullRequest className="w-3.5 h-3.5" />
+        </button>
+      </div>
 
       {/* Divider */}
       <div className="w-px h-5 bg-border/50 mx-1 shrink-0" />
