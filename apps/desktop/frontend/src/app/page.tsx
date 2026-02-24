@@ -9,12 +9,12 @@ const downloads = [
   {
     name: "Download for Apple Silicon",
     description: "macOS 12+ (M1/M2/M3/M4)",
-    href: "https://github.com/simonbloom/vibogit/releases/latest/download/ViboGit_3.7.7_aarch64.dmg",
+    href: "https://github.com/simonbloom/vibogit/releases/latest/download/ViboGit_3.8.0_aarch64.dmg",
   },
   {
     name: "Download for Intel Mac",
     description: "macOS 12+ (x64)",
-    href: "https://github.com/simonbloom/vibogit/releases/latest/download/ViboGit_3.7.7_x64.dmg",
+    href: "https://github.com/simonbloom/vibogit/releases/latest/download/ViboGit_3.8.0_x64.dmg",
   },
 ];
 
