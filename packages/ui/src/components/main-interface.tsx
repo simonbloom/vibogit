@@ -34,6 +34,7 @@ import {
   Loader2,
   GitPullRequest,
   GitBranch,
+  GitCommitVertical,
   Github,
   FileEdit,
   ScrollText,
@@ -522,7 +523,7 @@ export function MainInterface() {
             </>
           ) : (
             <>
-              <GitBranch className="w-4 h-4" />
+              <GitCommitVertical className="w-4 h-4" />
               Quick Commit {totalChanges > 0 && `(${totalChanges})`}
             </>
           )}
