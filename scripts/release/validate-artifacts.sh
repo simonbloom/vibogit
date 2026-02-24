@@ -5,6 +5,7 @@
 validate_artifacts() {
   local REPO_ROOT="$1"
   local VERSION="$2"
+  local WEB_VIBOGIT_PAGE="$3"
   local errors=0
   local BUNDLE_DIR="$REPO_ROOT/apps/desktop/src-tauri/target/release/bundle"
 
@@ -47,11 +48,18 @@ validate_artifacts() {
     errors=$((errors + 1))
   fi
 
-  # Check landing page links
-  if grep -q "ViboGit_${VERSION}" "$REPO_ROOT/apps/desktop/frontend/src/app/page.tsx"; then
-    echo "  [OK] Landing page links reference version $VERSION"
+  # Check web-volume11 Vibogit page links
+  if grep -q "ViboGit_${VERSION}_aarch64.dmg" "$WEB_VIBOGIT_PAGE"; then
+    echo "  [OK] web-volume11 Vibogit Apple Silicon link references version $VERSION"
   else
-    echo "  [FAIL] Landing page links do not reference version $VERSION"
+    echo "  [FAIL] web-volume11 Vibogit Apple Silicon link missing version $VERSION"
+    errors=$((errors + 1))
+  fi
+
+  if grep -q "ViboGit_${VERSION}_x64.dmg" "$WEB_VIBOGIT_PAGE"; then
+    echo "  [OK] web-volume11 Vibogit Intel link references version $VERSION"
+  else
+    echo "  [FAIL] web-volume11 Vibogit Intel link missing version $VERSION"
     errors=$((errors + 1))
   fi
 

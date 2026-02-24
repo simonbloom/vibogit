@@ -7,6 +7,7 @@ verify_release() {
   local VERSION="$2"
   local GITHUB_REPO="$3"
   local DRY_RUN="$4"
+  local WEB_VIBOGIT_PAGE="$5"
   local errors=0
 
   # Verify updater endpoint config
@@ -89,7 +90,7 @@ report = {
     'updater_endpoint': '$updater_endpoint',
     'updater_pubkey': '$pubkey' == 'SET',
     'dmg_path': '$REPO_ROOT/apps/desktop/src-tauri/target/release/bundle/dmg/ViboGit_${VERSION}_aarch64.dmg',
-    'landing_page': '$REPO_ROOT/apps/desktop/frontend/src/app/page.tsx',
+    'web_vibogit_page': '$WEB_VIBOGIT_PAGE',
     'github_repo': '$GITHUB_REPO',
     'errors': $errors
 }

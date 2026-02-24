@@ -21,7 +21,7 @@ usage() {
   echo "  3. Clean build (frontend + Rust + DMG)"
   echo "  4. Artifact contract validation"
   echo "  5. GitHub release create + upload"
-  echo "  6. Landing page download link update"
+  echo "  6. web-volume11 Vibogit download link update"
   echo "  7. Post-release verification report"
   exit 1
 }
@@ -56,7 +56,8 @@ fi
 TAURI_CONF="$REPO_ROOT/apps/desktop/src-tauri/tauri.conf.json"
 CARGO_TOML="$REPO_ROOT/apps/desktop/src-tauri/Cargo.toml"
 SIDEBAR_TSX="$REPO_ROOT/packages/ui/src/components/sidebar/sidebar.tsx"
-LANDING_PAGE="$REPO_ROOT/apps/desktop/frontend/src/app/page.tsx"
+WEB_VOLUME11_ROOT="${VIBOGIT_WEB_VOLUME11_ROOT:-/Users/simonbloom/apps-vol11/web-volume11}"
+WEB_VIBOGIT_PAGE="$WEB_VOLUME11_ROOT/src/components/webflow/vibogit/sections.tsx"
 DMG_PATH="$REPO_ROOT/apps/desktop/src-tauri/target/release/bundle/dmg/ViboGit_${VERSION}_aarch64.dmg"
 GITHUB_REPO="simonbloom/vibogit"
 
@@ -64,7 +65,7 @@ GITHUB_REPO="simonbloom/vibogit"
 log "Stage 1: Preflight checks"
 
 source "$SCRIPTS_DIR/preflight.sh"
-run_preflight "$REPO_ROOT" "$VERSION" "$DRY_RUN"
+run_preflight "$REPO_ROOT" "$VERSION" "$DRY_RUN" "$WEB_VIBOGIT_PAGE"
 ok "Preflight passed"
 
 # ── Stage 2: Version bump ───────────────────────────────────────────────────
@@ -89,8 +90,8 @@ print('  Updated tauri.conf.json')
   sed -i '' "s/v${OLD_VERSION}/v${VERSION}/g" "$SIDEBAR_TSX"
   echo "  Updated sidebar.tsx"
 
-  sed -i '' "s/ViboGit_${OLD_VERSION}/ViboGit_${VERSION}/g" "$LANDING_PAGE"
-  echo "  Updated landing page download links"
+  sed -E -i '' "s/ViboGit_[0-9]+\\.[0-9]+\\.[0-9]+_(aarch64|x64)\\.dmg/ViboGit_${VERSION}_\\1.dmg/g" "$WEB_VIBOGIT_PAGE"
+  echo "  Updated web-volume11 Vibogit download links"
 fi
 ok "Version files updated"
 
@@ -126,7 +127,7 @@ ok "Build complete"
 log "Stage 4: Artifact contract validation"
 
 source "$SCRIPTS_DIR/validate-artifacts.sh"
-validate_artifacts "$REPO_ROOT" "$VERSION"
+validate_artifacts "$REPO_ROOT" "$VERSION" "$WEB_VIBOGIT_PAGE"
 ok "All required artifacts present"
 
 # ── Stage 4.5: Commit & push version bump ────────────────────────────────────
@@ -173,13 +174,13 @@ else
   ok "Release published: $RELEASE_URL"
 fi
 
-# ── Stage 6: Landing page link update ────────────────────────────────────────
-log "Stage 6: Landing page download link update"
+# ── Stage 6: web-volume11 Vibogit page link update ───────────────────────────
+log "Stage 6: web-volume11 Vibogit download link update"
 
-if dry "update landing page links to version $VERSION"; then
+if dry "update web-volume11 Vibogit links to version $VERSION"; then
   :
 else
-  ok "Landing page links already updated in Stage 2"
+  ok "web-volume11 Vibogit links already updated in Stage 2"
 fi
 
 # ── Stage 6.5: Wait for CI to upload latest.json ─────────────────────────────
@@ -247,7 +248,7 @@ fi
 log "Stage 7: Post-release verification"
 
 source "$SCRIPTS_DIR/verify-release.sh"
-verify_release "$REPO_ROOT" "$VERSION" "$GITHUB_REPO" "$DRY_RUN"
+verify_release "$REPO_ROOT" "$VERSION" "$GITHUB_REPO" "$DRY_RUN" "$WEB_VIBOGIT_PAGE"
 
 echo ""
 echo "========================================"
@@ -258,8 +259,9 @@ echo "  DMG:     $DMG_PATH"
 if ! $DRY_RUN; then
   echo "  Release: $RELEASE_URL"
 fi
-echo "  Landing: $LANDING_PAGE (updated)"
+echo "  Vibogit page: $WEB_VIBOGIT_PAGE (updated)"
 echo ""
 echo "Next steps:"
-echo "  1. Verify download from landing page"
+echo "  1. Verify download links on https://www.volume11.ai/vibogit"
+echo "  2. Commit and push web-volume11 changes in that repo"
 echo ""

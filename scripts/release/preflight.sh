@@ -6,6 +6,7 @@ run_preflight() {
   local REPO_ROOT="$1"
   local VERSION="$2"
   local DRY_RUN="$3"
+  local WEB_VIBOGIT_PAGE="$4"
   local errors=0
 
   # Check gh CLI installed
@@ -37,7 +38,7 @@ run_preflight() {
     "$REPO_ROOT/apps/desktop/src-tauri/tauri.conf.json"
     "$REPO_ROOT/apps/desktop/src-tauri/Cargo.toml"
     "$REPO_ROOT/packages/ui/src/components/sidebar/sidebar.tsx"
-    "$REPO_ROOT/apps/desktop/frontend/src/app/page.tsx"
+    "$WEB_VIBOGIT_PAGE"
   )
 
   for f in "${files[@]}"; do
@@ -48,12 +49,19 @@ run_preflight() {
   done
   echo "  [OK] All version files exist"
 
-  # Check landing page has replaceable download link pattern
-  if ! grep -q "ViboGit_.*_aarch64.dmg" "$REPO_ROOT/apps/desktop/frontend/src/app/page.tsx"; then
-    echo "  [FAIL] Landing page does not contain expected DMG link pattern"
+  # Check web-volume11 Vibogit page has replaceable download link patterns
+  if ! grep -q "ViboGit_.*_aarch64.dmg" "$WEB_VIBOGIT_PAGE"; then
+    echo "  [FAIL] web-volume11 Vibogit page missing Apple Silicon DMG pattern"
     errors=$((errors + 1))
   else
-    echo "  [OK] Landing page download link pattern found"
+    echo "  [OK] web-volume11 Vibogit page Apple Silicon pattern found"
+  fi
+
+  if ! grep -q "ViboGit_.*_x64.dmg" "$WEB_VIBOGIT_PAGE"; then
+    echo "  [FAIL] web-volume11 Vibogit page missing Intel DMG pattern"
+    errors=$((errors + 1))
+  else
+    echo "  [OK] web-volume11 Vibogit page Intel pattern found"
   fi
 
   # Check Rust toolchain
