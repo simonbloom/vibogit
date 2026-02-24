@@ -57,7 +57,24 @@ print('SET' if pk else 'EMPTY')
       if [[ "$asset_count" -gt 0 ]]; then
         echo "  [OK] GitHub release v$VERSION has $asset_count asset(s)"
       else
-        echo "  [WARN] GitHub release v$VERSION has no assets (may still be uploading)"
+        echo "  [FAIL] GitHub release v$VERSION has no assets"
+        errors=$((errors + 1))
+      fi
+
+      local asset_names
+      asset_names=$(gh release view "v$VERSION" --repo "$GITHUB_REPO" --json assets -q '.assets[].name' 2>/dev/null || echo "")
+      if echo "$asset_names" | grep -q "^latest.json$"; then
+        echo "  [OK] Release assets include latest.json"
+      else
+        echo "  [FAIL] Release assets are missing latest.json"
+        errors=$((errors + 1))
+      fi
+
+      if echo "$asset_names" | grep -qE "\\.app\\.tar\\.gz\\.sig$"; then
+        echo "  [OK] Release assets include signed updater bundle(s)"
+      else
+        echo "  [FAIL] Release assets are missing signed updater bundles (.app.tar.gz.sig)"
+        errors=$((errors + 1))
       fi
 
       # Verify latest.json is downloadable
@@ -67,9 +84,15 @@ print('SET' if pk else 'EMPTY')
       if [[ "$http_status" == "200" ]]; then
         local latest_ver
         latest_ver=$(curl -sL "$latest_json_url" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('version','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
-        echo "  [OK] latest.json downloadable (version: $latest_ver)"
+        if [[ "$latest_ver" == "$VERSION" ]]; then
+          echo "  [OK] latest.json downloadable (version: $latest_ver)"
+        else
+          echo "  [FAIL] latest.json version mismatch: expected $VERSION, got $latest_ver"
+          errors=$((errors + 1))
+        fi
       else
-        echo "  [WARN] latest.json not yet available at $latest_json_url (HTTP $http_status)"
+        echo "  [FAIL] latest.json not available at $latest_json_url (HTTP $http_status)"
+        errors=$((errors + 1))
       fi
     fi
   else

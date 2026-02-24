@@ -193,54 +193,47 @@ else
   MAX_WAIT=900  # 15 minutes
   POLL_INTERVAL=30
   ELAPSED=0
+  RUN_ID=""
 
   # Wait for the CI workflow run triggered by the tag push
   log "Waiting for release-desktop.yml CI workflow to complete (up to ${MAX_WAIT}s)..."
   log "Polling every ${POLL_INTERVAL}s for latest.json on release $TAG..."
 
   while [[ $ELAPSED -lt $MAX_WAIT ]]; do
-    # Check if latest.json exists on the release
-    ASSET_NAMES=$(gh release view "$TAG" --repo "$GITHUB_REPO" --json assets -q '.assets[].name' 2>/dev/null || echo "")
-    if echo "$ASSET_NAMES" | grep -q "^latest.json$"; then
-      # Verify it's actually downloadable (not a partial upload)
-      HTTP_STATUS=$(curl -sL -o /dev/null -w "%{http_code}" "$LATEST_JSON_URL" 2>/dev/null || echo "000")
-      if [[ "$HTTP_STATUS" == "200" ]]; then
-        ok "latest.json is live on release $TAG (waited ${ELAPSED}s)"
-        break
+    if [[ -z "$RUN_ID" ]]; then
+      RUN_ID=$(gh run list --repo "$GITHUB_REPO" --workflow=release-desktop.yml --branch "$TAG" --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)
+      if [[ -n "$RUN_ID" ]]; then
+        log "Tracking workflow run $RUN_ID for $TAG"
       fi
     fi
 
-    # Check CI run status for early failure detection
-    CI_STATUS=$(gh run list --repo "$GITHUB_REPO" --workflow=release-desktop.yml --limit 1 --json status,headBranch -q ".[0].status" 2>/dev/null || echo "unknown")
-    if [[ "$CI_STATUS" == "completed" ]]; then
-      # CI finished but latest.json still not found -- check for failure
-      CI_CONCLUSION=$(gh run list --repo "$GITHUB_REPO" --workflow=release-desktop.yml --limit 1 --json conclusion -q ".[0].conclusion" 2>/dev/null || echo "unknown")
-      if [[ "$CI_CONCLUSION" != "success" ]]; then
-        warn "CI workflow finished with conclusion: $CI_CONCLUSION"
-        warn "latest.json may not have been uploaded. Check GitHub Actions."
+    HTTP_STATUS=$(curl -sL -o /dev/null -w "%{http_code}" "$LATEST_JSON_URL" 2>/dev/null || echo "000")
+    if [[ "$HTTP_STATUS" == "200" ]]; then
+      LIVE_VERSION=$(curl -sL "$LATEST_JSON_URL" 2>/dev/null | python3 -c "import sys, json; print(json.load(sys.stdin).get('version', 'UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
+      if [[ "$LIVE_VERSION" == "$VERSION" ]]; then
+        ok "latest.json is live for $TAG with version $LIVE_VERSION (waited ${ELAPSED}s)"
         break
       fi
-      # CI succeeded but asset not found yet -- give GitHub a moment to finalize
-      sleep 5
-      ASSET_NAMES=$(gh release view "$TAG" --repo "$GITHUB_REPO" --json assets -q '.assets[].name' 2>/dev/null || echo "")
-      if echo "$ASSET_NAMES" | grep -q "^latest.json$"; then
-        ok "latest.json is live on release $TAG (waited ${ELAPSED}s)"
-        break
-      else
-        warn "CI completed successfully but latest.json not found on release $TAG"
-        warn "This may indicate tauri-action uploaded to a different release (draft). Check GitHub."
-        break
+      warn "latest.json reachable but serves version $LIVE_VERSION (expected $VERSION)"
+    fi
+
+    CI_STATUS="pending"
+    CI_CONCLUSION=""
+    if [[ -n "$RUN_ID" ]]; then
+      CI_STATUS=$(gh run view "$RUN_ID" --repo "$GITHUB_REPO" --json status -q '.status' 2>/dev/null || echo "unknown")
+      CI_CONCLUSION=$(gh run view "$RUN_ID" --repo "$GITHUB_REPO" --json conclusion -q '.conclusion' 2>/dev/null || echo "")
+      if [[ "$CI_STATUS" == "completed" && "$CI_CONCLUSION" != "success" ]]; then
+        fail "CI workflow run $RUN_ID finished with conclusion '$CI_CONCLUSION'. latest.json for $TAG was not published."
       fi
     fi
 
-    echo "  ... waiting (${ELAPSED}s elapsed, CI status: $CI_STATUS)"
+    echo "  ... waiting (${ELAPSED}s elapsed, run: ${RUN_ID:-pending}, status: $CI_STATUS, conclusion: ${CI_CONCLUSION:-pending}, latest.json: $HTTP_STATUS)"
     sleep "$POLL_INTERVAL"
     ELAPSED=$((ELAPSED + POLL_INTERVAL))
   done
 
   if [[ $ELAPSED -ge $MAX_WAIT ]]; then
-    warn "Timed out waiting for latest.json after ${MAX_WAIT}s"
-    warn "CI may still be running. Check: gh run list --repo $GITHUB_REPO --workflow=release-desktop.yml"
+    fail "Timed out waiting for latest.json version $VERSION after ${MAX_WAIT}s. Check run state: gh run list --repo $GITHUB_REPO --workflow=release-desktop.yml --branch $TAG"
   fi
 fi
 

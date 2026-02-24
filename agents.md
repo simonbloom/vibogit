@@ -72,6 +72,20 @@ cd apps/desktop/frontend && bun run build && cd ../../..
 cd apps/desktop && node_modules/.bin/tauri build --bundles dmg
 ```
 
+## Version Bump + In-App Update Availability - CRITICAL
+
+When the user asks for a version bump, **it is not complete** until the in-app updater can see the new version.
+
+Required completion flow:
+1. Run the release automation end-to-end (not dry-run): `./scripts/release/release.sh <version>`
+2. Confirm GitHub release `v<version>` exists and includes updater artifacts (`latest.json`, `.app.tar.gz`, `.app.tar.gz.sig`)
+3. Confirm updater endpoint serves the new version:
+   - `https://github.com/simonbloom/vibogit/releases/latest/download/latest.json` returns `200`
+   - `latest.json.version` equals `<version>`
+
+Do not report success after only editing version strings or website links.
+If updater artifacts are missing or `latest.json` is still on an older version, treat the task as incomplete and continue until fixed or blocked.
+
 ### Architecture: Desktop
 - **Desktop app** (`apps/desktop`): uses Tauri Rust `invoke()` commands for git operations and local integrations.
 - The Rust backend (`src-tauri/src/git.rs`) has its own git implementation using the `git2` crate.
