@@ -282,6 +282,16 @@ export interface DevServerState {
   logs: string[];
 }
 
+export interface DevServerDiagnosis {
+  processAlive: boolean;
+  portListening: boolean;
+  lastLogs: string[];
+  problem: string;
+  suggestion: string;
+  suggestedCommand?: string;
+  diagnosisCode: string;
+}
+
 // Stash
 export interface GitStash {
   index: number;

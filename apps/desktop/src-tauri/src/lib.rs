@@ -100,6 +100,8 @@ pub fn run() {
             commands::dev_server_state,
             commands::kill_port,
             commands::cleanup_dev_locks,
+            commands::dev_server_diagnose,
+            commands::ai_diagnose_dev_server,
             // Agents config commands
             commands::read_agents_config,
             commands::write_agents_config,

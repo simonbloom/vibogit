@@ -1673,6 +1673,321 @@ pub async fn cleanup_dev_locks(path: String) -> Result<(), String> {
     Ok(())
 }
 
+// Dev Server Diagnostics
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DevServerDiagnosis {
+    pub process_alive: bool,
+    pub port_listening: bool,
+    pub last_logs: Vec<String>,
+    pub problem: String,
+    pub suggestion: String,
+    pub suggested_command: Option<String>,
+    pub diagnosis_code: String,
+}
+
+#[tauri::command]
+pub async fn dev_server_diagnose(
+    path: String,
+    port: u16,
+    app: AppHandle,
+) -> Result<DevServerDiagnosis, String> {
+    let project_path = PathBuf::from(&path);
+
+    // Filesystem checks (priority order)
+    let package_json_path = project_path.join("package.json");
+    if !package_json_path.exists() {
+        return Ok(DevServerDiagnosis {
+            process_alive: false,
+            port_listening: false,
+            last_logs: vec![],
+            problem: "No package.json found in this directory".to_string(),
+            suggestion: "Make sure you've opened the correct project folder. This directory doesn't appear to be a Node.js project.".to_string(),
+            suggested_command: None,
+            diagnosis_code: "no_package_json".to_string(),
+        });
+    }
+
+    // Check for dev script
+    let has_dev_script = if let Ok(content) = std::fs::read_to_string(&package_json_path) {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+            json.get("scripts")
+                .and_then(|s| s.get("dev"))
+                .is_some()
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    if !has_dev_script {
+        return Ok(DevServerDiagnosis {
+            process_alive: false,
+            port_listening: false,
+            last_logs: vec![],
+            problem: "No 'dev' script found in package.json".to_string(),
+            suggestion: "Add a \"dev\" script to your package.json, for example: \"dev\": \"next dev\" or \"dev\": \"vite\"".to_string(),
+            suggested_command: None,
+            diagnosis_code: "no_dev_script".to_string(),
+        });
+    }
+
+    if !project_path.join("node_modules").exists() {
+        return Ok(DevServerDiagnosis {
+            process_alive: false,
+            port_listening: false,
+            last_logs: vec![],
+            problem: "Dependencies aren't installed yet".to_string(),
+            suggestion: "Run bun install in your project directory to install the packages your app needs.".to_string(),
+            suggested_command: Some("bun install".to_string()),
+            diagnosis_code: "no_node_modules".to_string(),
+        });
+    }
+
+    // Get process state and logs from DevServerManager
+    let mut process_alive = false;
+    let mut port_listening = false;
+    let mut last_logs: Vec<String> = vec![];
+
+    let manager = app.try_state::<DevServerManager>();
+    if let Some(manager) = manager {
+        let servers = manager.servers.lock().unwrap();
+        if let Some(server) = servers.get(&path) {
+            // Check process alive
+            process_alive = server.child.as_ref()
+                .map(|c| {
+                    let mut cmd = Command::new("kill");
+                    cmd.args(["-0", &c.id().to_string()]);
+                    cmd.output().map(|o| o.status.success()).unwrap_or(false)
+                })
+                .unwrap_or(false);
+
+            // Check port listening
+            port_listening = {
+                use std::net::TcpStream;
+                use std::time::Duration;
+                TcpStream::connect_timeout(
+                    &format!("127.0.0.1:{}", port).parse().unwrap(),
+                    Duration::from_millis(500),
+                ).is_ok()
+            };
+
+            // Get last 20 log lines
+            if let Ok(logs) = server.logs.lock() {
+                let len = logs.len();
+                let start = if len > 20 { len - 20 } else { 0 };
+                last_logs = logs[start..].to_vec();
+            }
+        }
+    }
+
+    // Log pattern matching (priority order)
+    let log_text = last_logs.join("\n");
+
+    if !process_alive && (last_logs.is_empty() || log_text.contains("ENOENT") || log_text.contains("not found") || log_text.contains("command not found")) {
+        if last_logs.is_empty() || log_text.contains("ENOENT") || log_text.contains("command not found") {
+            return Ok(DevServerDiagnosis {
+                process_alive,
+                port_listening,
+                last_logs,
+                problem: "Couldn't find the dev command on your system".to_string(),
+                suggestion: "Make sure your package manager (bun, npm, etc.) is installed and available in your PATH.".to_string(),
+                suggested_command: None,
+                diagnosis_code: "command_not_found".to_string(),
+            });
+        }
+    }
+
+    if log_text.contains("EADDRINUSE") || log_text.contains("address already in use") {
+        return Ok(DevServerDiagnosis {
+            process_alive,
+            port_listening,
+            last_logs,
+            problem: format!("Port {} is already being used by another app", port),
+            suggestion: "Close the other process using this port, or change your dev server port.".to_string(),
+            suggested_command: Some(format!("lsof -ti:{} | xargs kill", port)),
+            diagnosis_code: "port_in_use".to_string(),
+        });
+    }
+
+    if log_text.contains("MODULE_NOT_FOUND") || log_text.contains("Cannot find module") || log_text.contains("Module not found") {
+        return Ok(DevServerDiagnosis {
+            process_alive,
+            port_listening,
+            last_logs,
+            problem: "Some packages are missing".to_string(),
+            suggestion: "Install your project's dependencies to fix the missing modules.".to_string(),
+            suggested_command: Some("bun install".to_string()),
+            diagnosis_code: "missing_deps".to_string(),
+        });
+    }
+
+    if log_text.contains("SyntaxError") || log_text.contains("TypeError") || log_text.contains("ReferenceError") || log_text.contains("error TS") || log_text.contains("Build error") || log_text.contains("Failed to compile") {
+        return Ok(DevServerDiagnosis {
+            process_alive,
+            port_listening,
+            last_logs,
+            problem: "Your code has errors that crashed the server".to_string(),
+            suggestion: "Check the logs below for the specific error and fix it in your code.".to_string(),
+            suggested_command: None,
+            diagnosis_code: "script_error".to_string(),
+        });
+    }
+
+    // Process + port state checks
+    if process_alive && !port_listening {
+        return Ok(DevServerDiagnosis {
+            process_alive,
+            port_listening,
+            last_logs,
+            problem: format!("Server started but isn't responding on port {}", port),
+            suggestion: "Your framework may use a different port. Check your config file (next.config.js, vite.config.ts, etc.) or try waiting a bit longer for large projects.".to_string(),
+            suggested_command: None,
+            diagnosis_code: "wrong_port".to_string(),
+        });
+    }
+
+    if !process_alive && !last_logs.is_empty() {
+        return Ok(DevServerDiagnosis {
+            process_alive,
+            port_listening,
+            last_logs,
+            problem: "The dev server stopped unexpectedly".to_string(),
+            suggestion: "Check the logs below for details about what went wrong.".to_string(),
+            suggested_command: None,
+            diagnosis_code: "process_crashed".to_string(),
+        });
+    }
+
+    // Fallback
+    Ok(DevServerDiagnosis {
+        process_alive,
+        port_listening,
+        last_logs,
+        problem: "Something went wrong".to_string(),
+        suggestion: "Check the dev server logs for more information about the error.".to_string(),
+        suggested_command: None,
+        diagnosis_code: "unknown".to_string(),
+    })
+}
+
+// AI Dev Server Diagnostics
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiDiagnoseResponse {
+    pub commands: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn ai_diagnose_dev_server(
+    provider: String,
+    model: String,
+    api_key: String,
+    path: String,
+    command: String,
+    command_args: Vec<String>,
+    port: u16,
+    diagnosis_code: String,
+    problem: String,
+    last_logs: Vec<String>,
+) -> Result<AiDiagnoseResponse, String> {
+    let logs_text = last_logs.join("\n");
+    let prompt = format!(
+        "My dev server failed to start. Here's the context:\n\
+        - Project path: {}\n\
+        - Command: {} {}\n\
+        - Port: {}\n\
+        - Diagnosis: {} - {}\n\
+        - Last logs:\n{}\n\n\
+        What terminal command(s) should I run to fix this? Reply with ONLY the command(s), one per line, no explanation.",
+        path, command, command_args.join(" "), port, diagnosis_code, problem, logs_text
+    );
+
+    let client = reqwest::Client::new();
+
+    let response_text = match provider.as_str() {
+        "anthropic" => {
+            let body = serde_json::json!({
+                "model": &model,
+                "max_tokens": 300,
+                "messages": [{ "role": "user", "content": prompt }]
+            });
+            let res = client
+                .post("https://api.anthropic.com/v1/messages")
+                .header("x-api-key", &api_key)
+                .header("anthropic-version", "2023-06-01")
+                .header("content-type", "application/json")
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| format!("Request failed: {}", e))?;
+            let json: serde_json::Value = res.json().await
+                .map_err(|e| format!("Failed to parse response: {}", e))?;
+            json["content"][0]["text"].as_str().unwrap_or("").to_string()
+        }
+        "openai" => {
+            let body = serde_json::json!({
+                "model": &model,
+                "max_tokens": 300,
+                "messages": [{ "role": "user", "content": prompt }]
+            });
+            let res = client
+                .post("https://api.openai.com/v1/chat/completions")
+                .header("Authorization", format!("Bearer {}", api_key))
+                .header("content-type", "application/json")
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| format!("Request failed: {}", e))?;
+            let json: serde_json::Value = res.json().await
+                .map_err(|e| format!("Failed to parse response: {}", e))?;
+            json["choices"][0]["message"]["content"].as_str().unwrap_or("").to_string()
+        }
+        "gemini" => {
+            let url = format!(
+                "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+                model, api_key
+            );
+            let body = serde_json::json!({
+                "contents": [{ "parts": [{ "text": prompt }] }],
+                "generationConfig": { "maxOutputTokens": 300 }
+            });
+            let res = client
+                .post(&url)
+                .header("content-type", "application/json")
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| format!("Request failed: {}", e))?;
+            let json: serde_json::Value = res.json().await
+                .map_err(|e| format!("Failed to parse response: {}", e))?;
+            json["candidates"][0]["content"]["parts"][0]["text"].as_str().unwrap_or("").to_string()
+        }
+        _ => return Err(format!("Unknown provider: {}", provider)),
+    };
+
+    // Parse response: one command per line, strip markdown code blocks
+    let mut text = response_text.trim().to_string();
+    if text.starts_with("```") {
+        text = text
+            .trim_start_matches(|c: char| c == '`' || c.is_alphabetic() || c == '\n')
+            .trim_end_matches('`')
+            .trim()
+            .to_string();
+    }
+
+    let commands: Vec<String> = text
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty() && !l.starts_with('#') && !l.starts_with("//"))
+        .collect();
+
+    Ok(AiDiagnoseResponse { commands })
+}
+
 // Agents Config Commands
 
 #[derive(Debug, Serialize, Deserialize)]
