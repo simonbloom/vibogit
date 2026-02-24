@@ -82,12 +82,33 @@ print('SET' if pk else 'EMPTY')
       local http_status
       http_status=$(curl -sL -o /dev/null -w "%{http_code}" "$latest_json_url" 2>/dev/null || echo "000")
       if [[ "$http_status" == "200" ]]; then
+        local latest_json_body
+        latest_json_body=$(curl -sL "$latest_json_url" 2>/dev/null || true)
         local latest_ver
-        latest_ver=$(curl -sL "$latest_json_url" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('version','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
+        latest_ver=$(printf "%s" "$latest_json_body" | python3 -c "import sys,json; print(json.load(sys.stdin).get('version','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
         if [[ "$latest_ver" == "$VERSION" ]]; then
           echo "  [OK] latest.json downloadable (version: $latest_ver)"
         else
           echo "  [FAIL] latest.json version mismatch: expected $VERSION, got $latest_ver"
+          errors=$((errors + 1))
+        fi
+
+        local has_aarch64
+        has_aarch64=$(printf "%s" "$latest_json_body" | python3 -c "import sys,json; p=json.load(sys.stdin).get('platforms',{}); print('yes' if 'darwin-aarch64' in p else 'no')" 2>/dev/null || echo "no")
+        local has_x64
+        has_x64=$(printf "%s" "$latest_json_body" | python3 -c "import sys,json; p=json.load(sys.stdin).get('platforms',{}); print('yes' if 'darwin-x86_64' in p else 'no')" 2>/dev/null || echo "no")
+
+        if [[ "$has_aarch64" == "yes" ]]; then
+          echo "  [OK] latest.json includes darwin-aarch64 updater entry"
+        else
+          echo "  [FAIL] latest.json missing darwin-aarch64 updater entry"
+          errors=$((errors + 1))
+        fi
+
+        if [[ "$has_x64" == "yes" ]]; then
+          echo "  [OK] latest.json includes darwin-x86_64 updater entry"
+        else
+          echo "  [FAIL] latest.json missing darwin-x86_64 updater entry"
           errors=$((errors + 1))
         fi
       else

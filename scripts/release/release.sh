@@ -209,12 +209,19 @@ else
 
     HTTP_STATUS=$(curl -sL -o /dev/null -w "%{http_code}" "$LATEST_JSON_URL" 2>/dev/null || echo "000")
     if [[ "$HTTP_STATUS" == "200" ]]; then
-      LIVE_VERSION=$(curl -sL "$LATEST_JSON_URL" 2>/dev/null | python3 -c "import sys, json; print(json.load(sys.stdin).get('version', 'UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
-      if [[ "$LIVE_VERSION" == "$VERSION" ]]; then
-        ok "latest.json is live for $TAG with version $LIVE_VERSION (waited ${ELAPSED}s)"
+      LATEST_JSON_BODY=$(curl -sL "$LATEST_JSON_URL" 2>/dev/null || true)
+      LIVE_VERSION=$(printf "%s" "$LATEST_JSON_BODY" | python3 -c "import sys, json; print(json.load(sys.stdin).get('version', 'UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
+      HAS_AARCH64=$(printf "%s" "$LATEST_JSON_BODY" | python3 -c "import sys, json; p=json.load(sys.stdin).get('platforms', {}); print('yes' if 'darwin-aarch64' in p else 'no')" 2>/dev/null || echo "no")
+      HAS_X64=$(printf "%s" "$LATEST_JSON_BODY" | python3 -c "import sys, json; p=json.load(sys.stdin).get('platforms', {}); print('yes' if 'darwin-x86_64' in p else 'no')" 2>/dev/null || echo "no")
+      if [[ "$LIVE_VERSION" == "$VERSION" && "$HAS_AARCH64" == "yes" && "$HAS_X64" == "yes" ]]; then
+        ok "latest.json is live for $TAG with version $LIVE_VERSION and both macOS architectures (waited ${ELAPSED}s)"
         break
       fi
-      warn "latest.json reachable but serves version $LIVE_VERSION (expected $VERSION)"
+      if [[ "$LIVE_VERSION" == "$VERSION" ]]; then
+        warn "latest.json has version $LIVE_VERSION but missing platform keys (darwin-aarch64: $HAS_AARCH64, darwin-x86_64: $HAS_X64)"
+      else
+        warn "latest.json reachable but serves version $LIVE_VERSION (expected $VERSION)"
+      fi
     fi
 
     CI_STATUS="pending"
