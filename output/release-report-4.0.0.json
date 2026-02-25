@@ -1,0 +1,11 @@
+{
+  "version": "4.0.0",
+  "timestamp": "2026-02-25T12:00:26.704726+00:00",
+  "dry_run": false,
+  "updater_endpoint": "https://github.com/simonbloom/vibogit/releases/latest/download/latest.json",
+  "updater_pubkey": true,
+  "dmg_path": "/Users/simonbloom/apps-vol11/vibogit/apps/desktop/src-tauri/target/release/bundle/dmg/ViboGit_4.0.0_aarch64.dmg",
+  "web_vibogit_page": "/Users/simonbloom/apps-vol11/web-volume11/src/components/webflow/vibogit/sections.tsx",
+  "github_repo": "simonbloom/vibogit",
+  "errors": 0
+}

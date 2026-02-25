@@ -52,6 +52,7 @@ export type MessageType =
   | "skills-list"
   | "getFavicon"
   | "githubListRepos"
+  | "githubResolveAuthSource"
   | "gitCloneIntoFolder";
 
 export interface WebSocketMessage<T = unknown> {
@@ -413,11 +414,21 @@ export interface GitHubListReposRequest {
   perPage?: number;
 }
 
+export type GitHubAuthSource = "pat" | "gh" | "none";
+
+export interface GitHubAuthStatus {
+  source: GitHubAuthSource;
+  login?: string | null;
+  message?: string | null;
+}
+
 export interface GitHubListReposResponse {
   repos: GitHubRepo[];
   page: number;
   perPage: number;
   hasMore: boolean;
+  authSource: GitHubAuthSource;
+  authLogin?: string | null;
 }
 
 export interface GitCloneIntoFolderRequest {

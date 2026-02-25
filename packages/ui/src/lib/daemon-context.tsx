@@ -380,6 +380,11 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
       return result as T;
     }
 
+    case "githubResolveAuthSource": {
+      const result = await tauriInvoke("github_resolve_auth_source");
+      return result as T;
+    }
+
     case "gitCloneIntoFolder": {
       const path = (args.path as string) || "";
       const cloneUrl = (args.cloneUrl as string) || "";

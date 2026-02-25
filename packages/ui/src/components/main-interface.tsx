@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { useWindowActivity } from "@/lib/use-window-activity";
-import { useConfig } from "@/lib/config-context";
 import { BranchSelector } from "@/components/branch-selector";
 import { DevServerConnection } from "@/components/dev-server-connection";
 import { DevServerLogs } from "@/components/dev-server-logs";
@@ -49,6 +48,7 @@ import { toast } from "sonner";
 import type {
   DevServerConfig,
   DevServerState,
+  GitHubAuthStatus,
   GitHubRepo,
   GitHubListReposResponse,
 } from "@vibogit/shared";
@@ -63,12 +63,48 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+function isValidGitHubCloneUrl(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+
+  if (/^git@github\.com:[^/\s]+\/[^/\s]+(?:\.git)?$/i.test(trimmed)) {
+    return true;
+  }
+
+  if (/^ssh:\/\/git@github\.com\/[^/\s]+\/[^/\s]+(?:\.git)?\/?$/i.test(trimmed)) {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "https:" || parsed.hostname.toLowerCase() !== "github.com") {
+      return false;
+    }
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    return segments.length >= 2;
+  } catch {
+    return false;
+  }
+}
+
+function getRepoLabelFromCloneUrl(value: string): string {
+  const trimmed = value.trim().replace(/\.git$/, "").replace(/\/$/, "");
+  const sshMatch = trimmed.match(/^git@github\.com:(.+)$/i);
+  if (sshMatch?.[1]) return sshMatch[1];
+
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.pathname.replace(/^\/+/, "");
+  } catch {
+    return trimmed;
+  }
+}
+
 const AUTO_FETCH_INTERVAL_MS = 120_000;
 
 export function MainInterface() {
   const { state, send, refreshStatus, refreshBranches, setRepoPath } = useDaemon();
   const { isForeground } = useWindowActivity();
-  const { config } = useConfig();
   const [isPulling, setIsPulling] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
@@ -87,12 +123,15 @@ export function MainInterface() {
   const lastFetchAtRef = useRef(0);
   const wasForegroundRef = useRef(isForeground);
   const [showCloneDialog, setShowCloneDialog] = useState(false);
+  const [cloneMode, setCloneMode] = useState<"url" | "repos">("url");
+  const [cloneUrl, setCloneUrl] = useState("");
   const [cloneQuery, setCloneQuery] = useState("");
   const [cloneRepos, setCloneRepos] = useState<GitHubRepo[]>([]);
   const [cloneReposPage, setCloneReposPage] = useState(1);
   const [cloneReposHasMore, setCloneReposHasMore] = useState(false);
   const [cloneLoading, setCloneLoading] = useState(false);
   const [cloneError, setCloneError] = useState<string | null>(null);
+  const [cloneAuthStatus, setCloneAuthStatus] = useState<GitHubAuthStatus | null>(null);
   const [selectedCloneRepo, setSelectedCloneRepo] = useState<GitHubRepo | null>(null);
   const [cloneBranch, setCloneBranch] = useState("");
   const [isCloning, setIsCloning] = useState(false);
@@ -509,15 +548,25 @@ export function MainInterface() {
     }
   };
 
+  const fetchCloneAuthStatus = useCallback(async () => {
+    try {
+      const status = await send<GitHubAuthStatus>("githubResolveAuthSource");
+      setCloneAuthStatus(status);
+      return status;
+    } catch (error) {
+      const message = getErrorMessage(error, "Failed to resolve GitHub authentication");
+      const fallbackStatus: GitHubAuthStatus = {
+        source: "none",
+        login: null,
+        message,
+      };
+      setCloneAuthStatus(fallbackStatus);
+      return fallbackStatus;
+    }
+  }, [send]);
+
   const fetchGitHubRepos = useCallback(
     async (query: string, page: number, append: boolean) => {
-      if (!config.githubPat?.trim()) {
-        setCloneError("Add your GitHub token in Settings > Tools before cloning.");
-        setCloneRepos([]);
-        setCloneReposHasMore(false);
-        return;
-      }
-
       setCloneLoading(true);
       setCloneError(null);
       try {
@@ -529,6 +578,11 @@ export function MainInterface() {
         setCloneRepos((current) => (append ? [...current, ...response.repos] : response.repos));
         setCloneReposPage(response.page);
         setCloneReposHasMore(response.hasMore);
+        setCloneAuthStatus({
+          source: response.authSource,
+          login: response.authLogin ?? null,
+          message: null,
+        });
       } catch (error) {
         const message = getErrorMessage(error, "Failed to load GitHub repositories");
         setCloneError(message);
@@ -536,39 +590,74 @@ export function MainInterface() {
           setCloneRepos([]);
           setCloneReposHasMore(false);
         }
+        setCloneAuthStatus((current) => {
+          if (current && current.source !== "none") {
+            return current;
+          }
+          return {
+            source: "none",
+            login: null,
+            message,
+          };
+        });
       } finally {
         setCloneLoading(false);
       }
     },
-    [config.githubPat, send]
+    [send]
   );
 
   const handleOpenCloneDialog = async () => {
     setShowCloneDialog(true);
+    setCloneMode("url");
+    setCloneUrl("");
     setCloneBranch("");
+    setCloneError(null);
     setSelectedCloneRepo(null);
     setCloneQuery("");
-    await fetchGitHubRepos("", 1, false);
+    setCloneRepos([]);
+    setCloneReposPage(1);
+    setCloneReposHasMore(false);
+    const status = await fetchCloneAuthStatus();
+    if (status?.source && status.source !== "none") {
+      await fetchGitHubRepos("", 1, false);
+    }
   };
 
-  const handleCloneSelectedRepo = async () => {
-    if (!repoPath || !selectedCloneRepo) return;
+  const cloneIntoFolder = async (cloneUrlToUse: string, successLabel: string) => {
+    if (!repoPath) return;
     setIsCloning(true);
     try {
       await send("gitCloneIntoFolder", {
         path: repoPath,
-        cloneUrl: selectedCloneRepo.cloneUrl,
+        cloneUrl: cloneUrlToUse,
         branch: cloneBranch.trim() || undefined,
       });
       await setRepoPath(repoPath);
       setShowCloneDialog(false);
-      toast.success(`Cloned ${selectedCloneRepo.fullName}`);
+      toast.success(`Cloned ${successLabel}`);
     } catch (error) {
       toast.error(getErrorMessage(error, "Clone failed"));
     } finally {
       setIsCloning(false);
     }
   };
+
+  const handleCloneSelectedRepo = async () => {
+    if (!selectedCloneRepo) return;
+    await cloneIntoFolder(selectedCloneRepo.cloneUrl, selectedCloneRepo.fullName);
+  };
+
+  const handleCloneByUrl = async () => {
+    const trimmedUrl = cloneUrl.trim();
+    if (!isValidGitHubCloneUrl(trimmedUrl)) return;
+    await cloneIntoFolder(trimmedUrl, getRepoLabelFromCloneUrl(trimmedUrl));
+  };
+
+  const cloneUrlIsValid = isValidGitHubCloneUrl(cloneUrl);
+  const authStatusMessage =
+    cloneAuthStatus?.message ??
+    "GitHub listing auth unavailable. Use Paste URL below, or run gh auth login.";
 
   return (
     <div className="flex flex-col h-full">
@@ -821,76 +910,140 @@ export function MainInterface() {
           <DialogHeader>
             <DialogTitle>Clone from GitHub</DialogTitle>
             <DialogDescription>
-              Select a repository to clone into the current folder root.
+              Paste a repository URL, or list repositories from your authenticated GitHub account.
             </DialogDescription>
           </DialogHeader>
 
-          {!config.githubPat?.trim() && (
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
-              Add your GitHub token in Settings &gt; Tools to list repositories.
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={cloneQuery}
-                onChange={(event) => setCloneQuery(event.target.value)}
-                placeholder="Search repositories"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    void fetchGitHubRepos(cloneQuery, 1, false);
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={cloneMode === "url" ? "default" : "outline"}
+                onClick={() => {
+                  setCloneMode("url");
+                  setCloneError(null);
+                }}
+              >
+                Paste URL
+              </Button>
+              <Button
+                type="button"
+                variant={cloneMode === "repos" ? "default" : "outline"}
+                onClick={() => {
+                  setCloneMode("repos");
+                  if (cloneRepos.length === 0 && !cloneLoading) {
+                    void fetchGitHubRepos("", 1, false);
                   }
                 }}
-              />
-              <Button
-                variant="outline"
-                onClick={() => void fetchGitHubRepos(cloneQuery, 1, false)}
-                disabled={cloneLoading || !config.githubPat?.trim()}
               >
-                Search
+                My Repositories
               </Button>
             </div>
 
-            <div className="max-h-64 overflow-y-auto rounded-md border divide-y">
-              {cloneRepos.length === 0 && !cloneLoading && !cloneError && (
-                <div className="px-3 py-4 text-sm text-muted-foreground">No repositories found.</div>
-              )}
-              {cloneRepos.map((repo) => (
-                <button
-                  key={repo.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedCloneRepo(repo);
-                    setCloneBranch(repo.defaultBranch || "");
-                  }}
-                  className={clsx(
-                    "w-full px-3 py-2 text-left hover:bg-accent transition-colors",
-                    selectedCloneRepo?.id === repo.id && "bg-accent"
+            {cloneMode === "repos" && cloneAuthStatus?.source === "pat" && (
+              <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-900 dark:text-emerald-200">
+                Listing repositories with token from Settings &gt; Tools.
+              </div>
+            )}
+
+            {cloneMode === "repos" && cloneAuthStatus?.source === "gh" && (
+              <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-900 dark:text-emerald-200">
+                Listing repositories with GitHub CLI auth{cloneAuthStatus.login ? ` (${cloneAuthStatus.login})` : ""}.
+              </div>
+            )}
+
+            {cloneMode === "repos" && cloneAuthStatus?.source === "none" && (
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
+                <p>{authStatusMessage}</p>
+                <p className="mt-1">
+                  Use Paste URL, or run <code>gh auth login</code> in Terminal.
+                </p>
+              </div>
+            )}
+
+            {cloneMode === "repos" && (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={cloneQuery}
+                    onChange={(event) => setCloneQuery(event.target.value)}
+                    placeholder="Search repositories"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        void fetchGitHubRepos(cloneQuery, 1, false);
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => void fetchGitHubRepos(cloneQuery, 1, false)}
+                    disabled={cloneLoading || cloneAuthStatus?.source === "none"}
+                  >
+                    Search
+                  </Button>
+                </div>
+
+                <div className="max-h-64 overflow-y-auto rounded-md border divide-y">
+                  {cloneRepos.length === 0 && !cloneLoading && !cloneError && (
+                    <div className="px-3 py-4 text-sm text-muted-foreground">No repositories found.</div>
                   )}
-                >
-                  <div className="text-sm font-medium">{repo.fullName}</div>
-                  <div className="text-xs text-muted-foreground flex items-center gap-2">
-                    <span>{repo.private ? "Private" : "Public"}</span>
-                    <span>Default: {repo.defaultBranch || "main"}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
+                  {cloneRepos.map((repo) => (
+                    <button
+                      key={repo.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCloneRepo(repo);
+                        setCloneBranch(repo.defaultBranch || "");
+                      }}
+                      className={clsx(
+                        "w-full px-3 py-2 text-left hover:bg-accent transition-colors",
+                        selectedCloneRepo?.id === repo.id && "bg-accent"
+                      )}
+                    >
+                      <div className="text-sm font-medium">{repo.fullName}</div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-2">
+                        <span>{repo.private ? "Private" : "Public"}</span>
+                        <span>Default: {repo.defaultBranch || "main"}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
 
-            {cloneError && <p className="text-sm text-destructive">{cloneError}</p>}
+                {cloneError && <p className="text-sm text-destructive">{cloneError}</p>}
 
-            {cloneReposHasMore && (
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => void fetchGitHubRepos(cloneQuery, cloneReposPage + 1, true)}
-                disabled={cloneLoading}
-              >
-                {cloneLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Load more"}
-              </Button>
+                {cloneReposHasMore && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => void fetchGitHubRepos(cloneQuery, cloneReposPage + 1, true)}
+                    disabled={cloneLoading}
+                  >
+                    {cloneLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Load more"}
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {cloneMode === "url" && (
+              <div className="space-y-2">
+                <label className="mb-1 block text-sm font-medium text-foreground">Repository URL</label>
+                <input
+                  type="text"
+                  value={cloneUrl}
+                  onChange={(event) => setCloneUrl(event.target.value)}
+                  placeholder="git@github.com:owner/repo.git or https://github.com/owner/repo.git"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                {cloneUrl.trim().length > 0 && !cloneUrlIsValid && (
+                  <p className="text-sm text-destructive">Enter a valid GitHub SSH or HTTPS clone URL.</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Need the URL? Open the repository on GitHub, click <span className="font-medium">Code</span>, and copy
+                  the SSH or HTTPS URL.
+                </p>
+              </div>
             )}
 
             <div>
@@ -914,8 +1067,14 @@ export function MainInterface() {
               Cancel
             </Button>
             <Button
-              onClick={() => void handleCloneSelectedRepo()}
-              disabled={!selectedCloneRepo || !repoPath || isCloning}
+              onClick={() =>
+                void (cloneMode === "repos" ? handleCloneSelectedRepo() : handleCloneByUrl())
+              }
+              disabled={
+                !repoPath ||
+                isCloning ||
+                (cloneMode === "repos" ? !selectedCloneRepo : !cloneUrlIsValid)
+              }
             >
               {isCloning ? <Loader2 className="w-4 h-4 animate-spin" /> : "Clone Here"}
             </Button>

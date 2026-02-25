@@ -842,6 +842,24 @@ pub struct GitHubListReposResponse {
     pub page: u32,
     pub per_page: u32,
     pub has_more: bool,
+    pub auth_source: GitHubAuthSource,
+    pub auth_login: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum GitHubAuthSource {
+    Pat,
+    Gh,
+    None,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubAuthStatus {
+    pub source: GitHubAuthSource,
+    pub login: Option<String>,
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -866,26 +884,81 @@ struct GitHubSearchReposResponse {
     items: Vec<GitHubRepoApi>,
 }
 
-fn get_github_pat() -> Result<String, String> {
+#[derive(Debug, Clone)]
+struct GitHubAuthCandidate {
+    source: GitHubAuthSource,
+    token: String,
+}
+
+#[derive(Debug, Clone)]
+struct GitHubResolvedAuth {
+    source: GitHubAuthSource,
+    token: String,
+    login: String,
+}
+
+fn get_merged_path() -> String {
+    let default_path = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+    match std::env::var("PATH") {
+        Ok(path) if !path.is_empty() => format!("{}:{}", default_path, path),
+        _ => default_path.to_string(),
+    }
+}
+
+fn get_github_pat() -> Option<String> {
     let config = load_app_config();
     let token = config.github_pat.trim().to_string();
     if token.is_empty() {
-        return Err("GitHub token is required. Add it in Settings > Tools.".to_string());
+        return None;
     }
+    Some(token)
+}
+
+fn get_github_cli_token() -> Result<String, String> {
+    let output = Command::new("gh")
+        .env("PATH", get_merged_path())
+        .arg("auth")
+        .arg("token")
+        .output()
+        .map_err(|e| format!("Failed to run GitHub CLI: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        if stderr.is_empty() {
+            return Err("GitHub CLI is not authenticated.".to_string());
+        }
+        return Err(format!("GitHub CLI is not authenticated: {}", stderr));
+    }
+
+    let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if token.is_empty() {
+        return Err("GitHub CLI returned an empty auth token.".to_string());
+    }
+
     Ok(token)
 }
 
-#[tauri::command]
-pub async fn github_list_repos(
-    query: Option<String>,
-    page: Option<u32>,
-    per_page: Option<u32>,
-) -> Result<GitHubListReposResponse, String> {
-    let token = get_github_pat()?;
-    let page = page.unwrap_or(1).max(1);
-    let per_page = per_page.unwrap_or(20).clamp(1, 100);
-    let client = reqwest::Client::new();
+fn collect_github_auth_candidates() -> Vec<GitHubAuthCandidate> {
+    let mut candidates = Vec::new();
 
+    if let Some(token) = get_github_pat() {
+        candidates.push(GitHubAuthCandidate {
+            source: GitHubAuthSource::Pat,
+            token,
+        });
+    }
+
+    if let Ok(token) = get_github_cli_token() {
+        candidates.push(GitHubAuthCandidate {
+            source: GitHubAuthSource::Gh,
+            token,
+        });
+    }
+
+    candidates
+}
+
+async fn github_user_from_token(client: &reqwest::Client, token: &str) -> Result<GitHubUser, String> {
     let user_response = client
         .get("https://api.github.com/user")
         .header("Authorization", format!("Bearer {}", token))
@@ -902,10 +975,98 @@ pub async fn github_list_repos(
         return Err(format!("GitHub auth failed ({}): {}", status, body));
     }
 
-    let user = user_response
+    user_response
         .json::<GitHubUser>()
         .await
-        .map_err(|e| format!("Failed to decode GitHub user: {}", e))?;
+        .map_err(|e| format!("Failed to decode GitHub user: {}", e))
+}
+
+async fn resolve_github_auth(client: &reqwest::Client) -> Result<GitHubResolvedAuth, String> {
+    let candidates = collect_github_auth_candidates();
+    if candidates.is_empty() {
+        return Err(
+            "GitHub auth is not configured. Run `gh auth login` in Terminal, or add a token in Settings > Tools."
+                .to_string(),
+        );
+    }
+
+    let mut last_error = String::new();
+
+    for candidate in candidates {
+        match github_user_from_token(client, &candidate.token).await {
+            Ok(user) => {
+                return Ok(GitHubResolvedAuth {
+                    source: candidate.source,
+                    token: candidate.token,
+                    login: user.login,
+                });
+            }
+            Err(error) => {
+                let source_name = match candidate.source {
+                    GitHubAuthSource::Pat => "Settings token",
+                    GitHubAuthSource::Gh => "GitHub CLI auth",
+                    GitHubAuthSource::None => "Unknown auth source",
+                };
+                last_error = format!("{} failed: {}", source_name, error);
+            }
+        }
+    }
+
+    if last_error.is_empty() {
+        return Err(
+            "GitHub auth failed. Run `gh auth login` in Terminal, or add a token in Settings > Tools."
+                .to_string(),
+        );
+    }
+
+    Err(format!(
+        "GitHub auth failed. Run `gh auth login` in Terminal, or add a token in Settings > Tools. {}",
+        last_error
+    ))
+}
+
+fn map_github_repo_summary(repo: GitHubRepoApi) -> GitHubRepoSummary {
+    GitHubRepoSummary {
+        id: repo.id,
+        full_name: repo.full_name,
+        private: repo.private,
+        default_branch: repo.default_branch,
+        clone_url: repo.clone_url,
+        ssh_url: repo.ssh_url,
+        html_url: repo.html_url,
+    }
+}
+
+#[tauri::command]
+pub async fn github_resolve_auth_source() -> Result<GitHubAuthStatus, String> {
+    let client = reqwest::Client::new();
+    match resolve_github_auth(&client).await {
+        Ok(auth) => Ok(GitHubAuthStatus {
+            source: auth.source,
+            login: Some(auth.login),
+            message: None,
+        }),
+        Err(message) => Ok(GitHubAuthStatus {
+            source: GitHubAuthSource::None,
+            login: None,
+            message: Some(message),
+        }),
+    }
+}
+
+#[tauri::command]
+pub async fn github_list_repos(
+    query: Option<String>,
+    page: Option<u32>,
+    per_page: Option<u32>,
+) -> Result<GitHubListReposResponse, String> {
+    let page = page.unwrap_or(1).max(1);
+    let per_page = per_page.unwrap_or(20).clamp(1, 100);
+    let client = reqwest::Client::new();
+    let resolved_auth = resolve_github_auth(&client).await?;
+    let token = resolved_auth.token;
+    let login = resolved_auth.login;
+    let auth_source = resolved_auth.source;
 
     let normalized_query = query.unwrap_or_default().trim().to_string();
 
@@ -942,19 +1103,13 @@ pub async fn github_list_repos(
         return Ok(GitHubListReposResponse {
             repos: repos
                 .into_iter()
-                .map(|repo| GitHubRepoSummary {
-                    id: repo.id,
-                    full_name: repo.full_name,
-                    private: repo.private,
-                    default_branch: repo.default_branch,
-                    clone_url: repo.clone_url,
-                    ssh_url: repo.ssh_url,
-                    html_url: repo.html_url,
-                })
+                .map(map_github_repo_summary)
                 .collect(),
             page,
             per_page,
             has_more,
+            auth_source,
+            auth_login: Some(login),
         });
     }
 
@@ -965,7 +1120,7 @@ pub async fn github_list_repos(
                 "q",
                 format!(
                     "user:{} {} in:name",
-                    user.login,
+                    login,
                     normalized_query.replace('"', "")
                 ),
             ),
@@ -998,19 +1153,13 @@ pub async fn github_list_repos(
         repos: payload
             .items
             .into_iter()
-            .map(|repo| GitHubRepoSummary {
-                id: repo.id,
-                full_name: repo.full_name,
-                private: repo.private,
-                default_branch: repo.default_branch,
-                clone_url: repo.clone_url,
-                ssh_url: repo.ssh_url,
-                html_url: repo.html_url,
-            })
+            .map(map_github_repo_summary)
             .collect(),
         page,
         per_page,
         has_more,
+        auth_source,
+        auth_login: Some(login),
     })
 }
 
@@ -1038,15 +1187,9 @@ pub async fn git_clone_into_folder(
         return Err("Destination folder must be empty before cloning.".to_string());
     }
 
-    let default_path = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
-    let merged_path = match std::env::var("PATH") {
-        Ok(path) if !path.is_empty() => format!("{}:{}", default_path, path),
-        _ => default_path.to_string(),
-    };
-
     let mut command = Command::new("git");
     command
-        .env("PATH", merged_path)
+        .env("PATH", get_merged_path())
         .arg("clone");
 
     if let Some(branch_name) = branch.as_deref().map(str::trim).filter(|value| !value.is_empty()) {

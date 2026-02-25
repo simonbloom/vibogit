@@ -127,6 +127,7 @@ pub fn run() {
             commands::set_config,
             // GitHub commands
             commands::github_list_repos,
+            commands::github_resolve_auth_source,
             commands::git_clone_into_folder,
             // AI commands
             commands::ai_generate_commit,
