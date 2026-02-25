@@ -1,9 +1,10 @@
 use crate::git::{self, Commit, FileDiff, GitError, ProjectState, SaveResult, ShipResult, SyncResult};
 use crate::watcher;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use sha2::{Digest, Sha256};
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::process::{Command, Child, Stdio};
 use std::io::{BufRead, BufReader};
@@ -1235,106 +1236,700 @@ pub struct FaviconResult {
     pub mime_type: Option<String>,
 }
 
+const MAX_FAVICON_FILE_SIZE: u64 = 512 * 1024; // 512KB
+const MAX_ICON_SOURCE_FILE_SIZE: u64 = 256 * 1024; // 256KB
+
+const KNOWN_DEFAULT_ICON_HASHES: [&str; 1] = [
+    // Next/Vercel starter favicon.ico used across multiple repos.
+    "2b8ad2d33455a8f736fc3a8ebf8f0bdea8848ad4c0db48a2833bd0f9cd775932",
+];
+
+const ICON_SOURCE_FILES: [&str; 6] = [
+    "app/layout.tsx",
+    "src/app/layout.tsx",
+    "app/head.tsx",
+    "src/app/head.tsx",
+    "public/index.html",
+    "index.html",
+];
+
+const FALLBACK_ICON_PATHS: [&str; 57] = [
+    // Browser-likely public paths first.
+    "public/favicon.svg",
+    "public/favicon.png",
+    "public/favicon.ico",
+    "public/favicon-32x32.png",
+    "public/favicon-16x16.png",
+    "public/images/favicon.svg",
+    "public/images/favicon.png",
+    "public/images/favicon.ico",
+    "public/webflow/favicon.svg",
+    "public/webflow/favicon.png",
+    "public/webflow/favicon.ico",
+    "public/img/favicon.svg",
+    "public/img/favicon.png",
+    "public/img/favicon.ico",
+    // Root/static/src favicon paths.
+    "favicon.svg",
+    "favicon.png",
+    "favicon.ico",
+    "favicon-32x32.png",
+    "favicon-16x16.png",
+    "static/favicon.svg",
+    "static/favicon.png",
+    "static/favicon.ico",
+    "src/favicon.svg",
+    "src/favicon.png",
+    "src/favicon.ico",
+    // App router icons after explicit declarations.
+    "app/favicon.svg",
+    "app/favicon.png",
+    "app/favicon.ico",
+    "app/icon.svg",
+    "app/icon.png",
+    "app/icon.ico",
+    "src/app/favicon.svg",
+    "src/app/favicon.png",
+    "src/app/favicon.ico",
+    "src/app/icon.svg",
+    "src/app/icon.png",
+    "src/app/icon.ico",
+    // Generic logo/icon fallback.
+    "public/logo.svg",
+    "public/logo.png",
+    "public/logo.ico",
+    "public/icon.svg",
+    "public/icon.png",
+    "public/icon.ico",
+    "public/images/logo.svg",
+    "public/images/logo.png",
+    "public/images/icon.svg",
+    "public/images/icon.png",
+    "assets/logo.svg",
+    "assets/logo.png",
+    "assets/icon.svg",
+    "assets/icon.png",
+    "logo.svg",
+    "logo.png",
+    "logo.ico",
+    "icon.svg",
+    "icon.png",
+    "icon.ico",
+];
+
+#[derive(Debug)]
+struct ResolvedFavicon {
+    bytes: Vec<u8>,
+    mime_type: String,
+}
+
 #[tauri::command]
 pub async fn get_favicon(path: String) -> Result<FaviconResult, String> {
-    const MAX_FILE_SIZE: u64 = 512 * 1024; // 512KB
+    let repo_root = PathBuf::from(&path);
 
-    let favicon_paths = [
-        // Next.js app router icons (highest priority)
-        "app/favicon.ico",
-        "app/favicon.png",
-        "app/favicon.svg",
-        "app/icon.ico",
-        "app/icon.png",
-        "app/icon.svg",
-        "src/app/favicon.ico",
-        "src/app/favicon.png",
-        "src/app/favicon.svg",
-        "src/app/icon.ico",
-        "src/app/icon.png",
-        "src/app/icon.svg",
-        // Root/public/static favicons
-        "favicon.ico",
-        "favicon.png",
-        "favicon.svg",
-        "favicon-32x32.png",
-        "favicon-16x16.png",
-        "public/favicon.ico",
-        "public/favicon.png",
-        "public/favicon.svg",
-        "public/favicon-32x32.png",
-        "public/favicon-16x16.png",
-        "static/favicon.ico",
-        "static/favicon.png",
-        "static/favicon.svg",
-        "src/favicon.ico",
-        "src/favicon.png",
-        "src/favicon.svg",
-        // Common nested locations used by many sites
-        "public/images/favicon.ico",
-        "public/images/favicon.png",
-        "public/images/favicon.svg",
-        "public/img/favicon.ico",
-        "public/img/favicon.png",
-        "public/img/favicon.svg",
-        "public/webflow/favicon.ico",
-        "public/webflow/favicon.png",
-        "public/webflow/favicon.svg",
-        // Logo files
-        "logo.png",
-        "logo.svg",
-        "logo.ico",
-        "icon.png",
-        "icon.svg",
-        "icon.ico",
-        "public/logo.png",
-        "public/logo.svg",
-        "public/logo.ico",
-        "public/icon.png",
-        "public/icon.svg",
-        "public/icon.ico",
-        "public/images/logo.png",
-        "public/images/logo.svg",
-        "public/images/icon.png",
-        "public/images/icon.svg",
-        "assets/logo.png",
-        "assets/logo.svg",
-        "assets/icon.png",
-        "assets/icon.svg",
-    ];
+    let mut candidates = collect_browser_declared_icon_candidates(&repo_root);
+    candidates.extend(collect_fallback_icon_candidates(&repo_root));
 
-    let base = PathBuf::from(&path);
-    
-    for favicon_path in &favicon_paths {
-        let full_path = base.join(favicon_path);
-        if full_path.is_file() {
-            if let Ok(meta) = std::fs::metadata(&full_path) {
-                if meta.len() > MAX_FILE_SIZE {
-                    continue;
-                }
-            }
-            if let Ok(bytes) = std::fs::read(&full_path) {
-                let mime_type = if favicon_path.ends_with(".png") {
-                    "image/png"
-                } else if favicon_path.ends_with(".svg") {
-                    "image/svg+xml"
-                } else {
-                    "image/x-icon"
-                };
-                
-                let base64 = base64_encode(&bytes);
-                return Ok(FaviconResult {
-                    favicon: Some(base64),
-                    mime_type: Some(mime_type.to_string()),
-                });
-            }
-        }
+    if let Some(resolved) = select_best_icon(candidates) {
+        return Ok(FaviconResult {
+            favicon: Some(base64_encode(&resolved.bytes)),
+            mime_type: Some(resolved.mime_type),
+        });
     }
 
     Ok(FaviconResult {
         favicon: None,
         mime_type: None,
     })
+}
+
+fn collect_browser_declared_icon_candidates(repo_root: &Path) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    let mut seen = HashSet::new();
+
+    for source_rel_path in ICON_SOURCE_FILES {
+        let source_path = repo_root.join(source_rel_path);
+        if !source_path.is_file() {
+            continue;
+        }
+
+        let Some(content) = read_icon_source_file(&source_path) else {
+            continue;
+        };
+
+        let mut refs = extract_next_metadata_icon_references(&content);
+        refs.extend(extract_link_tag_icon_references(&content));
+
+        for raw_ref in refs {
+            for candidate in normalize_icon_reference_to_paths(&raw_ref, &source_path, repo_root) {
+                if seen.insert(candidate.clone()) {
+                    candidates.push(candidate);
+                }
+            }
+        }
+    }
+
+    candidates
+}
+
+fn collect_fallback_icon_candidates(repo_root: &Path) -> Vec<PathBuf> {
+    FALLBACK_ICON_PATHS.iter().map(|relative| repo_root.join(relative)).collect()
+}
+
+fn select_best_icon(candidates: Vec<PathBuf>) -> Option<ResolvedFavicon> {
+    select_best_icon_with_known_defaults(candidates, &KNOWN_DEFAULT_ICON_HASHES)
+}
+
+fn select_best_icon_with_known_defaults(
+    candidates: Vec<PathBuf>,
+    known_default_hashes: &[&str],
+) -> Option<ResolvedFavicon> {
+    let mut fallback_default: Option<ResolvedFavicon> = None;
+    let mut seen_paths = HashSet::new();
+
+    for path in candidates {
+        if !seen_paths.insert(path.clone()) {
+            continue;
+        }
+
+        let Some(mime_type) = mime_type_for_icon_path(&path) else {
+            continue;
+        };
+
+        let Some(bytes) = read_icon_candidate_bytes(&path) else {
+            continue;
+        };
+
+        let resolved = ResolvedFavicon {
+            bytes,
+            mime_type: mime_type.to_string(),
+        };
+
+        if is_known_default_icon(&resolved.bytes, known_default_hashes) {
+            if fallback_default.is_none() {
+                fallback_default = Some(resolved);
+            }
+            continue;
+        }
+
+        return Some(resolved);
+    }
+
+    fallback_default
+}
+
+fn read_icon_source_file(path: &Path) -> Option<String> {
+    if !path.is_file() {
+        return None;
+    }
+
+    let meta = std::fs::metadata(path).ok()?;
+    if meta.len() > MAX_ICON_SOURCE_FILE_SIZE {
+        return None;
+    }
+
+    std::fs::read_to_string(path).ok()
+}
+
+fn extract_next_metadata_icon_references(content: &str) -> Vec<String> {
+    let mut refs = Vec::new();
+
+    for icons_value in collect_icons_value_segments(content) {
+        if is_likely_icon_literal(&icons_value) {
+            refs.push(icons_value.clone());
+        }
+
+        refs.extend(
+            extract_keyed_string_values(&icons_value, &["icon", "shortcut", "apple", "url", "href"])
+                .into_iter()
+                .filter(|value| is_likely_icon_literal(value)),
+        );
+    }
+
+    refs
+}
+
+fn collect_icons_value_segments(content: &str) -> Vec<String> {
+    let mut values = Vec::new();
+    let bytes = content.as_bytes();
+    let mut search_start = 0;
+
+    while let Some(position) = find_identifier(content, "icons", search_start) {
+        let mut index = skip_ascii_whitespace(bytes, position + "icons".len());
+
+        if index < bytes.len() && bytes[index] == b'?' {
+            index += 1;
+            index = skip_ascii_whitespace(bytes, index);
+        }
+
+        if index >= bytes.len() || bytes[index] != b':' {
+            search_start = position + "icons".len();
+            continue;
+        }
+
+        index = skip_ascii_whitespace(bytes, index + 1);
+        if index >= bytes.len() {
+            break;
+        }
+
+        match bytes[index] {
+            b'\'' | b'"' => {
+                if let Some((value, next_index)) = parse_quoted_string(bytes, index) {
+                    values.push(value);
+                    search_start = next_index;
+                    continue;
+                }
+            }
+            b'{' | b'[' => {
+                if let Some((segment, next_index)) = extract_balanced_segment(bytes, index) {
+                    values.push(segment);
+                    search_start = next_index;
+                    continue;
+                }
+            }
+            _ => {}
+        }
+
+        search_start = position + "icons".len();
+    }
+
+    values
+}
+
+fn extract_keyed_string_values(content: &str, keys: &[&str]) -> Vec<String> {
+    let mut values = Vec::new();
+    let bytes = content.as_bytes();
+
+    for key in keys {
+        let mut search_start = 0;
+
+        while let Some(position) = find_identifier(content, key, search_start) {
+            let mut index = skip_ascii_whitespace(bytes, position + key.len());
+            if index >= bytes.len() || bytes[index] != b':' {
+                search_start = position + key.len();
+                continue;
+            }
+
+            index = skip_ascii_whitespace(bytes, index + 1);
+            if index >= bytes.len() {
+                break;
+            }
+
+            match bytes[index] {
+                b'\'' | b'"' => {
+                    if let Some((value, next_index)) = parse_quoted_string(bytes, index) {
+                        values.push(value);
+                        search_start = next_index;
+                        continue;
+                    }
+                }
+                b'{' | b'[' => {
+                    if let Some((segment, next_index)) = extract_balanced_segment(bytes, index) {
+                        values.extend(extract_keyed_string_values(&segment, &["url", "href"]));
+                        values.extend(
+                            extract_all_quoted_string_literals(&segment)
+                                .into_iter()
+                                .filter(|value| is_likely_icon_literal(value)),
+                        );
+                        search_start = next_index;
+                        continue;
+                    }
+                }
+                _ => {}
+            }
+
+            search_start = position + key.len();
+        }
+    }
+
+    values
+}
+
+fn extract_all_quoted_string_literals(content: &str) -> Vec<String> {
+    let bytes = content.as_bytes();
+    let mut values = Vec::new();
+    let mut index = 0;
+
+    while index < bytes.len() {
+        if matches!(bytes[index], b'\'' | b'"') {
+            if let Some((value, next_index)) = parse_quoted_string(bytes, index) {
+                values.push(value);
+                index = next_index;
+                continue;
+            }
+        }
+        index += 1;
+    }
+
+    values
+}
+
+fn extract_link_tag_icon_references(content: &str) -> Vec<String> {
+    let mut refs = Vec::new();
+    let mut search_start = 0;
+
+    while let Some(offset) = content[search_start..].find("<link") {
+        let tag_start = search_start + offset;
+        let Some(tag_end_offset) = content[tag_start..].find('>') else {
+            break;
+        };
+        let tag_end = tag_start + tag_end_offset + 1;
+        let tag = &content[tag_start..tag_end];
+
+        let attrs = extract_html_attributes(tag);
+        let rel = attrs
+            .iter()
+            .find(|(name, _)| name == "rel")
+            .map(|(_, value)| value.to_ascii_lowercase());
+        let href = attrs
+            .iter()
+            .find(|(name, _)| name == "href")
+            .map(|(_, value)| value.clone());
+
+        if rel.as_deref().is_some_and(|value| value.contains("icon")) {
+            if let Some(href_value) = href {
+                refs.push(href_value);
+            }
+        }
+
+        search_start = tag_end;
+    }
+
+    refs
+}
+
+fn extract_html_attributes(tag: &str) -> Vec<(String, String)> {
+    let bytes = tag.as_bytes();
+    let mut attrs = Vec::new();
+    let mut index = 0;
+
+    while index < bytes.len() {
+        while index < bytes.len()
+            && (bytes[index].is_ascii_whitespace()
+                || matches!(bytes[index], b'<' | b'>' | b'/'))
+        {
+            index += 1;
+        }
+
+        if index >= bytes.len() {
+            break;
+        }
+
+        let name_start = index;
+        while index < bytes.len()
+            && (bytes[index].is_ascii_alphanumeric() || matches!(bytes[index], b'-' | b'_' | b':'))
+        {
+            index += 1;
+        }
+
+        if name_start == index {
+            index += 1;
+            continue;
+        }
+
+        let name = tag[name_start..index].to_ascii_lowercase();
+        index = skip_ascii_whitespace(bytes, index);
+
+        if index >= bytes.len() || bytes[index] != b'=' {
+            continue;
+        }
+
+        index = skip_ascii_whitespace(bytes, index + 1);
+        if index >= bytes.len() {
+            break;
+        }
+
+        let value = if matches!(bytes[index], b'\'' | b'"') {
+            if let Some((value, next_index)) = parse_quoted_string(bytes, index) {
+                index = next_index;
+                value
+            } else {
+                break;
+            }
+        } else {
+            let value_start = index;
+            while index < bytes.len() && !bytes[index].is_ascii_whitespace() && bytes[index] != b'>' {
+                index += 1;
+            }
+            tag[value_start..index].to_string()
+        };
+
+        attrs.push((name, value));
+    }
+
+    attrs
+}
+
+fn normalize_icon_reference_to_paths(raw_ref: &str, source_path: &Path, repo_root: &Path) -> Vec<PathBuf> {
+    let Some(sanitized_ref) = sanitize_declared_icon_reference(raw_ref) else {
+        return Vec::new();
+    };
+
+    let source_dir = source_path.parent().unwrap_or(repo_root);
+    let mut candidates = Vec::new();
+    let mut seen = HashSet::new();
+
+    let mut add_candidate = |candidate: PathBuf| {
+        if seen.insert(candidate.clone()) {
+            candidates.push(candidate);
+        }
+    };
+
+    if sanitized_ref.starts_with('/') {
+        let web_root_relative = sanitized_ref.trim_start_matches('/');
+        if let Some(normalized) = normalize_repo_relative_path(web_root_relative) {
+            add_candidate(repo_root.join("public").join(&normalized));
+            add_candidate(repo_root.join(&normalized));
+        }
+        return candidates;
+    }
+
+    if let Some(normalized) = normalize_repo_relative_path(&sanitized_ref) {
+        add_candidate(source_dir.join(&normalized));
+        add_candidate(repo_root.join("public").join(&normalized));
+        add_candidate(repo_root.join(&normalized));
+    }
+
+    candidates
+}
+
+fn sanitize_declared_icon_reference(raw_ref: &str) -> Option<String> {
+    let mut value = raw_ref.trim().trim_matches('"').trim_matches('\'').trim().to_string();
+    if value.is_empty() {
+        return None;
+    }
+
+    let cut_index = value.find(|ch| ch == '?' || ch == '#').unwrap_or(value.len());
+    value.truncate(cut_index);
+    value = value.trim().to_string();
+    if value.is_empty() {
+        return None;
+    }
+
+    let lowered = value.to_ascii_lowercase();
+    if lowered.starts_with("http://")
+        || lowered.starts_with("https://")
+        || lowered.starts_with("data:")
+        || lowered.starts_with("//")
+        || lowered.starts_with("image/")
+    {
+        return None;
+    }
+
+    Some(value)
+}
+
+fn normalize_repo_relative_path(path: &str) -> Option<PathBuf> {
+    use std::path::Component;
+
+    let mut normalized = PathBuf::new();
+    for component in Path::new(path).components() {
+        match component {
+            Component::Normal(part) => normalized.push(part),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    return None;
+                }
+            }
+            Component::RootDir | Component::Prefix(_) => return None,
+        }
+    }
+
+    if normalized.as_os_str().is_empty() {
+        None
+    } else {
+        Some(normalized)
+    }
+}
+
+fn is_likely_icon_literal(value: &str) -> bool {
+    let lowered = value.to_ascii_lowercase();
+    if lowered.starts_with("image/") {
+        return false;
+    }
+
+    lowered.contains("favicon")
+        || lowered.contains("/icon")
+        || lowered.ends_with("icon")
+        || lowered.ends_with(".ico")
+        || lowered.ends_with(".png")
+        || lowered.ends_with(".svg")
+        || lowered.ends_with(".webp")
+        || lowered.ends_with(".jpg")
+        || lowered.ends_with(".jpeg")
+        || lowered.ends_with(".gif")
+        || lowered.ends_with(".avif")
+}
+
+fn find_identifier(content: &str, token: &str, start: usize) -> Option<usize> {
+    let bytes = content.as_bytes();
+    let token_bytes = token.as_bytes();
+    if token_bytes.is_empty() || start >= bytes.len() {
+        return None;
+    }
+
+    let mut index = start;
+    while index + token_bytes.len() <= bytes.len() {
+        if &bytes[index..index + token_bytes.len()] == token_bytes {
+            let left_boundary = index == 0 || !is_identifier_char(bytes[index - 1]);
+            let right_index = index + token_bytes.len();
+            let right_boundary = right_index >= bytes.len() || !is_identifier_char(bytes[right_index]);
+            if left_boundary && right_boundary {
+                return Some(index);
+            }
+        }
+        index += 1;
+    }
+
+    None
+}
+
+fn is_identifier_char(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'$')
+}
+
+fn skip_ascii_whitespace(bytes: &[u8], mut index: usize) -> usize {
+    while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+        index += 1;
+    }
+    index
+}
+
+fn parse_quoted_string(bytes: &[u8], start: usize) -> Option<(String, usize)> {
+    if start >= bytes.len() || !matches!(bytes[start], b'\'' | b'"') {
+        return None;
+    }
+
+    let quote = bytes[start];
+    let mut value = String::new();
+    let mut index = start + 1;
+    let mut escaped = false;
+
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if escaped {
+            value.push(byte as char);
+            escaped = false;
+            index += 1;
+            continue;
+        }
+
+        if byte == b'\\' {
+            escaped = true;
+            index += 1;
+            continue;
+        }
+
+        if byte == quote {
+            return Some((value, index + 1));
+        }
+
+        value.push(byte as char);
+        index += 1;
+    }
+
+    None
+}
+
+fn extract_balanced_segment(bytes: &[u8], start: usize) -> Option<(String, usize)> {
+    if start >= bytes.len() || !matches!(bytes[start], b'{' | b'[') {
+        return None;
+    }
+
+    let open = bytes[start];
+    let close = if open == b'{' { b'}' } else { b']' };
+    let mut depth = 0usize;
+    let mut index = start;
+    let mut in_quote: Option<u8> = None;
+    let mut escaped = false;
+
+    while index < bytes.len() {
+        let byte = bytes[index];
+
+        if let Some(quote) = in_quote {
+            if escaped {
+                escaped = false;
+                index += 1;
+                continue;
+            }
+
+            if byte == b'\\' {
+                escaped = true;
+                index += 1;
+                continue;
+            }
+
+            if byte == quote {
+                in_quote = None;
+            }
+            index += 1;
+            continue;
+        }
+
+        if matches!(byte, b'\'' | b'"') {
+            in_quote = Some(byte);
+            index += 1;
+            continue;
+        }
+
+        if byte == open {
+            depth += 1;
+        } else if byte == close {
+            depth = depth.saturating_sub(1);
+            if depth == 0 {
+                let segment = String::from_utf8_lossy(&bytes[start..=index]).to_string();
+                return Some((segment, index + 1));
+            }
+        }
+
+        index += 1;
+    }
+
+    None
+}
+
+fn read_icon_candidate_bytes(path: &Path) -> Option<Vec<u8>> {
+    if !path.is_file() {
+        return None;
+    }
+
+    let meta = std::fs::metadata(path).ok()?;
+    if meta.len() == 0 || meta.len() > MAX_FAVICON_FILE_SIZE {
+        return None;
+    }
+
+    std::fs::read(path).ok()
+}
+
+fn mime_type_for_icon_path(path: &Path) -> Option<&'static str> {
+    let extension = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase())?;
+
+    match extension.as_str() {
+        "png" => Some("image/png"),
+        "svg" => Some("image/svg+xml"),
+        "ico" => Some("image/x-icon"),
+        "webp" => Some("image/webp"),
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "gif" => Some("image/gif"),
+        "avif" => Some("image/avif"),
+        _ => None,
+    }
+}
+
+fn is_known_default_icon(bytes: &[u8], known_default_hashes: &[&str]) -> bool {
+    let hash = sha256_hex(bytes);
+    known_default_hashes.iter().any(|known| known.eq_ignore_ascii_case(&hash))
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    let digest = hasher.finalize();
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn base64_encode(data: &[u8]) -> String {
@@ -1496,6 +2091,266 @@ fn resolve_agents_file_path(repo_path: &str) -> PathBuf {
     }
 
     base.join("AGENTS.md")
+}
+
+#[cfg(test)]
+mod favicon_resolution_tests {
+    use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_repo_dir(label: &str) -> PathBuf {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time should be monotonic")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "vibogit-favicon-tests-{label}-{}-{now}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&path).expect("temp repo dir should be created");
+        path
+    }
+
+    fn write_file(repo: &Path, relative_path: &str, bytes: &[u8]) {
+        let full_path = repo.join(relative_path);
+        if let Some(parent) = full_path.parent() {
+            fs::create_dir_all(parent).expect("parent dir should be created");
+        }
+        fs::write(full_path, bytes).expect("file should be written");
+    }
+
+    fn write_text(repo: &Path, relative_path: &str, text: &str) {
+        write_file(repo, relative_path, text.as_bytes());
+    }
+
+    #[test]
+    fn extracts_icons_from_next_metadata_simple_string() {
+        let content = r#"
+            export const metadata = {
+              icons: {
+                icon: "/images/favicon.png",
+                apple: "/images/webclip.png",
+              },
+            };
+        "#;
+
+        let refs = extract_next_metadata_icon_references(content);
+        assert!(refs.contains(&"/images/favicon.png".to_string()));
+        assert!(refs.contains(&"/images/webclip.png".to_string()));
+    }
+
+    #[test]
+    fn extracts_icons_from_next_metadata_array_objects() {
+        let content = r#"
+            export const metadata = {
+              icons: {
+                icon: [
+                  { url: "/images/favicon.svg", type: "image/svg+xml" },
+                  { url: "/images/favicon.png", type: "image/png" },
+                ],
+                apple: [{ url: "/images/favicon.png", type: "image/png" }],
+              },
+            };
+        "#;
+
+        let refs = extract_next_metadata_icon_references(content);
+        assert!(refs.contains(&"/images/favicon.svg".to_string()));
+        assert!(refs.contains(&"/images/favicon.png".to_string()));
+    }
+
+    #[test]
+    fn extracts_icons_from_link_tags() {
+        let content = r#"
+            <head>
+              <link rel="icon" href="/favicon.ico" />
+              <link rel='apple-touch-icon' href='/apple-touch.png' />
+              <link rel="stylesheet" href="/styles.css" />
+            </head>
+        "#;
+
+        let refs = extract_link_tag_icon_references(content);
+        assert!(refs.contains(&"/favicon.ico".to_string()));
+        assert!(refs.contains(&"/apple-touch.png".to_string()));
+    }
+
+    #[test]
+    fn normalizes_declared_icon_paths_and_skips_external_refs() {
+        let repo_root = PathBuf::from("/tmp/fake-repo");
+        let source_file = repo_root.join("app/layout.tsx");
+
+        let rooted = normalize_icon_reference_to_paths("/images/favicon.png", &source_file, &repo_root);
+        assert_eq!(rooted[0], repo_root.join("public/images/favicon.png"));
+        assert_eq!(rooted[1], repo_root.join("images/favicon.png"));
+
+        let relative = normalize_icon_reference_to_paths("favicon.ico", &source_file, &repo_root);
+        assert!(relative.contains(&repo_root.join("app/favicon.ico")));
+
+        let external = normalize_icon_reference_to_paths("https://cdn.example.com/favicon.ico", &source_file, &repo_root);
+        assert!(external.is_empty());
+    }
+
+    #[test]
+    fn deprioritizes_known_default_when_custom_icon_exists() {
+        let repo = temp_repo_dir("deprioritize-known-default");
+        let default_bytes = b"default-template-icon";
+        let custom_bytes = b"custom-icon";
+
+        write_file(&repo, "app/favicon.ico", default_bytes);
+        write_file(&repo, "public/images/favicon.png", custom_bytes);
+
+        let default_hash = sha256_hex(default_bytes);
+        let selected = select_best_icon_with_known_defaults(
+            vec![repo.join("app/favicon.ico"), repo.join("public/images/favicon.png")],
+            &[default_hash.as_str()],
+        )
+        .expect("custom icon should be selected");
+
+        assert_eq!(selected.mime_type, "image/png");
+        assert_eq!(selected.bytes, custom_bytes.to_vec());
+
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn keeps_default_when_it_is_only_icon() {
+        let repo = temp_repo_dir("only-default");
+        let default_bytes = b"default-template-icon-only";
+        write_file(&repo, "app/favicon.ico", default_bytes);
+
+        let default_hash = sha256_hex(default_bytes);
+        let selected = select_best_icon_with_known_defaults(
+            vec![repo.join("app/favicon.ico")],
+            &[default_hash.as_str()],
+        )
+        .expect("default icon should still be selected");
+
+        assert_eq!(selected.mime_type, "image/x-icon");
+        assert_eq!(selected.bytes, default_bytes.to_vec());
+
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn skips_oversized_icon_file_in_favor_of_valid_small_icon() {
+        let repo = temp_repo_dir("size-guard");
+        write_file(
+            &repo,
+            "public/favicon.png",
+            &vec![0_u8; (MAX_FAVICON_FILE_SIZE as usize) + 1],
+        );
+        write_file(&repo, "public/images/favicon.png", b"small-valid-icon");
+
+        let selected = select_best_icon(vec![
+            repo.join("public/favicon.png"),
+            repo.join("public/images/favicon.png"),
+        ])
+        .expect("small icon should be selected");
+
+        assert_eq!(selected.mime_type, "image/png");
+        assert_eq!(selected.bytes, b"small-valid-icon".to_vec());
+
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn prefers_browser_declared_icon_for_web_meredith_style_repo() {
+        let repo = temp_repo_dir("web-meredith-style");
+        let default_bytes = b"default-template-icon";
+        let custom_bytes = b"meredith-custom-favicon";
+
+        write_text(
+            &repo,
+            "app/layout.tsx",
+            r#"
+              export const metadata = {
+                icons: {
+                  icon: "/images/favicon.png",
+                },
+              };
+            "#,
+        );
+        write_file(&repo, "app/favicon.ico", default_bytes);
+        write_file(&repo, "public/images/favicon.png", custom_bytes);
+
+        let mut candidates = collect_browser_declared_icon_candidates(&repo);
+        candidates.extend(collect_fallback_icon_candidates(&repo));
+
+        let default_hash = sha256_hex(default_bytes);
+        let selected = select_best_icon_with_known_defaults(candidates, &[default_hash.as_str()])
+            .expect("custom declared icon should be selected");
+
+        assert_eq!(selected.mime_type, "image/png");
+        assert_eq!(selected.bytes, custom_bytes.to_vec());
+
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn prefers_browser_declared_icon_for_web_volume_style_repo() {
+        let repo = temp_repo_dir("web-volume-style");
+        let default_bytes = b"default-template-icon";
+        let custom_bytes = b"volume-custom-favicon";
+
+        write_text(
+            &repo,
+            "src/app/layout.tsx",
+            r#"
+              export const metadata = {
+                icons: {
+                  icon: "/webflow/favicon.png",
+                },
+              };
+            "#,
+        );
+        write_file(&repo, "src/app/favicon.ico", default_bytes);
+        write_file(&repo, "public/webflow/favicon.png", custom_bytes);
+
+        let mut candidates = collect_browser_declared_icon_candidates(&repo);
+        candidates.extend(collect_fallback_icon_candidates(&repo));
+
+        let default_hash = sha256_hex(default_bytes);
+        let selected = select_best_icon_with_known_defaults(candidates, &[default_hash.as_str()])
+            .expect("webflow icon should be selected");
+
+        assert_eq!(selected.mime_type, "image/png");
+        assert_eq!(selected.bytes, custom_bytes.to_vec());
+
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn prefers_app_icon_svg_when_default_favicon_is_present_but_undeclared() {
+        let repo = temp_repo_dir("app-icon-svg");
+        let default_bytes = b"default-template-icon";
+        let custom_svg = br#"<svg xmlns="http://www.w3.org/2000/svg"></svg>"#;
+
+        write_file(&repo, "app/favicon.ico", default_bytes);
+        write_file(&repo, "app/icon.svg", custom_svg);
+
+        let mut candidates = collect_browser_declared_icon_candidates(&repo);
+        candidates.extend(collect_fallback_icon_candidates(&repo));
+
+        let default_hash = sha256_hex(default_bytes);
+        let selected = select_best_icon_with_known_defaults(candidates, &[default_hash.as_str()])
+            .expect("app icon svg should be selected");
+
+        assert_eq!(selected.mime_type, "image/svg+xml");
+        assert_eq!(selected.bytes, custom_svg.to_vec());
+
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn returns_none_when_no_icon_files_exist() {
+        let repo = temp_repo_dir("no-icons");
+        let mut candidates = collect_browser_declared_icon_candidates(&repo);
+        candidates.extend(collect_fallback_icon_candidates(&repo));
+
+        assert!(select_best_icon(candidates).is_none());
+
+        let _ = fs::remove_dir_all(repo);
+    }
 }
 
 #[cfg(test)]
