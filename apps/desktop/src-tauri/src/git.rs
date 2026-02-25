@@ -36,7 +36,7 @@ impl From<std::io::Error> for GitError {
 }
 
 fn open_repo(repo_path: &str) -> Result<Repository, GitError> {
-    match Repository::open(repo_path) {
+    match Repository::discover(repo_path) {
         Ok(repo) => Ok(repo),
         Err(err) => {
             let message = err.message().to_string();
@@ -63,6 +63,7 @@ pub struct ProjectState {
     pub ahead: usize,
     pub behind: usize,
     pub has_remote: bool,
+    pub is_empty_repo: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -140,16 +141,48 @@ pub struct DiffLine {
 
 pub fn get_status(repo_path: &str) -> Result<ProjectState, GitError> {
     let repo = open_repo(repo_path)?;
+    let is_empty_repo = repo.is_empty().unwrap_or(false);
+    let (head, is_head_unborn) = match repo.head() {
+        Ok(head_ref) => (Some(head_ref), false),
+        Err(err) => {
+            if err.code() == ErrorCode::UnbornBranch {
+                (None, true)
+            } else if err.code() == ErrorCode::NotFound && is_empty_repo {
+                (None, true)
+            } else {
+                return Err(err.into());
+            }
+        }
+    };
 
     // Get current branch
     let (branch, is_detached) = if repo.head_detached().unwrap_or(false) {
-        let head = repo.head()?;
-        let sha = head.peel_to_commit()?.id().to_string();
-        (sha[..7].to_string(), true)
-    } else {
-        let head = repo.head()?;
+        if let Some(head_ref) = head.as_ref() {
+            if let Ok(commit) = head_ref.peel_to_commit() {
+                let sha = commit.id().to_string();
+                (sha[..7].to_string(), true)
+            } else {
+                ("detached".to_string(), true)
+            }
+        } else {
+            ("detached".to_string(), true)
+        }
+    } else if is_head_unborn || is_empty_repo {
         let branch_name = head
-            .shorthand()
+            .as_ref()
+            .and_then(|h| h.shorthand().map(|value| value.to_string()))
+            .or_else(|| {
+                repo.find_reference("HEAD")
+                    .ok()
+                    .and_then(|reference| reference.symbolic_target().map(|target| target.to_string()))
+                    .and_then(|target| target.strip_prefix("refs/heads/").map(|value| value.to_string()))
+            })
+            .unwrap_or_else(|| "main".to_string());
+        (branch_name, false)
+    } else {
+        let branch_name = head
+            .as_ref()
+            .and_then(|h| h.shorthand())
             .unwrap_or("unknown")
             .to_string();
         (branch_name, false)
@@ -203,7 +236,11 @@ pub fn get_status(repo_path: &str) -> Result<ProjectState, GitError> {
     }
 
     // Get ahead/behind
-    let (ahead, behind, has_remote) = get_ahead_behind(&repo, &branch).unwrap_or((0, 0, false));
+    let (ahead, behind, has_remote) = if is_empty_repo || is_head_unborn {
+        (0, 0, false)
+    } else {
+        get_ahead_behind(&repo, &branch).unwrap_or((0, 0, false))
+    };
 
     Ok(ProjectState {
         branch,
@@ -214,6 +251,7 @@ pub fn get_status(repo_path: &str) -> Result<ProjectState, GitError> {
         ahead,
         behind,
         has_remote,
+        is_empty_repo,
     })
 }
 
@@ -269,6 +307,7 @@ pub fn save(repo_path: &str, message: Option<String>) -> Result<SaveResult, GitE
             ahead: 0,
             behind: 0,
             has_remote: false,
+            is_empty_repo: false,
         });
 
         let total_files = status.staged_files.len() + status.changed_files.len() + status.untracked_files.len();

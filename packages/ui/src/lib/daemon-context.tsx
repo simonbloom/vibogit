@@ -12,11 +12,15 @@ import {
 import type {
   DaemonState,
   ConnectionState,
+  RepoHealth,
   GitStatus,
   GitBranch,
 } from "@vibogit/shared";
 import { MINI_COMMIT_COMPLETE } from "./mini-view-events";
 import { useWindowActivity } from "./use-window-activity";
+
+const NON_GIT_REPO_MESSAGE = "Folder is empty or not initialized with Git yet.";
+const EMPTY_REPO_MESSAGE = "Repository initialized but has no commits yet.";
 
 const isTauri = (): boolean => {
   try {
@@ -29,6 +33,25 @@ const isTauri = (): boolean => {
 let tauriInvoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
 let tauriListen: ((event: string, handler: (event: { payload: unknown }) => void) => Promise<() => void>) | null = null;
 let tauriInitialized = false;
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  if (err && typeof err === "object" && "message" in err) {
+    const message = (err as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return "Unknown error";
+  }
+}
+
+function isNotRepositoryMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("not a git repository") || normalized.includes("not a repository");
+}
 
 async function ensureTauriAPIs(): Promise<boolean> {
   if (!isTauri()) {
@@ -68,6 +91,7 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
         untrackedFiles: string[];
         ahead: number;
         behind: number;
+        isEmptyRepo?: boolean;
       };
       return {
         status: {
@@ -77,6 +101,7 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
           untracked: state.untrackedFiles.map((f) => ({ path: f, status: "untracked", staged: false })),
           ahead: state.ahead,
           behind: state.behind,
+          isEmptyRepo: state.isEmptyRepo ?? false,
         }
       } as T;
     }
@@ -347,6 +372,22 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
       return { skills: result } as T;
     }
 
+    case "githubListRepos": {
+      const query = args.query as string | undefined;
+      const page = args.page as number | undefined;
+      const perPage = args.perPage as number | undefined;
+      const result = await tauriInvoke("github_list_repos", { query, page, perPage });
+      return result as T;
+    }
+
+    case "gitCloneIntoFolder": {
+      const path = (args.path as string) || "";
+      const cloneUrl = (args.cloneUrl as string) || "";
+      const branch = args.branch as string | undefined;
+      await tauriInvoke("git_clone_into_folder", { path, cloneUrl, branch });
+      return {} as T;
+    }
+
     default:
       throw new Error(`Unknown command: ${type}`);
   }
@@ -357,6 +398,7 @@ type DaemonAction =
   | { type: "SET_REPO_PATH"; payload: string | null }
   | { type: "SET_STATUS"; payload: GitStatus | null }
   | { type: "SET_BRANCHES"; payload: GitBranch[] }
+  | { type: "SET_REPO_HEALTH"; payload: { health: RepoHealth; message: string | null } }
   | { type: "SET_ERROR"; payload: string | null }
   | { type: "RESET" };
 
@@ -366,6 +408,8 @@ const initialState: DaemonState = {
   status: null,
   branches: [],
   error: null,
+  repoHealth: "ready",
+  repoMessage: null,
 };
 
 function daemonReducer(state: DaemonState, action: DaemonAction): DaemonState {
@@ -378,8 +422,14 @@ function daemonReducer(state: DaemonState, action: DaemonAction): DaemonState {
       return { ...state, status: action.payload };
     case "SET_BRANCHES":
       return { ...state, branches: action.payload };
+    case "SET_REPO_HEALTH":
+      return {
+        ...state,
+        repoHealth: action.payload.health,
+        repoMessage: action.payload.message,
+      };
     case "SET_ERROR":
-      return { ...state, error: action.payload, connection: action.payload ? "error" : state.connection };
+      return { ...state, error: action.payload };
     case "RESET":
       return initialState;
     default:
@@ -465,6 +515,12 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
       const response = await send<{ status: GitStatus }>("status", { repoPath: path });
       if (repoPathRef.current === path) {
         dispatch({ type: "SET_STATUS", payload: response.status });
+        dispatch({
+          type: "SET_REPO_HEALTH",
+          payload: response.status.isEmptyRepo
+            ? { health: "emptyRepo", message: EMPTY_REPO_MESSAGE }
+            : { health: "ready", message: null },
+        });
         debugCountersRef.current.statusRefreshExecuted += 1;
         if (debugCountersRef.current.statusRefreshExecuted % 20 === 0) {
           flushDebugCounters(opts?.source ?? "refresh");
@@ -544,7 +600,7 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error("[Backend] Failed to connect:", err);
       dispatch({ type: "SET_CONNECTION", payload: "error" });
-      dispatch({ type: "SET_ERROR", payload: err instanceof Error ? err.message : "Failed to connect to desktop backend" });
+      dispatch({ type: "SET_ERROR", payload: getErrorMessage(err) || "Failed to connect to desktop backend" });
     }
   }, [scheduleStatusRefresh]);
 
@@ -563,14 +619,27 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
 
     repoPathRef.current = path;
     dispatch({ type: "SET_REPO_PATH", payload: path });
+    dispatch({ type: "SET_ERROR", payload: null });
 
     if (!path) {
       dispatch({ type: "SET_STATUS", payload: null });
       dispatch({ type: "SET_BRANCHES", payload: [] });
+      dispatch({ type: "SET_REPO_HEALTH", payload: { health: "ready", message: null } });
       return;
     }
 
     try {
+      const isRepoResponse = await send<{ isRepo: boolean }>("isGitRepo", { path });
+      if (!isRepoResponse.isRepo) {
+        dispatch({ type: "SET_STATUS", payload: null });
+        dispatch({ type: "SET_BRANCHES", payload: [] });
+        dispatch({
+          type: "SET_REPO_HEALTH",
+          payload: { health: "nonGit", message: NON_GIT_REPO_MESSAGE },
+        });
+        return;
+      }
+
       await send("watch", { repoPath: path });
       const [statusResponse, branchResponse] = await Promise.all([
         send<{ status: GitStatus }>("status", { repoPath: path }),
@@ -580,9 +649,28 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
       if (repoPathRef.current === path) {
         dispatch({ type: "SET_STATUS", payload: statusResponse.status });
         dispatch({ type: "SET_BRANCHES", payload: branchResponse.branches });
+        dispatch({
+          type: "SET_REPO_HEALTH",
+          payload: statusResponse.status.isEmptyRepo
+            ? { health: "emptyRepo", message: EMPTY_REPO_MESSAGE }
+            : { health: "ready", message: null },
+        });
       }
     } catch (err) {
-      dispatch({ type: "SET_ERROR", payload: err instanceof Error ? err.message : "Failed to load project state" });
+      const message = getErrorMessage(err);
+      if (isNotRepositoryMessage(message)) {
+        dispatch({ type: "SET_STATUS", payload: null });
+        dispatch({ type: "SET_BRANCHES", payload: [] });
+        dispatch({
+          type: "SET_REPO_HEALTH",
+          payload: { health: "nonGit", message: NON_GIT_REPO_MESSAGE },
+        });
+        dispatch({ type: "SET_ERROR", payload: null });
+        return;
+      }
+
+      dispatch({ type: "SET_REPO_HEALTH", payload: { health: "ready", message: null } });
+      dispatch({ type: "SET_ERROR", payload: message || "Failed to load project state" });
     }
   }, [send]);
 

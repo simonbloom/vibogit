@@ -39,6 +39,7 @@ export function MiniView() {
   const { state: projectsState, selectProject } = useProjects();
   const { status, repoPath } = state;
   const containerRef = useRef<HTMLDivElement>(null);
+  const isRepoReady = state.repoHealth === "ready";
 
   const [isCommitting, setIsCommitting] = useState(false);
   const [commitIcon, setCommitIcon] = useState<"default" | "loading" | "check">("default");
@@ -229,7 +230,7 @@ export function MiniView() {
   };
 
   const handlePull = async () => {
-    if (!repoPath || isPulling) return;
+    if (!repoPath || !isRepoReady || isPulling) return;
     setIsPulling(true);
     try {
       await send("pull", { repoPath });
@@ -242,7 +243,7 @@ export function MiniView() {
   };
 
   const handleFetch = async () => {
-    if (!repoPath || isFetching) return;
+    if (!repoPath || !isRepoReady || isFetching) return;
     setIsFetching(true);
     try {
       await send("fetch", { repoPath });
@@ -255,7 +256,7 @@ export function MiniView() {
   };
 
   const handlePush = async () => {
-    if (!repoPath || isPushing) return;
+    if (!repoPath || !isRepoReady || isPushing) return;
     setIsPushing(true);
     try {
       await send("push", { repoPath });
@@ -269,7 +270,7 @@ export function MiniView() {
   };
 
   const handlePR = async () => {
-    if (!repoPath) return;
+    if (!repoPath || !isRepoReady) return;
     try {
       const result = await send<{ remotes: Array<{ name: string; refs: { fetch: string } }> }>("getRemotes", { repoPath });
       const origin = result.remotes.find((r) => r.name === "origin");
@@ -287,7 +288,7 @@ export function MiniView() {
   };
 
   const handleQuickCommit = async () => {
-    if (!repoPath || totalChanges === 0 || isCommitting) return;
+    if (!repoPath || !isRepoReady || totalChanges === 0 || isCommitting) return;
 
     const settings = getSettings();
     if (!settings.aiApiKey) {
@@ -416,7 +417,7 @@ export function MiniView() {
           <button
             key={type}
             onClick={() => handleQuickLink(type)}
-            disabled={!repoPath}
+            disabled={!repoPath || (type === "github" && !isRepoReady)}
             title={title}
             className="p-1 rounded hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors"
           >
@@ -429,7 +430,7 @@ export function MiniView() {
       <div className="w-px h-5 bg-border/50 mx-1 shrink-0" />
 
       {/* Dev server status */}
-      {repoPath && (
+      {repoPath && isRepoReady && (
         <button
           onClick={handleDevClick}
           className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-accent transition-colors text-xs shrink-0 max-w-[80px]"
@@ -460,7 +461,7 @@ export function MiniView() {
         {/* Pull */}
         <button
           onClick={handlePull}
-          disabled={!repoPath || isPulling}
+          disabled={!repoPath || !isRepoReady || isPulling}
           title={`Pull${status?.behind ? ` (${status.behind} behind)` : ""}`}
           className="flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors text-xs"
         >
@@ -473,7 +474,7 @@ export function MiniView() {
         {/* Fetch */}
         <button
           onClick={handleFetch}
-          disabled={!repoPath || isFetching}
+          disabled={!repoPath || !isRepoReady || isFetching}
           title="Fetch"
           className="flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors text-xs"
         >
@@ -485,7 +486,7 @@ export function MiniView() {
         {/* Push */}
         <button
           onClick={handlePush}
-          disabled={!repoPath || isPushing || !status?.ahead}
+          disabled={!repoPath || !isRepoReady || isPushing || !status?.ahead}
           title={`Push${status?.ahead ? ` (${status.ahead} ahead)` : ""}`}
           className="flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors text-xs"
         >
@@ -498,7 +499,7 @@ export function MiniView() {
         {/* Commit */}
         <button
           onClick={handleQuickCommit}
-          disabled={totalChanges === 0 || isCommitting || noApiKey}
+          disabled={!isRepoReady || totalChanges === 0 || isCommitting || noApiKey}
           title={noApiKey ? "Configure AI API key in settings" : `Quick commit (${totalChanges} changes)`}
           className="flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors text-xs"
         >
@@ -517,7 +518,7 @@ export function MiniView() {
         {/* PR */}
         <button
           onClick={handlePR}
-          disabled={!repoPath}
+          disabled={!repoPath || !isRepoReady}
           title="Create Pull Request"
           className="flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors text-xs"
         >

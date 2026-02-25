@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { useWindowActivity } from "@/lib/use-window-activity";
+import { useConfig } from "@/lib/config-context";
 import { BranchSelector } from "@/components/branch-selector";
 import { DevServerConnection } from "@/components/dev-server-connection";
 import { DevServerLogs } from "@/components/dev-server-logs";
@@ -17,6 +18,7 @@ import { PromptBox } from "@/components/prompt-box";
 import { WindowDragRegion } from "@/components/window-drag-region";
 import type { PromptData } from "@/components/prompt-box";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getSettings, TERMINAL_OPTIONS, EDITOR_OPTIONS } from "@/lib/settings";
 import { getModelForProvider } from "@/lib/ai-service";
 import { isTauri, isMacTauri } from "@/platform";
@@ -40,16 +42,33 @@ import {
   FileEdit,
   ScrollText,
   PanelTopOpen,
+  GitFork,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
-import type { DevServerConfig, DevServerState } from "@vibogit/shared";
+import type {
+  DevServerConfig,
+  DevServerState,
+  GitHubRepo,
+  GitHubListReposResponse,
+} from "@vibogit/shared";
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error) return error;
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message) return message;
+  }
+  return fallback;
+}
 
 const AUTO_FETCH_INTERVAL_MS = 120_000;
 
 export function MainInterface() {
-  const { state, send, refreshStatus, refreshBranches } = useDaemon();
+  const { state, send, refreshStatus, refreshBranches, setRepoPath } = useDaemon();
   const { isForeground } = useWindowActivity();
+  const { config } = useConfig();
   const [isPulling, setIsPulling] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
@@ -67,10 +86,21 @@ export function MainInterface() {
   const [isTauriEnv, setIsTauriEnv] = useState(false);
   const lastFetchAtRef = useRef(0);
   const wasForegroundRef = useRef(isForeground);
+  const [showCloneDialog, setShowCloneDialog] = useState(false);
+  const [cloneQuery, setCloneQuery] = useState("");
+  const [cloneRepos, setCloneRepos] = useState<GitHubRepo[]>([]);
+  const [cloneReposPage, setCloneReposPage] = useState(1);
+  const [cloneReposHasMore, setCloneReposHasMore] = useState(false);
+  const [cloneLoading, setCloneLoading] = useState(false);
+  const [cloneError, setCloneError] = useState<string | null>(null);
+  const [selectedCloneRepo, setSelectedCloneRepo] = useState<GitHubRepo | null>(null);
+  const [cloneBranch, setCloneBranch] = useState("");
+  const [isCloning, setIsCloning] = useState(false);
 
   const { status, branches, repoPath } = state;
   const currentBranch = branches.find((b) => b.current);
   const projectName = repoPath?.split("/").pop() || "Project";
+  const isRepoReady = state.repoHealth === "ready";
 
   const totalChanges =
     (status?.staged.length || 0) +
@@ -468,20 +498,98 @@ export function MainInterface() {
     }
   };
 
+  const handleChooseRepoRoot = async () => {
+    try {
+      const response = await send<{ path: string | null }>("pickFolder");
+      if (response.path) {
+        await setRepoPath(response.path);
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to choose repo root"));
+    }
+  };
+
+  const fetchGitHubRepos = useCallback(
+    async (query: string, page: number, append: boolean) => {
+      if (!config.githubPat?.trim()) {
+        setCloneError("Add your GitHub token in Settings > Tools before cloning.");
+        setCloneRepos([]);
+        setCloneReposHasMore(false);
+        return;
+      }
+
+      setCloneLoading(true);
+      setCloneError(null);
+      try {
+        const response = await send<GitHubListReposResponse>("githubListRepos", {
+          query,
+          page,
+          perPage: 20,
+        });
+        setCloneRepos((current) => (append ? [...current, ...response.repos] : response.repos));
+        setCloneReposPage(response.page);
+        setCloneReposHasMore(response.hasMore);
+      } catch (error) {
+        const message = getErrorMessage(error, "Failed to load GitHub repositories");
+        setCloneError(message);
+        if (!append) {
+          setCloneRepos([]);
+          setCloneReposHasMore(false);
+        }
+      } finally {
+        setCloneLoading(false);
+      }
+    },
+    [config.githubPat, send]
+  );
+
+  const handleOpenCloneDialog = async () => {
+    setShowCloneDialog(true);
+    setCloneBranch("");
+    setSelectedCloneRepo(null);
+    setCloneQuery("");
+    await fetchGitHubRepos("", 1, false);
+  };
+
+  const handleCloneSelectedRepo = async () => {
+    if (!repoPath || !selectedCloneRepo) return;
+    setIsCloning(true);
+    try {
+      await send("gitCloneIntoFolder", {
+        path: repoPath,
+        cloneUrl: selectedCloneRepo.cloneUrl,
+        branch: cloneBranch.trim() || undefined,
+      });
+      await setRepoPath(repoPath);
+      setShowCloneDialog(false);
+      toast.success(`Cloned ${selectedCloneRepo.fullName}`);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Clone failed"));
+    } finally {
+      setIsCloning(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="flex items-center gap-3 shrink-0">
-            <BranchSelector currentBranch={currentBranch} branches={branches} />
-            <DevServerConnection 
-              repoPath={repoPath} 
-              onPortChange={setDevServerPort} 
-              onRequestPortPrompt={() => setShowPortPrompt(true)}
-              onMonorepoChange={setIsMonorepo}
-            />
-          </div>
+          {isRepoReady ? (
+            <div className="flex items-center gap-3 shrink-0">
+              <BranchSelector currentBranch={currentBranch} branches={branches} />
+              <DevServerConnection
+                repoPath={repoPath}
+                onPortChange={setDevServerPort}
+                onRequestPortPrompt={() => setShowPortPrompt(true)}
+                onMonorepoChange={setIsMonorepo}
+              />
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground px-2 py-1 rounded-md bg-muted/50">
+              Not initialized
+            </div>
+          )}
           {isMacOverlayChrome && <WindowDragRegion className="mx-2 h-8 flex-1 min-w-0 rounded-md" />}
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -491,7 +599,13 @@ export function MainInterface() {
           <Button variant="ghost" size="icon" onClick={() => handleQuickLink("browser")} title="Open in browser">
             <ExternalLink className="w-5 h-5 text-nav-icon-inputs" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => handleQuickLink("github")} title="GitHub">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleQuickLink("github")}
+            title="GitHub"
+            disabled={!isRepoReady}
+          >
             <Github className="w-5 h-5 text-nav-icon-spaces" />
           </Button>
           <Button variant="ghost" size="icon" onClick={() => handleQuickLink("terminal")} title="Terminal">
@@ -520,7 +634,7 @@ export function MainInterface() {
           variant={(status?.behind || 0) > 0 ? "default" : "outline"}
           size="sm"
           onClick={handlePull}
-          disabled={isPulling}
+          disabled={!isRepoReady || isPulling}
           className={(status?.behind || 0) > 0 ? "bg-blue-600 hover:bg-blue-700" : ""}
         >
           {isPulling ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowDown className="w-4 h-4" />}
@@ -530,7 +644,7 @@ export function MainInterface() {
           variant="outline"
           size="icon"
           onClick={handleFetch}
-          disabled={isFetching}
+          disabled={!isRepoReady || isFetching}
           title="Fetch"
           className="h-9 w-9"
         >
@@ -540,7 +654,7 @@ export function MainInterface() {
           variant={(status?.ahead || 0) > 0 ? "default" : "outline"}
           size="sm"
           onClick={handlePush}
-          disabled={isPushing || (status?.ahead || 0) === 0}
+          disabled={!isRepoReady || isPushing || (status?.ahead || 0) === 0}
           className={(status?.ahead || 0) > 0 ? "bg-green-600 hover:bg-green-700" : ""}
         >
           {isPushing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4" />}
@@ -550,7 +664,7 @@ export function MainInterface() {
           variant={totalChanges > 0 ? "default" : "outline"}
           size="sm"
           onClick={handleQuickCommit}
-          disabled={totalChanges === 0 || isCommitting}
+          disabled={!isRepoReady || totalChanges === 0 || isCommitting}
         >
           {isCommitting ? (
             <>
@@ -568,6 +682,7 @@ export function MainInterface() {
           variant="outline"
           size="sm"
           onClick={() => setShowCreatePR(true)}
+          disabled={!isRepoReady}
         >
           <GitPullRequest className="w-4 h-4" />
           PR
@@ -581,6 +696,7 @@ export function MainInterface() {
           size="sm"
           onClick={() => setActiveView("changes")}
           className="gap-1.5 rounded-full"
+          disabled={!isRepoReady}
         >
           <FileEdit className="w-3.5 h-3.5" />
           Changes
@@ -595,6 +711,7 @@ export function MainInterface() {
           size="sm"
           onClick={() => setActiveView("tree")}
           className="gap-1.5 rounded-full"
+          disabled={!isRepoReady}
         >
           <Folder className="w-3.5 h-3.5" />
           Tree
@@ -604,6 +721,7 @@ export function MainInterface() {
           size="sm"
           onClick={() => setActiveView("graph")}
           className="gap-1.5 rounded-full"
+          disabled={!isRepoReady}
         >
           <GitBranch className="w-3.5 h-3.5" />
           Graph
@@ -613,6 +731,7 @@ export function MainInterface() {
           size="sm"
           onClick={() => setActiveView("logs")}
           className="gap-1.5 rounded-full"
+          disabled={!isRepoReady}
         >
           <ScrollText className="w-3.5 h-3.5" />
           Logs
@@ -621,12 +740,40 @@ export function MainInterface() {
 
       {/* Content */}
       <div className="flex-1 overflow-hidden">
-        {activeView === "graph" && (
+        {!isRepoReady && (
+          <div className="h-full flex items-center justify-center p-8">
+            <div className="w-full max-w-xl border rounded-lg p-6 bg-card">
+              <div className="flex items-center gap-2 mb-2">
+                <GitFork className="w-4 h-4 text-muted-foreground" />
+                <p className="font-medium text-foreground">Folder not ready yet</p>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {state.repoMessage || "Folder is empty or not initialized with Git yet."}
+              </p>
+              {repoPath && (
+                <p className="mt-2 text-xs text-muted-foreground font-mono truncate">{repoPath}</p>
+              )}
+              <div className="mt-4 flex items-center gap-2">
+                <Button variant="outline" onClick={() => void handleChooseRepoRoot()}>
+                  Choose Repo Root
+                </Button>
+                <Button
+                  onClick={() => void handleOpenCloneDialog()}
+                  disabled={!repoPath}
+                  title={!repoPath ? "Select a folder first" : undefined}
+                >
+                  Clone from GitHub
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+        {isRepoReady && activeView === "graph" && (
           <div className="h-full">
             <CommitHistory repoPath={repoPath} refreshKey={graphRefreshKey} />
           </div>
         )}
-        {activeView === "tree" && (
+        {isRepoReady && activeView === "tree" && (
           <div className="flex h-full">
             <div className="w-2/5 border-r overflow-hidden flex flex-col min-h-0">
               <FileTree
@@ -644,12 +791,12 @@ export function MainInterface() {
             </div>
           </div>
         )}
-        {activeView === "changes" && (
+        {isRepoReady && activeView === "changes" && (
           <div className="h-full overflow-auto">
             <StagedChanges repoPath={repoPath} />
           </div>
         )}
-        {activeView === "logs" && (
+        {isRepoReady && activeView === "logs" && (
           <div className="h-full overflow-auto">
             <DevServerLogs repoPath={repoPath} expanded />
           </div>
@@ -669,6 +816,112 @@ export function MainInterface() {
       </div>
 
       <CreatePRDialog isOpen={showCreatePR} onClose={() => setShowCreatePR(false)} repoPath={repoPath} currentBranch={currentBranch} />
+      <Dialog open={showCloneDialog} onOpenChange={setShowCloneDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clone from GitHub</DialogTitle>
+            <DialogDescription>
+              Select a repository to clone into the current folder root.
+            </DialogDescription>
+          </DialogHeader>
+
+          {!config.githubPat?.trim() && (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+              Add your GitHub token in Settings &gt; Tools to list repositories.
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={cloneQuery}
+                onChange={(event) => setCloneQuery(event.target.value)}
+                placeholder="Search repositories"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    void fetchGitHubRepos(cloneQuery, 1, false);
+                  }
+                }}
+              />
+              <Button
+                variant="outline"
+                onClick={() => void fetchGitHubRepos(cloneQuery, 1, false)}
+                disabled={cloneLoading || !config.githubPat?.trim()}
+              >
+                Search
+              </Button>
+            </div>
+
+            <div className="max-h-64 overflow-y-auto rounded-md border divide-y">
+              {cloneRepos.length === 0 && !cloneLoading && !cloneError && (
+                <div className="px-3 py-4 text-sm text-muted-foreground">No repositories found.</div>
+              )}
+              {cloneRepos.map((repo) => (
+                <button
+                  key={repo.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCloneRepo(repo);
+                    setCloneBranch(repo.defaultBranch || "");
+                  }}
+                  className={clsx(
+                    "w-full px-3 py-2 text-left hover:bg-accent transition-colors",
+                    selectedCloneRepo?.id === repo.id && "bg-accent"
+                  )}
+                >
+                  <div className="text-sm font-medium">{repo.fullName}</div>
+                  <div className="text-xs text-muted-foreground flex items-center gap-2">
+                    <span>{repo.private ? "Private" : "Public"}</span>
+                    <span>Default: {repo.defaultBranch || "main"}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {cloneError && <p className="text-sm text-destructive">{cloneError}</p>}
+
+            {cloneReposHasMore && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => void fetchGitHubRepos(cloneQuery, cloneReposPage + 1, true)}
+                disabled={cloneLoading}
+              >
+                {cloneLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Load more"}
+              </Button>
+            )}
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-foreground">Branch (optional)</label>
+              <input
+                type="text"
+                value={cloneBranch}
+                onChange={(event) => setCloneBranch(event.target.value)}
+                placeholder="Use repo default branch"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
+            {repoPath && (
+              <p className="text-xs text-muted-foreground font-mono truncate">Destination: {repoPath}</p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCloneDialog(false)} disabled={isCloning}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleCloneSelectedRepo()}
+              disabled={!selectedCloneRepo || !repoPath || isCloning}
+            >
+              {isCloning ? <Loader2 className="w-4 h-4 animate-spin" /> : "Clone Here"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <PortPromptModal
         isOpen={showPortPrompt}
         onClose={() => setShowPortPrompt(false)}

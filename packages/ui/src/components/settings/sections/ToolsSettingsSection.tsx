@@ -56,6 +56,20 @@ export function ToolsSettingsSection({ config, onSave }: ToolsSettingsSectionPro
       </div>
 
       <div>
+        <label className="mb-2 block text-sm font-medium text-foreground">GitHub Personal Access Token</label>
+        <input
+          type="password"
+          value={config.githubPat || ""}
+          onChange={(event) => onSave({ githubPat: event.target.value })}
+          placeholder="github_pat_..."
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Used to list your repositories for clone-to-root. Needs repo read access.
+        </p>
+      </div>
+
+      <div>
         <div className="flex items-center justify-between gap-4">
           <div>
             <label className="block text-sm font-medium text-foreground">Press Enter after paste</label>

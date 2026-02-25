@@ -13,8 +13,6 @@ export function WelcomeScreen() {
   const { state, send, setRepoPath } = useDaemon();
   const { addTab } = useTabs();
   const [isLoading, setIsLoading] = useState(false);
-  const [showInitDialog, setShowInitDialog] = useState(false);
-  const [pendingPath, setPendingPath] = useState<string | null>(null);
 
   const handleOpenProject = useCallback(async () => {
     if (state.connection !== "connected") return;
@@ -33,59 +31,17 @@ export function WelcomeScreen() {
 
   const checkAndOpenPath = async (path: string) => {
     try {
-      const isRepoResponse = await send<{ isRepo: boolean }>("isGitRepo", { path });
-      if (isRepoResponse.isRepo) {
-        addTab(path);
-        addRecentProject(path, path.split("/").pop() || path);
-        await setRepoPath(path);
-      } else {
-        setPendingPath(path);
-        setShowInitDialog(true);
-      }
+      addTab(path);
+      addRecentProject(path, path.split("/").pop() || path);
+      await setRepoPath(path);
     } catch (error) {
-      console.error("Failed to check path:", error);
-    }
-  };
-
-  const handleInitGit = async () => {
-    if (!pendingPath) return;
-    setIsLoading(true);
-    try {
-      await send("initGit", { path: pendingPath });
-      addTab(pendingPath);
-      addRecentProject(pendingPath, pendingPath.split("/").pop() || pendingPath);
-      await setRepoPath(pendingPath);
-    } catch (error) {
-      console.error("Failed to init git:", error);
-    } finally {
-      setIsLoading(false);
-      setShowInitDialog(false);
-      setPendingPath(null);
+      console.error("Failed to open path:", error);
     }
   };
 
   const handleRecentProjectClick = async (project: RecentProject) => {
     await checkAndOpenPath(project.path);
   };
-
-  if (showInitDialog && pendingPath) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-57px)] p-8">
-        <div className="border rounded-lg p-6 max-w-sm w-full">
-          <h2 className="font-semibold mb-1">{pendingPath.split("/").pop()}</h2>
-          <p className="text-sm text-muted-foreground mb-4">This folder isn&apos;t a git repository.</p>
-          <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={() => { setShowInitDialog(false); setPendingPath(null); }}>
-              Cancel
-            </Button>
-            <Button className="flex-1" onClick={handleInitGit} disabled={isLoading}>
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Initialize Git"}
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-57px)] p-8">

@@ -235,10 +235,12 @@ pub async fn get_saved_projects() -> Result<Vec<SavedProject>, String> {
 
 #[tauri::command]
 pub async fn add_saved_project(path: String) -> Result<SavedProject, String> {
-    // Validate it's a git repo
-    let git_dir = std::path::Path::new(&path).join(".git");
-    if !git_dir.exists() {
-        return Err("Not a git repository".to_string());
+    let project_path = std::path::Path::new(&path);
+    if !project_path.exists() {
+        return Err("Folder does not exist".to_string());
+    }
+    if !project_path.is_dir() {
+        return Err("Selected path is not a folder".to_string());
     }
 
     // Get project name from path
@@ -316,7 +318,7 @@ pub async fn get_all_project_statuses(
             }
             Err(_) => ProjectStatus {
                 path: path.clone(),
-                current_branch: "unknown".to_string(),
+                current_branch: "Not initialized".to_string(),
                 uncommitted_count: 0,
                 ahead: 0,
                 behind: 0,
@@ -544,8 +546,11 @@ pub async fn list_recent_projects(
 
 #[tauri::command]
 pub async fn is_git_repo(path: String) -> Result<bool, String> {
-    let git_dir = std::path::Path::new(&path).join(".git");
-    Ok(git_dir.exists())
+    let candidate = std::path::Path::new(&path);
+    if !candidate.exists() {
+        return Ok(false);
+    }
+    Ok(git2::Repository::discover(candidate).is_ok())
 }
 
 #[tauri::command]
@@ -559,7 +564,7 @@ pub async fn add_project_folder(
 
     app.dialog()
         .file()
-        .set_title("Select a Git Repository")
+        .set_title("Select a Project Folder")
         .pick_folder(move |folder| {
             let _ = tx.send(folder.map(|p| p.to_string()));
         });
@@ -735,6 +740,8 @@ pub struct AppConfig {
     pub computer_name: String,
     pub ai_provider: String,
     pub ai_api_key: String,
+    #[serde(default)]
+    pub github_pat: String,
     pub editor: String,
     pub custom_editor_command: String,
     pub terminal: String,
@@ -762,6 +769,7 @@ impl Default for AppConfig {
             computer_name: String::new(),
             ai_provider: "anthropic".to_string(),
             ai_api_key: String::new(),
+            github_pat: String::new(),
             editor: "cursor".to_string(),
             custom_editor_command: String::new(),
             terminal: "Terminal".to_string(),
@@ -811,6 +819,263 @@ pub async fn get_config() -> Result<AppConfig, String> {
 pub async fn set_config(config: AppConfig) -> Result<AppConfig, String> {
     save_app_config(&config);
     Ok(config)
+}
+
+// GitHub Commands
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubRepoSummary {
+    pub id: i64,
+    pub full_name: String,
+    pub private: bool,
+    pub default_branch: String,
+    pub clone_url: String,
+    pub ssh_url: String,
+    pub html_url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubListReposResponse {
+    pub repos: Vec<GitHubRepoSummary>,
+    pub page: u32,
+    pub per_page: u32,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct GitHubUser {
+    login: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GitHubRepoApi {
+    id: i64,
+    full_name: String,
+    private: bool,
+    default_branch: String,
+    clone_url: String,
+    ssh_url: String,
+    html_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GitHubSearchReposResponse {
+    total_count: u32,
+    items: Vec<GitHubRepoApi>,
+}
+
+fn get_github_pat() -> Result<String, String> {
+    let config = load_app_config();
+    let token = config.github_pat.trim().to_string();
+    if token.is_empty() {
+        return Err("GitHub token is required. Add it in Settings > Tools.".to_string());
+    }
+    Ok(token)
+}
+
+#[tauri::command]
+pub async fn github_list_repos(
+    query: Option<String>,
+    page: Option<u32>,
+    per_page: Option<u32>,
+) -> Result<GitHubListReposResponse, String> {
+    let token = get_github_pat()?;
+    let page = page.unwrap_or(1).max(1);
+    let per_page = per_page.unwrap_or(20).clamp(1, 100);
+    let client = reqwest::Client::new();
+
+    let user_response = client
+        .get("https://api.github.com/user")
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .header("User-Agent", "ViboGit")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to query GitHub user: {}", e))?;
+
+    if !user_response.status().is_success() {
+        let status = user_response.status().as_u16();
+        let body = user_response.text().await.unwrap_or_default();
+        return Err(format!("GitHub auth failed ({}): {}", status, body));
+    }
+
+    let user = user_response
+        .json::<GitHubUser>()
+        .await
+        .map_err(|e| format!("Failed to decode GitHub user: {}", e))?;
+
+    let normalized_query = query.unwrap_or_default().trim().to_string();
+
+    if normalized_query.is_empty() {
+        let repos_response = client
+            .get("https://api.github.com/user/repos")
+            .query(&[
+                ("type", "owner".to_string()),
+                ("sort", "updated".to_string()),
+                ("direction", "desc".to_string()),
+                ("page", page.to_string()),
+                ("per_page", per_page.to_string()),
+            ])
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header("User-Agent", "ViboGit")
+            .send()
+            .await
+            .map_err(|e| format!("Failed to list repositories: {}", e))?;
+
+        if !repos_response.status().is_success() {
+            let status = repos_response.status().as_u16();
+            let body = repos_response.text().await.unwrap_or_default();
+            return Err(format!("GitHub API error ({}): {}", status, body));
+        }
+
+        let repos = repos_response
+            .json::<Vec<GitHubRepoApi>>()
+            .await
+            .map_err(|e| format!("Failed to decode repositories: {}", e))?;
+
+        let has_more = repos.len() as u32 == per_page;
+        return Ok(GitHubListReposResponse {
+            repos: repos
+                .into_iter()
+                .map(|repo| GitHubRepoSummary {
+                    id: repo.id,
+                    full_name: repo.full_name,
+                    private: repo.private,
+                    default_branch: repo.default_branch,
+                    clone_url: repo.clone_url,
+                    ssh_url: repo.ssh_url,
+                    html_url: repo.html_url,
+                })
+                .collect(),
+            page,
+            per_page,
+            has_more,
+        });
+    }
+
+    let search_response = client
+        .get("https://api.github.com/search/repositories")
+        .query(&[
+            (
+                "q",
+                format!(
+                    "user:{} {} in:name",
+                    user.login,
+                    normalized_query.replace('"', "")
+                ),
+            ),
+            ("sort", "updated".to_string()),
+            ("order", "desc".to_string()),
+            ("page", page.to_string()),
+            ("per_page", per_page.to_string()),
+        ])
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .header("User-Agent", "ViboGit")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to search repositories: {}", e))?;
+
+    if !search_response.status().is_success() {
+        let status = search_response.status().as_u16();
+        let body = search_response.text().await.unwrap_or_default();
+        return Err(format!("GitHub search error ({}): {}", status, body));
+    }
+
+    let payload = search_response
+        .json::<GitHubSearchReposResponse>()
+        .await
+        .map_err(|e| format!("Failed to decode search response: {}", e))?;
+
+    let has_more = page.saturating_mul(per_page) < payload.total_count;
+    Ok(GitHubListReposResponse {
+        repos: payload
+            .items
+            .into_iter()
+            .map(|repo| GitHubRepoSummary {
+                id: repo.id,
+                full_name: repo.full_name,
+                private: repo.private,
+                default_branch: repo.default_branch,
+                clone_url: repo.clone_url,
+                ssh_url: repo.ssh_url,
+                html_url: repo.html_url,
+            })
+            .collect(),
+        page,
+        per_page,
+        has_more,
+    })
+}
+
+#[tauri::command]
+pub async fn git_clone_into_folder(
+    path: String,
+    clone_url: String,
+    branch: Option<String>,
+) -> Result<(), String> {
+    if clone_url.trim().is_empty() {
+        return Err("Clone URL is required".to_string());
+    }
+
+    let destination = PathBuf::from(&path);
+    if !destination.exists() {
+        return Err("Destination folder does not exist".to_string());
+    }
+    if !destination.is_dir() {
+        return Err("Destination path is not a folder".to_string());
+    }
+
+    let mut entries = std::fs::read_dir(&destination)
+        .map_err(|e| format!("Failed to inspect destination folder: {}", e))?;
+    if entries.next().is_some() {
+        return Err("Destination folder must be empty before cloning.".to_string());
+    }
+
+    let default_path = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+    let merged_path = match std::env::var("PATH") {
+        Ok(path) if !path.is_empty() => format!("{}:{}", default_path, path),
+        _ => default_path.to_string(),
+    };
+
+    let mut command = Command::new("git");
+    command
+        .env("PATH", merged_path)
+        .arg("clone");
+
+    if let Some(branch_name) = branch.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+        command
+            .arg("--branch")
+            .arg(branch_name)
+            .arg("--single-branch");
+    }
+
+    command
+        .arg(clone_url.trim())
+        .arg(".")
+        .current_dir(&destination);
+
+    let output = command
+        .output()
+        .map_err(|e| format!("Failed to launch git clone: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let detail = if !stderr.is_empty() { stderr } else { stdout };
+        if detail.is_empty() {
+            return Err("Git clone failed".to_string());
+        }
+        return Err(format!("Git clone failed: {}", detail));
+    }
+
+    Ok(())
 }
 
 // Notification Commands

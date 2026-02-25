@@ -14,11 +14,8 @@ export function TabBar() {
     try {
       const response = await send<{ path: string | null }>("pickFolder");
       if (response.path) {
-        const isRepoResponse = await send<{ isRepo: boolean }>("isGitRepo", { path: response.path });
-        if (isRepoResponse.isRepo) {
-          addTab(response.path);
-          setRepoPath(response.path);
-        }
+        addTab(response.path);
+        setRepoPath(response.path);
       }
     } catch (error) {
       console.error("Failed to add tab:", error);

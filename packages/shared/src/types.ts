@@ -50,7 +50,9 @@ export type MessageType =
   | "configChanged"
   | "list-skills"
   | "skills-list"
-  | "getFavicon";
+  | "getFavicon"
+  | "githubListRepos"
+  | "gitCloneIntoFolder";
 
 export interface WebSocketMessage<T = unknown> {
   type: MessageType;
@@ -76,6 +78,7 @@ export interface GitStatus {
   staged: GitFile[];
   unstaged: GitFile[];
   untracked: GitFile[];
+  isEmptyRepo: boolean;
 }
 
 export interface GitBranch {
@@ -219,6 +222,7 @@ export interface FileChangeEvent {
 
 // Connection State
 export type ConnectionState = "disconnected" | "connecting" | "connected" | "error";
+export type RepoHealth = "ready" | "nonGit" | "emptyRepo";
 
 export interface DaemonState {
   connection: ConnectionState;
@@ -226,6 +230,8 @@ export interface DaemonState {
   status: GitStatus | null;
   branches: GitBranch[];
   error: string | null;
+  repoHealth: RepoHealth;
+  repoMessage: string | null;
 }
 
 // UI State
@@ -323,6 +329,7 @@ export interface Config {
   aiProvider: AiProvider;
   aiModel: string;
   aiApiKey: string;
+  githubPat: string;
   editor: EditorOption;
   customEditorCommand: string;
   terminal: TerminalOption;
@@ -340,6 +347,7 @@ export const DEFAULT_CONFIG: Config = {
   aiProvider: "anthropic",
   aiModel: "",
   aiApiKey: "",
+  githubPat: "",
   editor: "cursor",
   customEditorCommand: "",
   terminal: "Terminal",
@@ -387,6 +395,35 @@ export interface SkillsListResponse {
 // Favicon Types
 export interface GetFaviconRequest {
   path: string;
+}
+
+export interface GitHubRepo {
+  id: number;
+  fullName: string;
+  private: boolean;
+  defaultBranch: string;
+  cloneUrl: string;
+  sshUrl: string;
+  htmlUrl: string;
+}
+
+export interface GitHubListReposRequest {
+  query?: string;
+  page?: number;
+  perPage?: number;
+}
+
+export interface GitHubListReposResponse {
+  repos: GitHubRepo[];
+  page: number;
+  perPage: number;
+  hasMore: boolean;
+}
+
+export interface GitCloneIntoFolderRequest {
+  path: string;
+  cloneUrl: string;
+  branch?: string;
 }
 
 export interface GetFaviconResponse {
