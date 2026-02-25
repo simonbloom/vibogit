@@ -10,6 +10,7 @@ export function UpdateBanner({
   status,
   version,
   progress,
+  error,
   startUpdate,
   restartApp,
   dismiss,
@@ -54,7 +55,7 @@ export function UpdateBanner({
       {status === "ready" && (
         <>
           <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
-          <span className="flex-1 text-foreground">Update ready! Restart to apply.</span>
+          <span className="flex-1 text-foreground">{error || "Update ready! Restart to apply."}</span>
           <Button size="sm" onClick={restartApp}>
             Restart Now
           </Button>

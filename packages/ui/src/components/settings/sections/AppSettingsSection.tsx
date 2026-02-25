@@ -24,7 +24,7 @@ export function AppSettingsSection({
         checking: "Checking...",
         "update-available": updateState.version ? `v${updateState.version} available` : "Update available",
         downloading: `Downloading... ${updateState.progress}%`,
-        ready: "Restart to apply",
+        ready: updateState.error || "Restart to apply",
         error: updateState.error || "Update failed",
       }[updateState.status]
     : null;
