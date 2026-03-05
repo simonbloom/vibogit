@@ -26,10 +26,10 @@ export const AI_PROVIDERS: AIProvider[] = [
   {
     id: "openai",
     displayName: "OpenAI",
-    model: "gpt-4o-mini",
+    model: "gpt-5.3-codex-spark",
     models: [
-      { id: "gpt-4o-mini", displayName: "GPT-4o mini" },
       { id: "gpt-5.3-codex-spark", displayName: "GPT-5.3 Codex Spark" },
+      { id: "gpt-4o-mini", displayName: "GPT-4o mini" },
     ],
     keyPlaceholder: "sk-...",
     keyHelpUrl: "https://platform.openai.com/api-keys",
@@ -52,7 +52,7 @@ export function getProviderById(id: string): AIProvider | undefined {
 
 export function getModelForProvider(providerId: string, modelId?: string): string {
   const provider = getProviderById(providerId);
-  if (!provider) return "gpt-4o-mini";
+  if (!provider) return "gpt-5.3-codex-spark";
   if (modelId && provider.models.some((m) => m.id === modelId)) return modelId;
   return provider.model;
 }
