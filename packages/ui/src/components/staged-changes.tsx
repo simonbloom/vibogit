@@ -6,7 +6,8 @@ import { AICommitButton } from "@/components/ai-commit-button";
 import { FileViewer } from "@/components/file-viewer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Check, FileText, FilePlus, FileX, ArrowUp, ArrowDown, Loader2 } from "lucide-react";
+import { EDITOR_OPTIONS, getSettings } from "@/lib/settings";
+import { Check, FileText, FilePlus, FileX, ArrowUp, ArrowDown, Loader2, Code } from "lucide-react";
 
 interface StagedChangesProps {
   repoPath: string | null;
@@ -62,6 +63,27 @@ export function StagedChanges({ repoPath }: StagedChangesProps) {
       console.error("Failed to commit:", error);
     } finally {
       setIsCommitting(false);
+    }
+  };
+
+  const handleOpenInEditor = async (filePath: string) => {
+    if (!repoPath) return;
+
+    const settings = getSettings();
+    const editorConfig = EDITOR_OPTIONS.find((ed) => ed.id === settings.editor);
+    const fullPath = `${repoPath}/${filePath}`;
+
+    try {
+      if (settings.editor === "custom") {
+        const command = settings.customEditorCommand;
+        if (command) {
+          await send("openEditor", { path: fullPath, editor: command });
+        }
+      } else if (editorConfig?.appName) {
+        await send("openEditor", { path: fullPath, appName: editorConfig.appName });
+      }
+    } catch (error) {
+      console.error("Failed to open in editor:", error);
     }
   };
 
@@ -157,6 +179,18 @@ export function StagedChanges({ repoPath }: StagedChangesProps) {
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-6 w-6 text-foreground hover:text-primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleOpenInEditor(file.path);
+                      }}
+                      title="Open in IDE"
+                    >
+                      <Code className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="h-6 w-6 text-foreground hover:text-muted-foreground"
                       onClick={(e) => { e.stopPropagation(); excludeFile(file.path); }}
                       title="Exclude"
@@ -194,6 +228,18 @@ export function StagedChanges({ repoPath }: StagedChangesProps) {
                     <span className={`text-sm truncate flex-1 ${getStatusColor(file.status)}`}>
                       {file.path}
                     </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-foreground hover:text-primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleOpenInEditor(file.path);
+                      }}
+                      title="Open in IDE"
+                    >
+                      <Code className="w-3.5 h-3.5" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
