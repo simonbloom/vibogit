@@ -767,7 +767,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             computer_name: String::new(),
-            ai_provider: "anthropic".to_string(),
+            ai_provider: "openai".to_string(),
             ai_api_key: String::new(),
             github_pat: String::new(),
             editor: "cursor".to_string(),
@@ -791,7 +791,14 @@ fn get_app_config_path() -> Option<PathBuf> {
 fn load_app_config() -> AppConfig {
     if let Some(path) = get_app_config_path() {
         if let Ok(content) = std::fs::read_to_string(&path) {
-            if let Ok(config) = serde_json::from_str(&content) {
+            if let Ok(mut config) = serde_json::from_str::<AppConfig>(&content) {
+                // Migrate removed Gemini provider to default
+                if config.ai_provider == "gemini" {
+                    let defaults = AppConfig::default();
+                    config.ai_provider = defaults.ai_provider;
+                    config.ai_api_key = String::new();
+                    save_app_config(&config);
+                }
                 return config;
             }
         }
@@ -3372,26 +3379,6 @@ pub async fn ai_diagnose_dev_server(
                 .map_err(|e| format!("Failed to parse response: {}", e))?;
             json["choices"][0]["message"]["content"].as_str().unwrap_or("").to_string()
         }
-        "gemini" => {
-            let url = format!(
-                "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-                model, api_key
-            );
-            let body = serde_json::json!({
-                "contents": [{ "parts": [{ "text": prompt }] }],
-                "generationConfig": { "maxOutputTokens": 300 }
-            });
-            let res = client
-                .post(&url)
-                .header("content-type", "application/json")
-                .json(&body)
-                .send()
-                .await
-                .map_err(|e| format!("Request failed: {}", e))?;
-            let json: serde_json::Value = res.json().await
-                .map_err(|e| format!("Failed to parse response: {}", e))?;
-            json["candidates"][0]["content"]["parts"][0]["text"].as_str().unwrap_or("").to_string()
-        }
         _ => return Err(format!("Unknown provider: {}", provider)),
     };
 
@@ -4110,37 +4097,6 @@ pub async fn ai_generate_commit(
                 .unwrap_or("")
                 .to_string()
         }
-        "gemini" => {
-            let url = format!(
-                "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-                model, api_key
-            );
-            
-            let body = serde_json::json!({
-                "contents": [{
-                    "parts": [{"text": prompt}]
-                }],
-                "generationConfig": {
-                    "maxOutputTokens": 500
-                }
-            });
-            
-            let res = client
-                .post(&url)
-                .header("content-type", "application/json")
-                .json(&body)
-                .send()
-                .await
-                .map_err(|e| format!("Request failed: {}", e))?;
-            
-            let json: serde_json::Value = res.json().await
-                .map_err(|e| format!("Failed to parse response: {}", e))?;
-            
-            json["candidates"][0]["content"]["parts"][0]["text"]
-                .as_str()
-                .unwrap_or("")
-                .to_string()
-        }
         _ => return Err(format!("Unknown provider: {}", provider)),
     };
 
@@ -4253,39 +4209,6 @@ pub async fn ai_generate_pr(
                 .map_err(|e| format!("Failed to parse response: {}", e))?;
 
             json["choices"][0]["message"]["content"]
-                .as_str()
-                .unwrap_or("")
-                .to_string()
-        }
-        "gemini" => {
-            let url = format!(
-                "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-                model, api_key
-            );
-
-            let body = serde_json::json!({
-                "contents": [{
-                    "parts": [{"text": prompt}]
-                }],
-                "generationConfig": {
-                    "maxOutputTokens": 1000
-                }
-            });
-
-            let res = client
-                .post(&url)
-                .header("content-type", "application/json")
-                .json(&body)
-                .send()
-                .await
-                .map_err(|e| format!("Request failed: {}", e))?;
-
-            let json: serde_json::Value = res
-                .json()
-                .await
-                .map_err(|e| format!("Failed to parse response: {}", e))?;
-
-            json["candidates"][0]["content"]["parts"][0]["text"]
                 .as_str()
                 .unwrap_or("")
                 .to_string()
