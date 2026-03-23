@@ -1,0 +1,39 @@
+{
+  "featureId": "sync-beacon-backend",
+  "reviewedAt": "2026-03-23T16:40:00Z",
+  "commitId": "2c79d8f",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature adds the requested Sync Beacon backend commands, gist persistence, command registration, and basic serialization tests, but the implementation is incomplete against the feature contract because it cannot reliably update an existing multi-file gist created by the UI flow and lacks automated coverage for the gh error-handling paths it claims to support.",
+    "issues": [
+      {
+        "file": "apps/desktop/src-tauri/src/commands.rs",
+        "line": 983,
+        "severity": "blocking",
+        "description": "`sync_beacon_pull`/`sync_beacon_validate_gist`/`sync_beacon_push` read gist contents via `gh gist view <id> --raw` without selecting `vibogit-beacon.json`. For gists containing multiple files, `gh gist view --raw` returns all file payloads concatenated, so `parse_sync_beacon_json` fails even when the beacon file is present. The feature contract requires these commands to read and update the named gist file reliably."
+      },
+      {
+        "file": "apps/desktop/src-tauri/src/commands.rs",
+        "line": 1021,
+        "severity": "blocking",
+        "description": "`update_sync_beacon_gist` calls `gh gist edit <gist_id> -f vibogit-beacon.json <temp_path>` without deleting or targeting an existing file path. On a gist that already has a differently named file or multiple files, this can add/rename content unpredictably rather than safely updating the beacon payload. Combined with the raw-read issue, the required read-modify-write preservation guarantee is not met for general accessible gists."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The `tauri-fullstack` skill still hard-requires browser verification, but this backend-only feature correctly skipped it and recorded a deviation. The skill procedure should distinguish backend-only Rust/Tauri command work from UI changes to avoid unnecessary variance.",
+      "evidence": ".factory/skills/tauri-fullstack/SKILL.md step 6 requires browser verification; handoff.skillFeedback.suggestedChanges says browser verification was unnecessary for this backend-only feature."
+    },
+    {
+      "area": "knowledge",
+      "observation": "Mission shared state documents that Sync Beacon uses gh CLI for Gist operations, but it does not capture a crucial implementation constraint: beacon commands must select the specific `vibogit-beacon.json` file when reading/updating gists because users may join existing gists that contain multiple files.",
+      "evidence": "Mission AGENTS.md lists `gh gist view <gist_id> --raw` and `gh gist edit <gist_id> -f <filename> <content_file>` generically, while commands.rs lines 983-992/1016-1033 show the omission that causes multi-file gist failures."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Fail. The backend commands and tests were added, but two blocking issues remain: gist reads do not target the required `vibogit-beacon.json` file, and gist updates are not robust for existing multi-file gists, so the promised read-modify-write preservation is not reliably satisfied."
+}
