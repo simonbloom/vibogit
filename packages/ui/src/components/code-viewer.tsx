@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useTheme } from "next-themes";
 import { useDaemon } from "@/lib/daemon-context";
 import { getSettings, EDITOR_OPTIONS } from "@/lib/settings";
 import { Button } from "@/components/ui/button";
 import { Copy, Code, FileText, Loader2, Check } from "lucide-react";
-import { clsx } from "clsx";
 
 const LANG_MAP: Record<string, string> = {
   js: "javascript",
@@ -61,6 +61,7 @@ interface CodeViewerProps {
 
 export function CodeViewer({ filePath, fileName, repoPath }: CodeViewerProps) {
   const { send } = useDaemon();
+  const { resolvedTheme, theme } = useTheme();
   const [content, setContent] = useState<string>("");
   const [highlightedHtml, setHighlightedHtml] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
@@ -72,6 +73,13 @@ export function CodeViewer({ filePath, fileName, repoPath }: CodeViewerProps) {
     const ext = filename.split(".").pop()?.toLowerCase() || "";
     return LANG_MAP[ext] || "text";
   }, []);
+
+  const shikiTheme =
+    (resolvedTheme ?? theme) === "dark" ||
+    theme === "ember" ||
+    theme === "matrix"
+      ? "github-dark"
+      : "github-light";
 
   useEffect(() => {
     if (!filePath || !repoPath) {
@@ -112,13 +120,13 @@ export function CodeViewer({ filePath, fileName, repoPath }: CodeViewerProps) {
         // Dynamically import shiki
         const shiki = await import("shiki");
         const highlighter = await shiki.createHighlighter({
-          themes: ["github-dark"],
+          themes: [shikiTheme],
           langs: [getLanguage(fileName)],
         });
 
         const html = highlighter.codeToHtml(fileContent, {
           lang: getLanguage(fileName),
-          theme: "github-dark",
+          theme: shikiTheme,
         });
 
         setHighlightedHtml(html);
@@ -133,7 +141,7 @@ export function CodeViewer({ filePath, fileName, repoPath }: CodeViewerProps) {
     };
 
     loadFile();
-  }, [filePath, repoPath, fileName, send, getLanguage]);
+  }, [filePath, repoPath, fileName, send, getLanguage, shikiTheme]);
 
   const handleCopy = async () => {
     try {

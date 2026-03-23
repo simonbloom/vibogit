@@ -13,12 +13,19 @@ import { isMacTauri } from "@/platform";
 
 interface AppLayoutProps {
   children: React.ReactNode;
+  initialPane?: "project" | "settings";
 }
 
-export function AppLayout({ children }: AppLayoutProps) {
+function getInitialPane(): "project" | "settings" {
+  if (typeof window === "undefined") return "project";
+  const pane = new URLSearchParams(window.location.search).get("pane");
+  return pane === "settings" ? "settings" : "project";
+}
+
+export function AppLayout({ children, initialPane }: AppLayoutProps) {
   const { state: daemonState, setRepoPath, send } = useDaemon();
   const { state: projectsState, addProject } = useProjects();
-  const [activePane, setActivePane] = useState<"project" | "settings">("project");
+  const [activePane, setActivePane] = useState<"project" | "settings">(() => initialPane ?? getInitialPane());
   const [isMacOverlayChrome, setIsMacOverlayChrome] = useState(false);
   const autoUpdate = useAutoUpdate();
 

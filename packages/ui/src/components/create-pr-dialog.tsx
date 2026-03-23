@@ -13,6 +13,7 @@ interface CreatePRDialogProps {
   onClose: () => void;
   repoPath: string | null;
   currentBranch: GitBranch | undefined;
+  inline?: boolean;
 }
 
 export function CreatePRDialog({
@@ -20,6 +21,7 @@ export function CreatePRDialog({
   onClose,
   repoPath,
   currentBranch,
+  inline = false,
 }: CreatePRDialogProps) {
   const { send } = useDaemon();
   const [title, setTitle] = useState("");
@@ -123,7 +125,7 @@ export function CreatePRDialog({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className={inline ? "absolute inset-0 z-10 flex items-center justify-center bg-black/25 p-6" : "fixed inset-0 z-50 flex items-center justify-center bg-black/50"}>
       <div className="bg-card border border-border rounded-xl w-full max-w-2xl shadow-xl max-h-[90vh] overflow-hidden flex flex-col text-foreground">
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-2">

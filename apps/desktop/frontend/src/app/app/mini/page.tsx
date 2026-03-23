@@ -8,14 +8,27 @@ import { Loader2 } from "lucide-react";
 
 export default function MiniPage() {
   const { state, setRepoPath } = useDaemon();
-  const { state: projectsState } = useProjects();
+  const { state: projectsState, addProject } = useProjects();
 
   // Sync selected project to daemon on mount
   useEffect(() => {
-    if (state.connection === "connected" && projectsState.selectedPath && !state.repoPath) {
+    if (typeof window === "undefined") return;
+    if (state.connection !== "connected" || state.repoPath) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const repo = params.get("repo");
+    if (repo) {
+      if (!projectsState.projects.some((project) => project.path === repo)) {
+        void addProject(repo);
+      }
+      setRepoPath(repo);
+      return;
+    }
+
+    if (projectsState.selectedPath) {
       setRepoPath(projectsState.selectedPath);
     }
-  }, [state.connection, state.repoPath, projectsState.selectedPath, setRepoPath]);
+  }, [addProject, state.connection, state.repoPath, projectsState.projects, projectsState.selectedPath, setRepoPath]);
 
   if (state.connection === "connecting") {
     return (

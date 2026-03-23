@@ -1,0 +1,596 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - paragraph [ref=e6]: ViboGit Figma Export
+          - heading "Light Components, Panels, and States" [level=1] [ref=e7]
+          - paragraph [ref=e8]: A broader light-mode export covering navigation, project state, repository panels, settings sections, modal surfaces, and utility components that are not obvious from a single app shell.
+        - generic [ref=e9]:
+          - img [ref=e10]
+          - text: Light mode locked for capture
+      - generic [ref=e13]:
+        - generic [ref=e14]:
+          - heading "Navigation System" [level=2] [ref=e15]
+          - paragraph [ref=e16]: Tabs, project list items, and compact project representations.
+        - generic [ref=e18]:
+          - generic [ref=e20]:
+            - img [ref=e21]
+            - button "vibogit" [ref=e25]:
+              - text: vibogit
+              - generic "Close project" [ref=e26]:
+                - img
+            - button "bloomindesign" [ref=e27]:
+              - text: bloomindesign
+              - generic "Close project" [ref=e28]:
+                - img
+            - button "agent-browser" [ref=e29]:
+              - text: agent-browser
+              - generic "Close project" [ref=e30]:
+                - img
+            - button "Open project" [ref=e31]:
+              - img
+          - generic [ref=e32]:
+            - generic [ref=e33]:
+              - generic [ref=e35] [cursor=pointer]:
+                - generic [ref=e36]: V
+                - generic [ref=e37]:
+                  - generic [ref=e38]:
+                    - generic [ref=e39]: vibogit
+                    - generic [ref=e40]:
+                      - generic "5 uncommitted changes" [ref=e41]:
+                        - img [ref=e42]
+                        - generic [ref=e44]: "5"
+                      - generic "2 commits ahead" [ref=e45]:
+                        - img [ref=e46]
+                        - generic [ref=e48]: "2"
+                  - generic [ref=e49]: main
+              - generic [ref=e51] [cursor=pointer]:
+                - generic [ref=e52]: B
+                - generic [ref=e53]:
+                  - generic [ref=e54]:
+                    - generic [ref=e55]: bloomindesign
+                    - generic "1 commit behind" [ref=e57]:
+                      - img [ref=e58]
+                      - generic [ref=e60]: "1"
+                  - generic [ref=e61]: release/homepage
+              - generic [ref=e63] [cursor=pointer]:
+                - generic [ref=e64]: A
+                - generic [ref=e65]:
+                  - generic [ref=e66]:
+                    - generic [ref=e67]: agent-browser
+                    - generic "All clean" [ref=e68]:
+                      - img [ref=e69]
+                  - generic [ref=e71]: feat/browser-tools
+            - generic [ref=e72]:
+              - generic "vibogit main" [ref=e74] [cursor=pointer]:
+                - generic [ref=e75]: V
+                - generic [ref=e76]:
+                  - generic "5 uncommitted changes" [ref=e77]:
+                    - img [ref=e78]
+                    - generic [ref=e80]: "5"
+                  - generic "2 commits ahead" [ref=e81]:
+                    - img [ref=e82]
+                    - generic [ref=e84]: "2"
+              - generic "bloomindesign release/homepage" [ref=e86] [cursor=pointer]:
+                - generic [ref=e87]: B
+                - generic "1 commit behind" [ref=e89]:
+                  - img [ref=e90]
+                  - generic [ref=e92]: "1"
+              - generic "agent-browser feat/browser-tools" [ref=e94] [cursor=pointer]:
+                - generic [ref=e95]: A
+                - generic "All clean" [ref=e96]:
+                  - img [ref=e97]
+      - generic [ref=e99]:
+        - generic [ref=e100]:
+          - generic [ref=e101]:
+            - heading "Branch and Update Controls" [level=2] [ref=e102]
+            - paragraph [ref=e103]: Top-level repository controls and update banner states.
+          - generic [ref=e105]:
+            - button "main" [ref=e107]:
+              - img
+              - generic [ref=e108]: main
+              - img
+            - generic [ref=e109]:
+              - img [ref=e110]
+              - generic [ref=e113]:
+                - text: ViboGit
+                - generic [ref=e114]: v4.1.0
+                - text: is available
+              - button "Update Now" [ref=e115]
+              - button "Later" [ref=e116]
+            - generic [ref=e117]:
+              - img [ref=e118]
+              - generic [ref=e120]: Downloading update...
+              - generic [ref=e124]: 67%
+            - generic [ref=e125]:
+              - img [ref=e126]
+              - generic [ref=e129]: Update installed. Restart to apply it.
+              - button "Restart Now" [ref=e130]
+        - generic [ref=e131]:
+          - generic [ref=e132]:
+            - heading "Commit Flow" [level=2] [ref=e133]
+            - paragraph [ref=e134]: The staged-changes workflow for selecting files, drafting a commit, and reviewing content.
+          - generic [ref=e137]:
+            - generic [ref=e139]:
+              - textbox "Commit message..." [ref=e140]
+              - button "AI" [ref=e142]:
+                - img
+                - text: AI
+              - button "Commit (5)" [disabled]
+            - generic [ref=e143]:
+              - generic [ref=e144]:
+                - generic [ref=e145]:
+                  - generic [ref=e147]: Will Commit (5)
+                  - generic [ref=e148]:
+                    - generic [ref=e149] [cursor=pointer]:
+                      - img [ref=e151]
+                      - generic [ref=e154]: packages/ui/src/components/sidebar/sidebar.tsx
+                      - button "Open in IDE" [ref=e155]:
+                        - img
+                      - button "Exclude" [ref=e156]:
+                        - img
+                    - generic [ref=e157] [cursor=pointer]:
+                      - img [ref=e159]
+                      - generic [ref=e162]: packages/ui/src/components/main-interface.tsx
+                      - button "Open in IDE" [ref=e163]:
+                        - img
+                      - button "Exclude" [ref=e164]:
+                        - img
+                    - generic [ref=e165] [cursor=pointer]:
+                      - img [ref=e167]
+                      - generic [ref=e170]: apps/desktop/frontend/src/app/layout.tsx
+                      - button "Open in IDE" [ref=e171]:
+                        - img
+                      - button "Exclude" [ref=e172]:
+                        - img
+                    - generic [ref=e173] [cursor=pointer]:
+                      - img [ref=e175]
+                      - generic [ref=e178]: packages/ui/src/lib/daemon-context.tsx
+                      - button "Open in IDE" [ref=e179]:
+                        - img
+                      - button "Exclude" [ref=e180]:
+                        - img
+                    - generic [ref=e181] [cursor=pointer]:
+                      - img [ref=e183]
+                      - generic [ref=e186]: packages/ui/src/components/export-preview.tsx
+                      - button "Open in IDE" [ref=e187]:
+                        - img
+                      - button "Exclude" [ref=e188]:
+                        - img
+                - generic [ref=e189]:
+                  - generic [ref=e191]: Won't Commit (0)
+                  - generic [ref=e192]: All files staged
+              - generic [ref=e194]:
+                - img [ref=e195]
+                - paragraph [ref=e198]: Select a file to view
+      - generic [ref=e199]:
+        - generic [ref=e200]:
+          - heading "Changes and Diff Review" [level=2] [ref=e201]
+          - paragraph [ref=e202]: Modified file list with side-by-side diff context used in day-to-day review.
+        - generic [ref=e204]:
+          - generic [ref=e206]:
+            - generic [ref=e207]:
+              - generic [ref=e208]: Changes (5)
+              - button "Stage all" [ref=e209]
+            - generic [ref=e210]:
+              - generic [ref=e211]:
+                - button "Staged (2) Unstage all" [ref=e212]:
+                  - generic [ref=e213]:
+                    - img
+                    - generic [ref=e214]: Staged
+                    - generic [ref=e215]: (2)
+                  - button "Unstage all" [ref=e216]
+                - generic [ref=e217]:
+                  - generic [ref=e218] [cursor=pointer]:
+                    - img [ref=e220]
+                    - generic [ref=e222]:
+                      - paragraph [ref=e223]: sidebar.tsx
+                      - paragraph [ref=e224]: packages/ui/src/components/sidebar
+                    - button "Unstage" [ref=e225]
+                  - generic [ref=e226] [cursor=pointer]:
+                    - img [ref=e228]
+                    - generic [ref=e230]:
+                      - paragraph [ref=e231]: main-interface.tsx
+                      - paragraph [ref=e232]: packages/ui/src/components
+                    - button "Unstage" [ref=e233]
+              - generic [ref=e234]:
+                - button "Modified (2)" [ref=e235]:
+                  - generic [ref=e236]:
+                    - img
+                    - generic [ref=e237]: Modified
+                    - generic [ref=e238]: (2)
+                - generic [ref=e239]:
+                  - generic [ref=e240] [cursor=pointer]:
+                    - img [ref=e242]
+                    - generic [ref=e244]:
+                      - paragraph [ref=e245]: layout.tsx
+                      - paragraph [ref=e246]: apps/desktop/frontend/src/app
+                    - button "Stage" [ref=e247]
+                  - generic [ref=e248] [cursor=pointer]:
+                    - img [ref=e250]
+                    - generic [ref=e252]:
+                      - paragraph [ref=e253]: daemon-context.tsx
+                      - paragraph [ref=e254]: packages/ui/src/lib
+                    - button "Stage" [ref=e255]
+              - generic [ref=e256]:
+                - button "Untracked (1)" [ref=e257]:
+                  - generic [ref=e258]:
+                    - img
+                    - generic [ref=e259]: Untracked
+                    - generic [ref=e260]: (1)
+                - generic [ref=e262] [cursor=pointer]:
+                  - img [ref=e264]
+                  - generic [ref=e267]:
+                    - paragraph [ref=e268]: export-boards.tsx
+                    - paragraph [ref=e269]: apps/desktop/frontend/src/app/figma-export
+                  - button "Stage" [ref=e270]
+          - generic [ref=e271]:
+            - generic [ref=e272]:
+              - generic [ref=e273]: modified
+              - generic [ref=e274]: packages/ui/src/components/sidebar/sidebar.tsx
+              - generic [ref=e275]: Staged
+            - generic [ref=e278]:
+              - generic [ref=e279]: "@@ -1,3 +1,4 @@"
+              - generic [ref=e280]:
+                - generic [ref=e286]: "export function Sidebar() {"
+                - generic [ref=e287]:
+                  - generic [ref=e290]: "-"
+                  - generic [ref=e292]: return <aside className="w-16">...</aside>;
+                - generic [ref=e293]:
+                  - generic [ref=e296]: +
+                  - generic [ref=e298]: return <aside className="w-[220px] rounded-r-2xl">...</aside>;
+                - generic [ref=e299]:
+                  - generic [ref=e302]: +
+                  - generic [ref=e304]: // Mock diff used for browser capture mode.
+      - generic [ref=e305]:
+        - generic [ref=e306]:
+          - heading "Files and Source" [level=2] [ref=e307]
+          - paragraph [ref=e308]: File tree explorer paired with the in-app source viewer.
+        - generic [ref=e310]:
+          - generic [ref=e312]:
+            - generic [ref=e313]:
+              - generic [ref=e314]: Files
+              - button "Show hidden files" [ref=e315]:
+                - img
+            - generic [ref=e316]:
+              - generic [ref=e318] [cursor=pointer]:
+                - img [ref=e319]
+                - img [ref=e321]
+                - generic [ref=e323]: apps
+              - generic [ref=e325] [cursor=pointer]:
+                - img [ref=e326]
+                - img [ref=e328]
+                - generic [ref=e330]: packages
+          - generic [ref=e331]:
+            - generic [ref=e332]:
+              - generic [ref=e333]: daemon-context.tsx
+              - generic [ref=e334]:
+                - button "Copy code" [ref=e335]:
+                  - img
+                - button "Open in editor" [ref=e336]:
+                  - img
+            - code [ref=e340]:
+              - generic [ref=e341]: "export function DaemonProvider() {"
+              - generic [ref=e342]: return null;
+              - generic [ref=e343]: "}"
+      - generic [ref=e344]:
+        - generic [ref=e345]:
+          - generic [ref=e346]:
+            - heading "History Graph" [level=2] [ref=e347]
+            - paragraph [ref=e348]: Commit graph and commit metadata view.
+          - generic [ref=e354]:
+            - generic [ref=e355]:
+              - img [ref=e357]
+              - generic [ref=e363]:
+                - generic [ref=e364]:
+                  - paragraph [ref=e365]: refine desktop layout for capture workflow
+                  - generic [ref=e366]:
+                    - generic "Click to copy" [ref=e367] [cursor=pointer]: d2a2a73
+                    - generic [ref=e368]: Simon Bloom
+                    - generic [ref=e369]: 2h ago
+                - generic [ref=e370]:
+                  - generic [ref=e371]: main
+                  - generic [ref=e372]: origin/main
+            - generic [ref=e373]:
+              - img [ref=e375]
+              - generic [ref=e381]:
+                - paragraph [ref=e382]: ship settings panel refinements
+                - generic [ref=e383]:
+                  - generic "Click to copy" [ref=e384] [cursor=pointer]: 91ea1bb
+                  - generic [ref=e385]: Simon Bloom
+                  - generic [ref=e386]: 4h ago
+            - generic [ref=e387]:
+              - img [ref=e389]
+              - generic [ref=e395]:
+                - paragraph [ref=e396]: add mini-view polish and project quick links
+                - generic [ref=e397]:
+                  - generic "Click to copy" [ref=e398] [cursor=pointer]: "7846107"
+                  - generic [ref=e399]: Simon Bloom
+                  - generic [ref=e400]: 22h ago
+            - generic [ref=e401]:
+              - img [ref=e403]
+              - generic [ref=e409]:
+                - paragraph [ref=e410]: introduce project sidebar persistence
+                - generic [ref=e411]:
+                  - generic "Click to copy" [ref=e412] [cursor=pointer]: 0d44c6f
+                  - generic [ref=e413]: Simon Bloom
+                  - generic [ref=e414]: yesterday
+            - generic [ref=e415]:
+              - img [ref=e417]
+              - generic [ref=e423]:
+                - paragraph [ref=e424]: bootstrap tauri desktop shell
+                - generic [ref=e425]:
+                  - generic "Click to copy" [ref=e426] [cursor=pointer]: f52f0c3
+                  - generic [ref=e427]: Simon Bloom
+                  - generic [ref=e428]: 2d ago
+        - generic [ref=e429]:
+          - generic [ref=e430]:
+            - heading "Dev Server Tools" [level=2] [ref=e431]
+            - paragraph [ref=e432]: Detected server controls and command configuration card.
+          - generic [ref=e436]:
+            - button "Dev Servers Running" [ref=e437] [cursor=pointer]:
+              - generic [ref=e438]:
+                - img [ref=e439]
+                - img [ref=e441]
+                - generic [ref=e443]: Dev Servers
+                - generic [ref=e444]: Running
+              - generic [ref=e446]:
+                - button "Open in browser" [ref=e447]:
+                  - img
+                - button "Stop" [ref=e448]:
+                  - img
+            - generic [ref=e449]:
+              - generic [ref=e450]:
+                - generic [ref=e451]: $ bun run dev
+                - generic [ref=e452]: ▲ Next.js 15.5.9
+                - generic [ref=e453]: "Local: http://localhost:4158"
+                - generic [ref=e454]: Compiled / in 712ms
+              - generic [ref=e455]:
+                - heading "Add Server" [level=4] [ref=e456]
+                - generic [ref=e457]:
+                  - generic [ref=e458]:
+                    - generic [ref=e459]: Command
+                    - textbox "bun run dev" [ref=e460]
+                  - generic [ref=e461]:
+                    - generic [ref=e462]: Port
+                    - spinbutton [ref=e463]: "3000"
+                - generic [ref=e464]:
+                  - button "Add" [ref=e465]:
+                    - img
+                    - text: Add
+                  - button "Cancel" [ref=e466]
+      - generic [ref=e467]:
+        - generic [ref=e468]:
+          - heading "Prompt Composition" [level=2] [ref=e469]
+          - paragraph [ref=e470]: The prompt box used to draft terminal instructions with file and skill references.
+        - generic [ref=e472]:
+          - button "Prompt - Ghostty" [expanded] [ref=e473]:
+            - img
+            - generic [ref=e474]: Prompt - Ghostty
+          - textbox "Compose prompt" [ref=e478]:
+            - /placeholder: Draft your prompt here... (use @ for files, / for skills)
+            - text: Review the light-mode export route and compare it against the main workspace capture before finalizing the Figma handoff.
+          - generic [ref=e479]:
+            - generic [ref=e480]:
+              - generic [ref=e481]: 121 chars
+              - generic [ref=e482]: "@ files"
+            - generic [ref=e483]:
+              - button "Clear" [ref=e484]
+              - button "Copy" [ref=e485]
+              - button "Send" [ref=e486]
+      - generic [ref=e487]:
+        - generic [ref=e488]:
+          - heading "Settings Sections" [level=2] [ref=e489]
+          - paragraph [ref=e490]: All settings tabs rendered as separate surfaces for token review and design cleanup.
+        - generic [ref=e492]:
+          - generic [ref=e493]:
+            - heading "AI" [level=3] [ref=e495]
+            - generic [ref=e497]:
+              - generic [ref=e498]:
+                - generic [ref=e499]: AI Provider
+                - combobox [ref=e500]:
+                  - option "Anthropic (Claude Haiku)"
+                  - option "OpenAI" [selected]
+                  - option "Google (Gemini Flash)"
+              - generic [ref=e501]:
+                - generic [ref=e502]: Model
+                - combobox [ref=e503]:
+                  - option "GPT-5.3 Codex Spark" [selected]
+                  - option "GPT-4o mini"
+              - generic [ref=e504]:
+                - generic [ref=e505]:
+                  - generic [ref=e506]: API Key
+                  - link "Get key" [ref=e507] [cursor=pointer]:
+                    - /url: https://platform.openai.com/api-keys
+                    - text: Get key
+                    - img [ref=e508]
+                - generic [ref=e512]:
+                  - textbox "sk-..." [ref=e513]: sk-**********************
+                  - button "Show API key" [ref=e514]:
+                    - img
+                - paragraph [ref=e515]: Stored in ~/.vibogit/config.json
+          - generic [ref=e516]:
+            - heading "Tools" [level=3] [ref=e518]
+            - generic [ref=e520]:
+              - generic [ref=e521]:
+                - generic [ref=e522]: Editor
+                - combobox [ref=e523]:
+                  - option "Cursor" [selected]
+                  - option "Antigravity"
+                  - option "VS Code"
+                  - option "Zed"
+                  - option "Custom..."
+              - generic [ref=e524]:
+                - generic [ref=e525]: Terminal App
+                - combobox [ref=e526]:
+                  - option "Terminal.app"
+                  - option "iTerm2"
+                  - option "Ghostty" [selected]
+                  - option "Warp"
+                  - option "Kitty"
+              - generic [ref=e527]:
+                - generic [ref=e528]: GitHub Personal Access Token
+                - textbox "github_pat_..." [ref=e529]: ghp_************************
+                - paragraph [ref=e530]: Used to list your repositories for clone-to-root. Needs repo read access.
+              - generic [ref=e532]:
+                - generic [ref=e533]:
+                  - generic [ref=e534]: Press Enter after paste
+                  - paragraph [ref=e535]: Automatically sends Enter after pasting into your terminal.
+                - switch [checked] [ref=e536]
+          - generic [ref=e538]:
+            - heading "Appearance" [level=3] [ref=e540]
+            - generic [ref=e543]:
+              - generic [ref=e544]:
+                - generic [ref=e545]: Theme
+                - paragraph [ref=e546]: Choose how the app looks to you.
+              - group [ref=e547]:
+                - radio "Light mode" [ref=e548]:
+                  - img [ref=e549]
+                  - text: Light
+                - radio "Dark mode" [checked] [ref=e555]:
+                  - img [ref=e556]
+                  - text: Dark
+                - radio "Ember mode" [ref=e558]:
+                  - img [ref=e559]
+                  - text: Ember
+                - radio "Matrix mode" [ref=e561]:
+                  - img [ref=e562]
+                  - text: Matrix
+                - radio "System preference" [ref=e567]:
+                  - img [ref=e568]
+                  - text: System
+          - generic [ref=e570]:
+            - heading "Capture" [level=3] [ref=e572]
+            - generic [ref=e574]:
+              - generic [ref=e575]:
+                - generic [ref=e576]: Screenshot Folder Path
+                - generic [ref=e577]:
+                  - generic [ref=e579]:
+                    - textbox /Users/you/Desktop/ [ref=e580]: ~/Desktop/Captures
+                    - img [ref=e581]
+                  - generic [ref=e583]:
+                    - generic [ref=e584]: Quick Select
+                    - generic [ref=e585]:
+                      - button "Desktop" [ref=e586]:
+                        - img
+                        - text: Desktop
+                      - button "Downloads" [ref=e587]:
+                        - img
+                        - text: Downloads
+                      - button "Pictures" [ref=e588]:
+                        - img
+                        - text: Pictures
+                      - button "Screenshots" [ref=e589]:
+                        - img
+                        - text: Screenshots
+                  - generic [ref=e590]:
+                    - generic [ref=e591]: Screenshot Apps
+                    - generic [ref=e592]:
+                      - button "CleanShot X ~/Desktop/" [ref=e593]:
+                        - generic [ref=e595]:
+                          - generic [ref=e597]: CleanShot X
+                          - generic [ref=e598]: ~/Desktop/
+                      - button "Shottr ~/Pictures/Shottr/" [ref=e599]:
+                        - generic [ref=e601]:
+                          - generic [ref=e603]: Shottr
+                          - generic [ref=e604]: ~/Pictures/Shottr/
+                      - button "macOS Default ~/Desktop/" [ref=e605]:
+                        - generic [ref=e607]:
+                          - generic [ref=e609]: macOS Default
+                          - generic [ref=e610]: ~/Desktop/
+                      - button "Droplr ~/Droplr/" [ref=e611]:
+                        - generic [ref=e613]:
+                          - generic [ref=e615]: Droplr
+                          - generic [ref=e616]: ~/Droplr/
+                  - generic [ref=e618]: This path is used when copying prompts with pasted images
+              - generic [ref=e620]:
+                - generic [ref=e621]:
+                  - generic [ref=e622]: CleanShot Mode
+                  - paragraph [ref=e623]: Match pasted images to files already saved by CleanShot instead of creating duplicates.
+                - switch [checked] [ref=e624]
+          - generic [ref=e626]:
+            - heading "Application" [level=3] [ref=e628]
+            - generic [ref=e630]:
+              - generic [ref=e631]:
+                - generic [ref=e632]: Computer
+                - generic [ref=e633]:
+                  - img [ref=e634]
+                  - generic [ref=e636]: Studio Mac
+                  - generic [ref=e637]: (auto-detected)
+              - generic [ref=e638]:
+                - generic [ref=e639]: Updates
+                - generic [ref=e640]:
+                  - generic [ref=e641]:
+                    - generic [ref=e642]: "Current version: 4.0.2"
+                    - generic [ref=e643]: v4.1.0 available
+                  - generic [ref=e644]:
+                    - button "Update Now" [ref=e645]
+                    - button "Check for Updates" [ref=e646]:
+                      - img
+                      - text: Check for Updates
+      - generic [ref=e647]:
+        - generic [ref=e648]:
+          - heading "Pull Request Dialog" [level=2] [ref=e649]
+          - paragraph [ref=e650]: Modal presentation for AI-generated pull request drafting.
+        - generic [ref=e654]:
+          - generic [ref=e655]:
+            - generic [ref=e656]:
+              - img [ref=e657]
+              - heading "Create Pull Request" [level=2] [ref=e661]
+            - button [ref=e662]:
+              - img
+          - generic [ref=e663]:
+            - generic [ref=e664]:
+              - generic [ref=e665]: main
+              - generic [ref=e666]: →
+              - textbox "main" [ref=e667]
+            - generic [ref=e668]:
+              - generic [ref=e669]:
+                - generic [ref=e670]: Title
+                - button "Generate with AI" [ref=e671]:
+                  - img
+                  - text: Generate with AI
+              - textbox "Add a descriptive title..." [ref=e672]
+            - generic [ref=e673]:
+              - generic [ref=e674]: Description
+              - textbox "Describe your changes..." [ref=e675]
+          - generic [ref=e676]:
+            - button "Cancel" [ref=e677]
+            - button "Open on GitHub" [disabled]:
+              - img
+              - text: Open on GitHub
+  - region "Notifications alt+T"
+  - generic [ref=e682] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=e683]:
+      - img [ref=e684]
+    - generic [ref=e687]:
+      - button "Open issues overlay" [ref=e688]:
+        - generic [ref=e689]:
+          - generic [ref=e690]: "1"
+          - generic [ref=e691]: "2"
+        - generic [ref=e692]:
+          - text: Issue
+          - generic [ref=e693]: s
+      - button "Collapse issues badge" [ref=e694]:
+        - img [ref=e695]
+  - alert [ref=e697]
+  - generic [ref=e699]:
+    - generic [ref=e701]:
+      - generic [ref=e702]:
+        - button "Select element" [ref=e705] [cursor=pointer]:
+          - img [ref=e706]
+        - generic:
+          - generic:
+            - button "Open history":
+              - generic:
+                - img
+        - generic:
+          - generic:
+            - button "Copy all history items":
+              - img
+        - button "Open more actions menu" [ref=e711] [cursor=pointer]:
+          - img [ref=e712]
+      - button "Disable React Grab" [pressed] [ref=e717] [cursor=pointer]
+    - button "Collapse toolbar" [ref=e720] [cursor=pointer]:
+      - img [ref=e721]

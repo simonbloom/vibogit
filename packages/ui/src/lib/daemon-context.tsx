@@ -15,7 +15,15 @@ import type {
   RepoHealth,
   GitStatus,
   GitBranch,
+  GitCommit,
+  Config,
+  DevServerConfig,
+  DevServerState,
+  GitDiff,
+  GitHubAuthStatus,
+  GitHubListReposResponse,
 } from "@vibogit/shared";
+import { DEFAULT_CONFIG } from "@vibogit/shared";
 import { MINI_COMMIT_COMPLETE } from "./mini-view-events";
 import { useWindowActivity } from "./use-window-activity";
 
@@ -33,6 +41,383 @@ const isTauri = (): boolean => {
 let tauriInvoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
 let tauriListen: ((event: string, handler: (event: { payload: unknown }) => void) => Promise<() => void>) | null = null;
 let tauriInitialized = false;
+
+type MockMode = "welcome" | "main";
+
+interface MockParams {
+  enabled: boolean;
+  mode: MockMode;
+  repoPath: string;
+}
+
+interface MockFileNode {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  children?: MockFileNode[];
+}
+
+const MOCK_REPO_PATH = "/Users/simonbloom/apps-vol11/vibogit";
+const MOCK_BRANCHES: GitBranch[] = [
+  { name: "main", current: true, tracking: "origin/main", ahead: 2, behind: 0 },
+  { name: "feat/figma-export", current: false, tracking: "origin/feat/figma-export", ahead: 0, behind: 0 },
+  { name: "design/sidebar-pass", current: false, tracking: "origin/design/sidebar-pass", ahead: 0, behind: 1 },
+];
+const MOCK_STATUS: GitStatus = {
+  branch: "main",
+  ahead: 2,
+  behind: 0,
+  staged: [
+    { path: "packages/ui/src/components/sidebar/sidebar.tsx", status: "modified", staged: true },
+    { path: "packages/ui/src/components/main-interface.tsx", status: "modified", staged: true },
+  ],
+  unstaged: [
+    { path: "apps/desktop/frontend/src/app/layout.tsx", status: "modified", staged: false },
+    { path: "packages/ui/src/lib/daemon-context.tsx", status: "modified", staged: false },
+  ],
+  untracked: [
+    { path: "packages/ui/src/components/export-preview.tsx", status: "untracked", staged: false },
+  ],
+  isEmptyRepo: false,
+};
+const MOCK_COMMITS: GitCommit[] = [
+  {
+    hash: "d2a2a7377f0b4d80f3e62b85b0d23cb5d10d43bf",
+    hashShort: "d2a2a73",
+    message: "refine desktop layout for capture workflow",
+    author: "Simon Bloom",
+    email: "simon.bloom@gmail.com",
+    date: "2026-03-22T17:50:00.000Z",
+    parents: ["91ea1bb4b75da0d3bd6024cc1f0b28c21c6a0a6a"],
+    refs: ["HEAD -> main", "origin/main"],
+  },
+  {
+    hash: "91ea1bb4b75da0d3bd6024cc1f0b28c21c6a0a6a",
+    hashShort: "91ea1bb",
+    message: "ship settings panel refinements",
+    author: "Simon Bloom",
+    email: "simon.bloom@gmail.com",
+    date: "2026-03-22T15:42:00.000Z",
+    parents: ["7846107a4b3c5fe7986eb9c131015db2ec74d5db"],
+    refs: [],
+  },
+  {
+    hash: "7846107a4b3c5fe7986eb9c131015db2ec74d5db",
+    hashShort: "7846107",
+    message: "add mini-view polish and project quick links",
+    author: "Simon Bloom",
+    email: "simon.bloom@gmail.com",
+    date: "2026-03-21T21:10:00.000Z",
+    parents: ["0d44c6f22fb745fdc590d421db38bccf744dc4f1"],
+    refs: [],
+  },
+  {
+    hash: "0d44c6f22fb745fdc590d421db38bccf744dc4f1",
+    hashShort: "0d44c6f",
+    message: "introduce project sidebar persistence",
+    author: "Simon Bloom",
+    email: "simon.bloom@gmail.com",
+    date: "2026-03-21T13:05:00.000Z",
+    parents: ["f52f0c33f7d8efc91226672a2556e61f33d7bfee"],
+    refs: [],
+  },
+  {
+    hash: "f52f0c33f7d8efc91226672a2556e61f33d7bfee",
+    hashShort: "f52f0c3",
+    message: "bootstrap tauri desktop shell",
+    author: "Simon Bloom",
+    email: "simon.bloom@gmail.com",
+    date: "2026-03-20T11:32:00.000Z",
+    parents: [],
+    refs: [],
+  },
+];
+const MOCK_FILE_TREE: MockFileNode[] = [
+  {
+    name: "apps",
+    path: "apps",
+    type: "directory",
+    children: [
+      {
+        name: "desktop",
+        path: "apps/desktop",
+        type: "directory",
+        children: [
+          {
+            name: "frontend",
+            path: "apps/desktop/frontend",
+            type: "directory",
+            children: [
+              {
+                name: "src",
+                path: "apps/desktop/frontend/src",
+                type: "directory",
+                children: [
+                  {
+                    name: "app",
+                    path: "apps/desktop/frontend/src/app",
+                    type: "directory",
+                    children: [
+                      { name: "layout.tsx", path: "apps/desktop/frontend/src/app/layout.tsx", type: "file" },
+                      { name: "page.tsx", path: "apps/desktop/frontend/src/app/page.tsx", type: "file" },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    name: "packages",
+    path: "packages",
+    type: "directory",
+    children: [
+      {
+        name: "ui",
+        path: "packages/ui",
+        type: "directory",
+        children: [
+          {
+            name: "src",
+            path: "packages/ui/src",
+            type: "directory",
+            children: [
+              {
+                name: "components",
+                path: "packages/ui/src/components",
+                type: "directory",
+                children: [
+                  { name: "main-interface.tsx", path: "packages/ui/src/components/main-interface.tsx", type: "file" },
+                  { name: "settings-panel.tsx", path: "packages/ui/src/components/settings-panel.tsx", type: "file" },
+                  {
+                    name: "sidebar",
+                    path: "packages/ui/src/components/sidebar",
+                    type: "directory",
+                    children: [
+                      { name: "sidebar.tsx", path: "packages/ui/src/components/sidebar/sidebar.tsx", type: "file" },
+                      { name: "project-list.tsx", path: "packages/ui/src/components/sidebar/project-list.tsx", type: "file" },
+                    ],
+                  },
+                ],
+              },
+              {
+                name: "lib",
+                path: "packages/ui/src/lib",
+                type: "directory",
+                children: [
+                  { name: "daemon-context.tsx", path: "packages/ui/src/lib/daemon-context.tsx", type: "file" },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+];
+const MOCK_FILE_CONTENT: Record<string, string> = {
+  "apps/desktop/frontend/src/app/layout.tsx": `import Script from "next/script";\n\nexport default function RootLayout({ children }: { children: React.ReactNode }) {\n  return <html><body>{children}</body></html>;\n}\n`,
+  "apps/desktop/frontend/src/app/page.tsx": `export { default } from "./app/page";\n`,
+  "packages/ui/src/components/main-interface.tsx": `export function MainInterface() {\n  return <div className="grid h-full grid-cols-[220px_1fr]">...</div>;\n}\n`,
+  "packages/ui/src/components/settings-panel.tsx": `export function SettingsPanel() {\n  return <div className="flex h-full flex-col bg-background">...</div>;\n}\n`,
+  "packages/ui/src/components/sidebar/sidebar.tsx": `export function Sidebar() {\n  return <aside className="flex h-full w-[220px] flex-col border-r bg-sidebar">...</aside>;\n}\n`,
+  "packages/ui/src/components/sidebar/project-list.tsx": `export function ProjectList() {\n  return <div className="space-y-1 p-1">...</div>;\n}\n`,
+  "packages/ui/src/lib/daemon-context.tsx": `export function DaemonProvider() {\n  return null;\n}\n`,
+};
+const MOCK_DEV_SERVER_STATE: DevServerState = {
+  running: true,
+  port: 4158,
+  logs: [
+    "$ bun run dev",
+    "▲ Next.js 15.5.9",
+    "Local: http://localhost:4158",
+    "Compiled / in 712ms",
+  ],
+};
+const MOCK_DEV_SERVER_CONFIG: DevServerConfig = {
+  command: "bun run dev",
+  args: [],
+  port: 4158,
+  explicitPort: 4158,
+};
+
+function getMockParams(): MockParams {
+  if (typeof window === "undefined") {
+    return { enabled: false, mode: "welcome", repoPath: MOCK_REPO_PATH };
+  }
+
+  const pathname = window.location.pathname;
+  const params = new URLSearchParams(window.location.search);
+  const mode = params.get("mock");
+  const autoMock = pathname.startsWith("/figma-export");
+
+  if ((!mode && !autoMock) || isTauri()) {
+    return { enabled: false, mode: "welcome", repoPath: MOCK_REPO_PATH };
+  }
+
+  return {
+    enabled: true,
+    mode: mode === "welcome" ? "welcome" : "main",
+    repoPath: params.get("repo") || MOCK_REPO_PATH,
+  };
+}
+
+function cloneMockStatus(): GitStatus {
+  return {
+    ...MOCK_STATUS,
+    staged: MOCK_STATUS.staged.map((file) => ({ ...file })),
+    unstaged: MOCK_STATUS.unstaged.map((file) => ({ ...file })),
+    untracked: MOCK_STATUS.untracked.map((file) => ({ ...file })),
+  };
+}
+
+function cloneMockBranches(): GitBranch[] {
+  return MOCK_BRANCHES.map((branch) => ({ ...branch }));
+}
+
+function cloneMockCommits(): GitCommit[] {
+  return MOCK_COMMITS.map((commit) => ({
+    ...commit,
+    parents: commit.parents ? [...commit.parents] : undefined,
+    refs: commit.refs ? [...commit.refs] : undefined,
+  }));
+}
+
+function cloneMockTree(nodes: MockFileNode[]): MockFileNode[] {
+  return nodes.map((node) => ({
+    ...node,
+    children: node.children ? cloneMockTree(node.children) : undefined,
+  }));
+}
+
+function getMockDiff(filePath: string): GitDiff {
+  return {
+    path: filePath,
+    oldPath: undefined,
+    isBinary: false,
+    hunks: [
+      {
+        oldStart: 1,
+        oldLines: 3,
+        newStart: 1,
+        newLines: 4,
+        lines: [
+          { type: "context", content: "export function Sidebar() {" },
+          { type: "delete", content: '  return <aside className="w-16">...</aside>;' },
+          { type: "add", content: '  return <aside className="w-[220px] rounded-r-2xl">...</aside>;' },
+          { type: "add", content: '  // Mock diff used for browser capture mode.' },
+        ],
+      },
+    ],
+  };
+}
+
+async function mockSend<T>(
+  type: string,
+  payload: unknown,
+  mockConfigRef: { current: Config }
+): Promise<T> {
+  const args = (payload ?? {}) as Record<string, unknown>;
+
+  switch (type) {
+    case "status":
+      return { status: cloneMockStatus() } as T;
+    case "branches":
+      return { branches: cloneMockBranches() } as T;
+    case "watch":
+    case "stage":
+    case "unstage":
+    case "stageAll":
+    case "commit":
+    case "push":
+    case "pull":
+    case "fetch":
+    case "checkout":
+    case "createBranch":
+    case "stashSave":
+    case "stashPop":
+    case "openFinder":
+    case "openTerminal":
+    case "sendToTerminal":
+    case "openEditor":
+    case "openBrowser":
+    case "devServerStart":
+    case "devServerStop":
+    case "killPort":
+    case "cleanupDevLocks":
+    case "writeAgentsConfig":
+    case "updateAgentsConfig":
+    case "writeDevScriptPort":
+    case "gitCloneIntoFolder":
+      return {} as T;
+    case "pickFolder":
+    case "openFolder":
+      return { path: null } as T;
+    case "isGitRepo":
+      return { isRepo: true } as T;
+    case "getConfig":
+      return { config: mockConfigRef.current } as T;
+    case "setConfig": {
+      const configPatch = (args.config as Partial<Config>) || {};
+      mockConfigRef.current = { ...mockConfigRef.current, ...configPatch };
+      return { config: mockConfigRef.current } as T;
+    }
+    case "listFiles":
+      return { tree: cloneMockTree(MOCK_FILE_TREE) } as T;
+    case "readFile": {
+      const filePath = String(args.filePath || "");
+      return {
+        content: MOCK_FILE_CONTENT[filePath] || `// Mock content for ${filePath}\n`,
+        isBinary: false,
+      } as T;
+    }
+    case "getFavicon":
+      return { favicon: null, mimeType: null } as T;
+    case "diff": {
+      const filePath = String(args.file || "packages/ui/src/components/sidebar/sidebar.tsx");
+      return { diff: getMockDiff(filePath) } as T;
+    }
+    case "log":
+      return { commits: cloneMockCommits() } as T;
+    case "getRemotes":
+      return {
+        remotes: [{ name: "origin", refs: { fetch: "https://github.com/simonbloom/vibogit.git" } }],
+      } as T;
+    case "devServerDetect":
+      return { config: { ...MOCK_DEV_SERVER_CONFIG } } as T;
+    case "devServerState":
+      return { state: { ...MOCK_DEV_SERVER_STATE, logs: [...MOCK_DEV_SERVER_STATE.logs] } } as T;
+    case "readAgentsConfig":
+      return { config: null } as T;
+    case "list-skills":
+    case "skills-list":
+      return { skills: [] } as T;
+    case "githubResolveAuthSource": {
+      const status: GitHubAuthStatus = {
+        source: "none",
+        login: null,
+        message: "Mock browser mode",
+      };
+      return status as T;
+    }
+    case "githubListRepos": {
+      const response: GitHubListReposResponse = {
+        repos: [],
+        page: Number(args.page || 1),
+        perPage: Number(args.perPage || 20),
+        hasMore: false,
+        authSource: "none",
+        authLogin: null,
+      };
+      return response as T;
+    }
+    default:
+      return {} as T;
+  }
+}
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -460,6 +845,7 @@ const POWER_DEBUG_ENABLED = process.env.NEXT_PUBLIC_VIBOGIT_DEBUG_POWER === "1";
 export function DaemonProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(daemonReducer, initialState);
   const repoPathRef = useRef<string | null>(null);
+  const mockConfigRef = useRef<Config>({ ...DEFAULT_CONFIG, theme: "light" });
   const fileChangeUnlistenRef = useRef<(() => void) | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshInFlightRef = useRef(false);
@@ -474,6 +860,7 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
   const { isForeground } = useWindowActivity();
   const isForegroundRef = useRef(isForeground);
   const wasForegroundRef = useRef(isForeground);
+  const mockParams = getMockParams();
 
   const flushDebugCounters = useCallback((reason: string) => {
     if (!POWER_DEBUG_ENABLED) return;
@@ -487,8 +874,11 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const send = useCallback(<T = unknown,>(type: string, payload?: unknown): Promise<T> => {
+    if (mockParams.enabled) {
+      return mockSend<T>(type, payload, mockConfigRef);
+    }
     return tauriSend<T>(type, payload);
-  }, []);
+  }, [mockParams.enabled]);
 
   const refreshStatusNow = useCallback(async (opts?: { allowBackground?: boolean; source?: string }) => {
     const path = repoPathRef.current;
@@ -571,6 +961,12 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "SET_CONNECTION", payload: "connecting" });
 
     try {
+      if (mockParams.enabled) {
+        dispatch({ type: "SET_CONNECTION", payload: "connected" });
+        dispatch({ type: "SET_ERROR", payload: null });
+        return;
+      }
+
       const initialized = await ensureTauriAPIs();
       if (!initialized) {
         dispatch({ type: "SET_CONNECTION", payload: "error" });
@@ -607,7 +1003,7 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
       dispatch({ type: "SET_CONNECTION", payload: "error" });
       dispatch({ type: "SET_ERROR", payload: getErrorMessage(err) || "Failed to connect to desktop backend" });
     }
-  }, [scheduleStatusRefresh]);
+  }, [mockParams.enabled, scheduleStatusRefresh]);
 
   const reconnect = useCallback(() => {
     void connect();

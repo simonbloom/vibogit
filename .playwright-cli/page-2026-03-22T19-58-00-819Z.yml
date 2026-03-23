@@ -1,0 +1,439 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - paragraph [ref=e6]: ViboGit Figma Export
+          - heading "Core App Screens" [level=1] [ref=e7]
+          - paragraph [ref=e8]: A light-mode board of the primary ViboGit application shells. These frames are intended for direct HTML-to-Figma capture so the file contains the main navigational screens in a consistent visual system.
+        - generic [ref=e9]:
+          - img [ref=e10]
+          - text: Light mode locked for capture
+      - generic [ref=e13]:
+        - generic [ref=e14]:
+          - heading "Main Workspace" [level=2] [ref=e15]
+          - paragraph [ref=e16]: Connected repository view with sidebar, commit workflow, prompt composer, and live repository status.
+        - generic [ref=e19]:
+          - generic [ref=e20]:
+            - generic [ref=e21]:
+              - generic [ref=e22]:
+                - img [ref=e23]
+                - generic [ref=e27]: VIBOGIT
+              - button "Collapse sidebar" [ref=e28]:
+                - img
+            - generic [ref=e29]:
+              - button "Add project" [ref=e31]:
+                - img
+                - generic [ref=e32]: Add project
+              - generic [ref=e33]:
+                - generic [ref=e34]:
+                  - button "V vibogit main" [ref=e35]:
+                    - generic [ref=e37] [cursor=pointer]:
+                      - generic [ref=e38]: V
+                      - generic [ref=e39]:
+                        - generic [ref=e40]:
+                          - generic [ref=e41]: vibogit
+                          - generic "All clean" [ref=e42]:
+                            - img [ref=e43]
+                        - generic [ref=e45]: main
+                  - button "B bloomindesign main" [ref=e46]:
+                    - generic [ref=e48] [cursor=pointer]:
+                      - generic [ref=e49]: B
+                      - generic [ref=e50]:
+                        - generic [ref=e51]:
+                          - generic [ref=e52]: bloomindesign
+                          - generic "All clean" [ref=e53]:
+                            - img [ref=e54]
+                        - generic [ref=e56]: main
+                  - button "A agent-browser main" [ref=e57]:
+                    - generic [ref=e59] [cursor=pointer]:
+                      - generic [ref=e60]: A
+                      - generic [ref=e61]:
+                        - generic [ref=e62]:
+                          - generic [ref=e63]: agent-browser
+                          - generic "All clean" [ref=e64]:
+                            - img [ref=e65]
+                        - generic [ref=e67]: main
+                - status [ref=e68]
+            - generic [ref=e70]:
+              - generic [ref=e71]:
+                - button "Settings" [ref=e72]:
+                  - img
+                - button "Switch to Ember theme" [ref=e73]:
+                  - img
+              - generic [ref=e74]: v4.0.2
+          - generic [ref=e77]:
+            - generic [ref=e78]:
+              - generic [ref=e80]:
+                - button "main" [ref=e82]:
+                  - img
+                  - generic [ref=e83]: main
+                  - img
+                - generic [ref=e84]:
+                  - button ":4158" [ref=e85] [cursor=pointer]: :4158
+                  - button "More options" [ref=e87]:
+                    - img [ref=e88]
+                  - button "Restart server" [ref=e90]:
+                    - img
+                  - button "Stop server" [ref=e91]:
+                    - img
+              - generic [ref=e92]:
+                - button "Finder" [ref=e93]:
+                  - img
+                - button "Open in browser" [ref=e94]:
+                  - img
+                - button "GitHub" [ref=e95]:
+                  - img
+                - button "Terminal" [ref=e96]:
+                  - img
+                - button "Editor" [ref=e97]:
+                  - img
+            - generic [ref=e98]:
+              - button "Pull" [ref=e99]:
+                - img
+                - text: Pull
+              - button "Fetch" [ref=e100]:
+                - img
+              - button "Push (2)" [ref=e101]:
+                - img
+                - text: Push (2)
+              - button "Quick Commit (5)" [ref=e102]:
+                - img
+                - text: Quick Commit (5)
+              - button "PR" [ref=e103]:
+                - img
+                - text: PR
+            - generic [ref=e104]:
+              - button "Changes 5" [ref=e105]:
+                - img
+                - text: Changes
+                - generic [ref=e106]: "5"
+              - button "Tree" [ref=e107]:
+                - img
+                - text: Tree
+              - button "Graph" [ref=e108]:
+                - img
+                - text: Graph
+              - button "Logs" [ref=e109]:
+                - img
+                - text: Logs
+            - generic [ref=e112]:
+              - generic [ref=e114]:
+                - textbox "Commit message..." [ref=e115]
+                - button "AI" [ref=e117]:
+                  - img
+                  - text: AI
+                - button "Commit (5)" [disabled]
+              - generic [ref=e118]:
+                - generic [ref=e119]:
+                  - generic [ref=e120]:
+                    - generic [ref=e122]: Will Commit (5)
+                    - generic [ref=e123]:
+                      - generic [ref=e124] [cursor=pointer]:
+                        - img [ref=e126]
+                        - generic [ref=e129]: packages/ui/src/components/sidebar/sidebar.tsx
+                        - button "Open in IDE" [ref=e130]:
+                          - img
+                        - button "Exclude" [ref=e131]:
+                          - img
+                      - generic [ref=e132] [cursor=pointer]:
+                        - img [ref=e134]
+                        - generic [ref=e137]: packages/ui/src/components/main-interface.tsx
+                        - button "Open in IDE" [ref=e138]:
+                          - img
+                        - button "Exclude" [ref=e139]:
+                          - img
+                      - generic [ref=e140] [cursor=pointer]:
+                        - img [ref=e142]
+                        - generic [ref=e145]: apps/desktop/frontend/src/app/layout.tsx
+                        - button "Open in IDE" [ref=e146]:
+                          - img
+                        - button "Exclude" [ref=e147]:
+                          - img
+                      - generic [ref=e148] [cursor=pointer]:
+                        - img [ref=e150]
+                        - generic [ref=e153]: packages/ui/src/lib/daemon-context.tsx
+                        - button "Open in IDE" [ref=e154]:
+                          - img
+                        - button "Exclude" [ref=e155]:
+                          - img
+                      - generic [ref=e156] [cursor=pointer]:
+                        - img [ref=e158]
+                        - generic [ref=e161]: packages/ui/src/components/export-preview.tsx
+                        - button "Open in IDE" [ref=e162]:
+                          - img
+                        - button "Exclude" [ref=e163]:
+                          - img
+                  - generic [ref=e164]:
+                    - generic [ref=e166]: Won't Commit (0)
+                    - generic [ref=e167]: All files staged
+                - generic [ref=e169]:
+                  - img [ref=e170]
+                  - paragraph [ref=e173]: Select a file to view
+            - generic [ref=e175]:
+              - button "Prompt - Ghostty" [expanded] [ref=e176]:
+                - img
+                - generic [ref=e177]: Prompt - Ghostty
+              - textbox "Compose prompt" [ref=e181]:
+                - /placeholder: Ask about this project... (use @ to reference files)
+              - generic [ref=e182]:
+                - generic [ref=e183]:
+                  - generic [ref=e184]: 0 chars
+                  - generic [ref=e185]: "@ files"
+                - generic [ref=e186]:
+                  - button "Clear" [ref=e187]
+                  - button "Copy" [ref=e188]
+                  - button "Send" [disabled]
+      - generic [ref=e189]:
+        - generic [ref=e190]:
+          - generic [ref=e191]:
+            - heading "Welcome State" [level=2] [ref=e192]
+            - paragraph [ref=e193]: The empty-project shell with app chrome, ready for first repository selection.
+          - generic [ref=e196]:
+            - generic [ref=e197]:
+              - generic [ref=e198]:
+                - generic [ref=e199]:
+                  - img [ref=e200]
+                  - generic [ref=e204]: VIBOGIT
+                - button "Collapse sidebar" [ref=e205]:
+                  - img
+              - generic [ref=e206]:
+                - button "Add project" [ref=e208]:
+                  - img
+                  - generic [ref=e209]: Add project
+                - generic [ref=e210]:
+                  - generic [ref=e211]:
+                    - button "V vibogit main" [ref=e212]:
+                      - generic [ref=e214] [cursor=pointer]:
+                        - generic [ref=e215]: V
+                        - generic [ref=e216]:
+                          - generic [ref=e217]:
+                            - generic [ref=e218]: vibogit
+                            - generic "All clean" [ref=e219]:
+                              - img [ref=e220]
+                          - generic [ref=e222]: main
+                    - button "B bloomindesign main" [ref=e223]:
+                      - generic [ref=e225] [cursor=pointer]:
+                        - generic [ref=e226]: B
+                        - generic [ref=e227]:
+                          - generic [ref=e228]:
+                            - generic [ref=e229]: bloomindesign
+                            - generic "All clean" [ref=e230]:
+                              - img [ref=e231]
+                          - generic [ref=e233]: main
+                    - button "A agent-browser main" [ref=e234]:
+                      - generic [ref=e236] [cursor=pointer]:
+                        - generic [ref=e237]: A
+                        - generic [ref=e238]:
+                          - generic [ref=e239]:
+                            - generic [ref=e240]: agent-browser
+                            - generic "All clean" [ref=e241]:
+                              - img [ref=e242]
+                          - generic [ref=e244]: main
+                  - status [ref=e245]
+              - generic [ref=e247]:
+                - generic [ref=e248]:
+                  - button "Settings" [ref=e249]:
+                    - img
+                  - button "Switch to Ember theme" [ref=e250]:
+                    - img
+                - generic [ref=e251]: v4.0.2
+            - generic [ref=e254]:
+              - heading "ViboGit" [level=1] [ref=e255]
+              - paragraph [ref=e256]: Git for the Vibe Coder
+              - button "Open Project" [ref=e257]:
+                - img
+                - text: Open Project
+        - generic [ref=e258]:
+          - generic [ref=e259]:
+            - heading "Settings State" [level=2] [ref=e260]
+            - paragraph [ref=e261]: The settings shell rendered directly in the app layout for design review and documentation.
+          - generic [ref=e264]:
+            - generic [ref=e265]:
+              - generic [ref=e266]:
+                - generic [ref=e267]:
+                  - img [ref=e268]
+                  - generic [ref=e272]: VIBOGIT
+                - button "Collapse sidebar" [ref=e273]:
+                  - img
+              - generic [ref=e274]:
+                - button "Add project" [ref=e276]:
+                  - img
+                  - generic [ref=e277]: Add project
+                - generic [ref=e278]:
+                  - generic [ref=e279]:
+                    - button "V vibogit main" [ref=e280]:
+                      - generic [ref=e282] [cursor=pointer]:
+                        - generic [ref=e283]: V
+                        - generic [ref=e284]:
+                          - generic [ref=e285]:
+                            - generic [ref=e286]: vibogit
+                            - generic "All clean" [ref=e287]:
+                              - img [ref=e288]
+                          - generic [ref=e290]: main
+                    - button "B bloomindesign main" [ref=e291]:
+                      - generic [ref=e293] [cursor=pointer]:
+                        - generic [ref=e294]: B
+                        - generic [ref=e295]:
+                          - generic [ref=e296]:
+                            - generic [ref=e297]: bloomindesign
+                            - generic "All clean" [ref=e298]:
+                              - img [ref=e299]
+                          - generic [ref=e301]: main
+                    - button "A agent-browser main" [ref=e302]:
+                      - generic [ref=e304] [cursor=pointer]:
+                        - generic [ref=e305]: A
+                        - generic [ref=e306]:
+                          - generic [ref=e307]:
+                            - generic [ref=e308]: agent-browser
+                            - generic "All clean" [ref=e309]:
+                              - img [ref=e310]
+                          - generic [ref=e312]: main
+                  - status [ref=e313]
+              - generic [ref=e315]:
+                - generic [ref=e316]:
+                  - button "Settings" [pressed] [ref=e317]:
+                    - img
+                  - button "Switch to Ember theme" [ref=e318]:
+                    - img
+                - generic [ref=e319]: v4.0.2
+            - generic [ref=e322]:
+              - generic [ref=e323]:
+                - heading "Settings" [level=2] [ref=e324]
+                - paragraph [ref=e325]: Preferences for ViboGit on this machine.
+              - tablist "Settings sections" [ref=e326]:
+                - generic [ref=e327]:
+                  - tab "AI" [selected] [ref=e328]:
+                    - img [ref=e329]
+                    - text: AI
+                  - tab "Tools" [ref=e337]:
+                    - img [ref=e338]
+                    - text: Tools
+                  - tab "Appearance" [ref=e340]:
+                    - img [ref=e341]
+                    - text: Appearance
+                  - tab "Capture" [ref=e347]:
+                    - img [ref=e348]
+                    - text: Capture
+                  - tab "App" [ref=e351]:
+                    - img [ref=e352]
+                    - text: App
+              - tabpanel "AI" [ref=e355]:
+                - generic [ref=e356]:
+                  - generic [ref=e357]:
+                    - generic [ref=e358]: AI Provider
+                    - combobox [ref=e359]:
+                      - option "Anthropic (Claude Haiku)"
+                      - option "OpenAI" [selected]
+                      - option "Google (Gemini Flash)"
+                  - generic [ref=e360]:
+                    - generic [ref=e361]: Model
+                    - combobox [ref=e362]:
+                      - option "GPT-5.3 Codex Spark" [selected]
+                      - option "GPT-4o mini"
+                  - generic [ref=e363]:
+                    - generic [ref=e364]:
+                      - generic [ref=e365]: API Key
+                      - link "Get key" [ref=e366] [cursor=pointer]:
+                        - /url: https://platform.openai.com/api-keys
+                        - text: Get key
+                        - img [ref=e367]
+                    - generic [ref=e371]:
+                      - textbox "sk-..." [ref=e372]: sk-**********************
+                      - button "Show API key" [ref=e373]:
+                        - img
+                    - paragraph [ref=e374]: Stored in ~/.vibogit/config.json
+              - paragraph [ref=e376]: Changes save automatically.
+      - generic [ref=e377]:
+        - generic [ref=e378]:
+          - generic [ref=e379]:
+            - heading "Desktop Onboarding" [level=2] [ref=e380]
+            - paragraph [ref=e381]: The browser-only onboarding screen shown when the Tauri backend is unavailable.
+          - generic [ref=e385]:
+            - generic [ref=e386]:
+              - heading "ViboGit Desktop" [level=1] [ref=e387]
+              - paragraph [ref=e388]: Desktop backend is not available in this runtime.
+            - generic [ref=e389]:
+              - heading "Run with Tauri" [level=2] [ref=e390]
+              - generic [ref=e391]:
+                - generic [ref=e392]:
+                  - generic [ref=e393]: "1"
+                  - generic [ref=e394]: Start the desktop runtime
+                - generic [ref=e396]:
+                  - code [ref=e397]: cd apps/desktop && bun run dev
+                  - button "Copy" [ref=e398]:
+                    - img
+                    - text: Copy
+              - generic [ref=e399]:
+                - generic [ref=e400]:
+                  - generic [ref=e401]: "2"
+                  - generic [ref=e402]: Open the app window
+                - paragraph [ref=e403]: If you are running in a plain browser tab, launch the Tauri app and reconnect.
+              - button "Reconnect Desktop Backend" [ref=e405]:
+                - img
+                - text: Reconnect Desktop Backend
+            - link "View on GitHub" [ref=e407] [cursor=pointer]:
+              - /url: https://github.com/simonbloom/vibogit
+              - img [ref=e408]
+              - text: View on GitHub
+        - generic [ref=e412]:
+          - generic [ref=e413]:
+            - heading "Mini View" [level=2] [ref=e414]
+            - paragraph [ref=e415]: Compact always-on-top status bar for quick pull, fetch, push, and PR access.
+          - generic [ref=e419]:
+            - img [ref=e421]
+            - combobox "/Users/simonbloom/apps-vol11/vibogit" [ref=e428] [cursor=pointer]:
+              - option "vibogit" [selected]
+              - option "bloomindesign"
+              - option "agent-browser"
+            - generic [ref=e430]:
+              - button "Finder" [ref=e431]:
+                - img [ref=e432]
+              - button "Browser" [ref=e434]:
+                - img [ref=e435]
+              - button "GitHub" [ref=e439]:
+                - img [ref=e440]
+              - button "Terminal" [ref=e443]:
+                - img [ref=e444]
+              - button "Editor" [ref=e446]:
+                - img [ref=e447]
+            - button ":4158" [ref=e451]:
+              - generic [ref=e453]: :4158
+            - generic [ref=e455]:
+              - button "Pull" [ref=e456]:
+                - img [ref=e457]
+              - button "Fetch" [ref=e460]:
+                - img [ref=e461]
+              - button "2" [ref=e467]:
+                - img [ref=e468]
+                - generic [ref=e470]: "2"
+              - button "5" [ref=e472]:
+                - img [ref=e473]
+                - generic [ref=e475]: "5"
+              - button "Create Pull Request" [ref=e477]:
+                - img [ref=e478]
+            - button "Close mini-view" [ref=e483]:
+              - img [ref=e484]
+  - region "Notifications alt+T"
+  - generic [ref=e488]:
+    - generic [ref=e490]:
+      - generic [ref=e491]:
+        - button "Select element" [ref=e494] [cursor=pointer]:
+          - img [ref=e495]
+        - generic:
+          - generic:
+            - button "Open history":
+              - generic:
+                - img
+        - generic:
+          - generic:
+            - button "Copy all history items":
+              - img
+        - button "Open more actions menu" [ref=e500] [cursor=pointer]:
+          - img [ref=e501]
+      - button "Disable React Grab" [pressed] [ref=e506] [cursor=pointer]
+    - button "Collapse toolbar" [ref=e509] [cursor=pointer]:
+      - img [ref=e510]
+  - button "Open Next.js Dev Tools" [ref=e517] [cursor=pointer]:
+    - img [ref=e518]
+  - alert [ref=e521]

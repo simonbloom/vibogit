@@ -102,20 +102,30 @@ function getRepoLabelFromCloneUrl(value: string): string {
 
 const AUTO_FETCH_INTERVAL_MS = 120_000;
 
-export function MainInterface() {
+type MainInterfaceView = "graph" | "tree" | "changes" | "logs";
+
+interface MainInterfaceProps {
+  initialActiveView?: MainInterfaceView;
+  initialSelectedFile?: { path: string; name: string } | null;
+}
+
+export function MainInterface({
+  initialActiveView = "changes",
+  initialSelectedFile = null,
+}: MainInterfaceProps = {}) {
   const { state, send, refreshStatus, refreshBranches, setRepoPath } = useDaemon();
   const { isForeground } = useWindowActivity();
   const [isPulling, setIsPulling] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
-  const [activeView, setActiveView] = useState<"graph" | "tree" | "changes" | "logs">("changes");
+  const [activeView, setActiveView] = useState<MainInterfaceView>(initialActiveView);
   const [showCreatePR, setShowCreatePR] = useState(false);
   const [devServerPort, setDevServerPort] = useState<number | null>(null);
   const [showPortPrompt, setShowPortPrompt] = useState(false);
   const [isMonorepo, setIsMonorepo] = useState(false);
   const [projectFiles, setProjectFiles] = useState<string[]>([]);
-  const [selectedFile, setSelectedFile] = useState<{ path: string; name: string } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{ path: string; name: string } | null>(initialSelectedFile);
   const [graphRefreshKey, setGraphRefreshKey] = useState(0);
   const [isMacOverlayChrome, setIsMacOverlayChrome] = useState(false);
   const [miniViewOpen, setMiniViewOpen] = useState(false);
@@ -146,11 +156,15 @@ export function MainInterface() {
     (status?.unstaged.length || 0) +
     (status?.untracked.length || 0);
 
+  useEffect(() => {
+    setActiveView(initialActiveView);
+  }, [initialActiveView]);
+
   // Clear selected file when repo changes
   useEffect(() => {
-    setSelectedFile(null);
+    setSelectedFile(initialSelectedFile);
     lastFetchAtRef.current = 0;
-  }, [repoPath]);
+  }, [initialSelectedFile, repoPath]);
 
   useEffect(() => {
     setIsMacOverlayChrome(isMacTauri());
