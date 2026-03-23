@@ -1,0 +1,15 @@
+commands:
+  install: bun install
+  typecheck: bun run typecheck
+  build: cd apps/desktop/frontend && bun run build
+  lint: bun run lint
+  test: cd apps/desktop/src-tauri && cargo test
+  dev: cd apps/desktop/frontend && bun run dev
+
+services:
+  frontend:
+    start: cd apps/desktop/frontend && bun run dev
+    stop: lsof -ti :4158 | xargs kill 2>/dev/null || true
+    healthcheck: curl -sf http://localhost:4158
+    port: 4158
+    depends_on: []
