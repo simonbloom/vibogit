@@ -1,0 +1,39 @@
+{
+  "featureId": "sync-beacon-frontend",
+  "reviewedAt": "2026-03-23T15:06:56.031738+00:00",
+  "commitId": "1f89ed3",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature adds the requested Sync Beacon UI surfaces and wiring, but it does not populate repository last-commit details in the panel and the shared-type message union was not updated for the new daemon commands, leaving the frontend/backend contract incomplete.",
+    "issues": [
+      {
+        "file": "packages/ui/src/lib/sync-beacon-context.tsx",
+        "line": 67,
+        "severity": "blocking",
+        "description": "The payload sent to `sync_beacon_push` hard-codes `lastCommitHash`, `lastCommitMessage`, and `lastCommitTimestamp` to empty/zero values for every repo. The feature explicitly requires the panel to show each repo's last commit, but no frontend code fetches commit metadata before publishing beacon data, so remote machines can only display \u201cNo commits yet\u201d / \u201cNo hash\u201d even when commits exist."
+      },
+      {
+        "file": "packages/shared/src/types.ts",
+        "line": 1,
+        "severity": "non_blocking",
+        "description": "The `MessageType` union was not extended with `sync_beacon_check_gh`, `sync_beacon_validate_gist`, `sync_beacon_pull`, or `sync_beacon_push`. The daemon bridge currently accepts raw strings so runtime still works, but the shared message contract is now stale and no longer documents the new frontend/backend command surface."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The `tauri-fullstack` skill still treats browser verification as a full manual verification step, but this feature could only be smoke-tested in browser mode because Tauri-backed Sync Beacon commands are unavailable there.",
+      "evidence": "Handoff skillFeedback marks procedure step 6 as not followed and suggests clarifying that Tauri-dependent features may only be smoke-checked in browser mode; current skill still says to use agent-browser to verify UI changes end-to-end."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The shared testing knowledge already says Sync Beacon gist operations require Tauri, which supports the worker's deviation. This gap is in the skill, not in `.factory/library/user-testing.md`.",
+      "evidence": ".factory/library/user-testing.md states \u201cSync beacon Gist operations (requires Tauri invoke)\u201d while `.factory/skills/tauri-fullstack/SKILL.md` still instructs browser verification as the manual verification path."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Fail: the frontend wiring and navigation were added, but beacon payloads omit repo last-commit data so the panel cannot satisfy the required last-commit display. Non-blocking: the shared `MessageType` contract was not updated for the new sync beacon commands. Shared-state follow-up: align the tauri-fullstack skill with the documented limitation that Tauri-dependent features can only be smoke-tested in browser mode."
+}

@@ -1,0 +1,33 @@
+{
+  "featureId": "sync-beacon-backend",
+  "reviewedAt": "2026-03-23T15:20:00Z",
+  "commitId": "2c79d8f",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The backend adds the requested gist-based Sync Beacon commands, data types, command registration, and helper tests, but it does not actually honor the feature's dedicated Sync Beacon machine-name field. `sync_beacon_push` derives the outgoing machine name only from `AppConfig.computer_name`, so a user-configured `syncBeaconMachineName` from the frontend is ignored and all machines fall back to the general computer name or hostname instead.",
+    "issues": [
+      {
+        "file": "apps/desktop/src-tauri/src/commands.rs",
+        "line": 842,
+        "severity": "blocking",
+        "description": "`machine_name_from_config()` only reads `AppConfig.computer_name`, but the Sync Beacon feature contract and frontend use a dedicated `syncBeaconMachineName` setting. Because the backend config struct has no `sync_beacon_machine_name` field and `sync_beacon_push()` calls this helper, any user-entered Sync Beacon machine name is silently ignored, so beacon payloads are published under the generic computer name/hostname instead of the configured beacon identity."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "The daemon-side `AppConfig` in `commands.rs` has diverged from the shared/frontend Config shape for Sync Beacon settings, which made the backend ignore the dedicated machine-name field even though the frontend persists it.",
+      "evidence": "packages/shared/src/types.ts:334-337 defines `syncBeaconMachineName`, `syncBeaconGistId`, and `syncBeaconInterval`, and the frontend uses `syncBeaconMachineName` in packages/ui/src/lib/config-context.tsx:40 and packages/ui/src/components/settings/sections/SyncBeaconSettingsSection.tsx:62-68. In contrast, apps/desktop/src-tauri/src/commands.rs:741-758 only adds `sync_beacon_gist_id` to `AppConfig`; there is no `sync_beacon_machine_name`, and machine_name_from_config() at 841-850 only reads `computer_name`."
+    },
+    {
+      "area": "skills",
+      "observation": "The worker followed a backend-only path, but the tauri-fullstack skill does not explicitly call out checking daemon config/schema parity with `packages/shared/src/types.ts` when a feature adds persisted settings. That gap likely contributed to the missing `sync_beacon_machine_name` field on the Rust side.",
+      "evidence": "The feature description required config persistence for beacon state, and the worker transcript for session ef6a6095-3da8-40e3-a57f-3c28fbd2663a shows edits only in `commands.rs` and `lib.rs`; .factory/skills/tauri-fullstack/SKILL.md mentions updating shared types 'if needed' but does not explicitly require verifying config-field parity between frontend/shared types and Rust `AppConfig` for backend-facing settings."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Fail. The Sync Beacon backend commands are present and generally match the gist workflow requirements, but there is one blocking correctness issue: the backend ignores the dedicated Sync Beacon machine-name setting and always derives machine identity from the general computer name/hostname. Shared-state triage should also note the config-schema drift between shared/frontend config and Rust `AppConfig`, plus a skill gap around checking that parity for persisted settings."
+}

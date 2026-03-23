@@ -1,0 +1,69 @@
+{
+  "milestone": "sync-beacon",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "cd apps/desktop/src-tauri && cargo test",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "bun run typecheck",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "bun run lint",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 2,
+    "passed": 0,
+    "failed": 2,
+    "failedFeatures": [
+      "sync-beacon-backend",
+      "sync-beacon-frontend"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "sync-beacon-backend",
+      "severity": "blocking",
+      "description": "`machine_name_from_config()` only reads `AppConfig.computer_name`, so `sync_beacon_push()` ignores the dedicated `syncBeaconMachineName` setting and publishes beacon data under the generic computer name or hostname instead of the user-configured beacon identity."
+    },
+    {
+      "featureId": "sync-beacon-frontend",
+      "severity": "blocking",
+      "description": "The payload sent from `packages/ui/src/lib/sync-beacon-context.tsx` hard-codes `lastCommitHash`, `lastCommitMessage`, and `lastCommitTimestamp` to empty values, so remote machines cannot display the required last-commit details in the Sync Beacon panel."
+    }
+  ],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "skills",
+      "suggestion": "Update the `tauri-fullstack` skill to explicitly require checking parity between persisted frontend/shared config fields and Rust `AppConfig`/backend config structs whenever a feature adds or changes stored settings.",
+      "evidence": "The sync-beacon backend review found that `packages/shared/src/types.ts` and frontend settings use `syncBeaconMachineName`, but `apps/desktop/src-tauri/src/commands.rs` omitted the corresponding Rust config field and only used `computer_name`, causing the user-configured beacon identity to be ignored.",
+      "isSystemic": true
+    },
+    {
+      "target": "skills",
+      "suggestion": "Clarify in `tauri-fullstack` that browser-based verification is only a smoke test for Tauri-dependent features and cannot fully validate flows that require Tauri runtime commands; workers should document that limitation and rely on Rust-side validation where appropriate.",
+      "evidence": "The sync-beacon frontend review and worker feedback both noted that Sync Beacon gist operations depend on Tauri invoke commands, so browser verification could confirm UI reachability but not end-to-end beacon behavior.",
+      "isSystemic": true
+    }
+  ],
+  "rejectedObservations": [
+    {
+      "observation": "Add a library entry documenting that Sync Beacon Gist operations require Tauri runtime.",
+      "reason": "already-documented in .factory/library/user-testing.md"
+    },
+    {
+      "observation": "Add missing sync beacon command literals to the shared `MessageType` union.",
+      "reason": "valid non-blocking code issue captured in feature review, but not a shared-state documentation or services update for scrutiny synthesis"
+    }
+  ],
+  "previousRound": null
+}
