@@ -748,25 +748,37 @@ pub async fn set_autostart(
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
+    #[serde(default)]
     pub computer_name: String,
+    #[serde(default)]
     pub ai_provider: String,
+    #[serde(default)]
     pub ai_api_key: String,
     #[serde(default)]
     pub github_pat: String,
     #[serde(default)]
     pub sync_beacon_machine_name: String,
+    #[serde(default)]
     pub editor: String,
+    #[serde(default)]
     pub custom_editor_command: String,
+    #[serde(default)]
     pub terminal: String,
+    #[serde(default)]
     pub theme: String,
+    #[serde(default)]
     pub image_base_path: String,
+    #[serde(default)]
     pub show_hidden_files: bool,
+    #[serde(default)]
     pub clean_shot_mode: bool,
     #[serde(default)]
     pub auto_execute_prompt: bool,
     #[serde(default)]
     pub sync_beacon_pairing_code: String,
+    #[serde(default)]
     pub recent_tabs: Vec<ConfigTab>,
+    #[serde(default)]
     pub active_tab_id: Option<String>,
 }
 
