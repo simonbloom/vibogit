@@ -190,6 +190,9 @@ pub struct ProjectStatus {
     pub uncommitted_count: i32,
     pub ahead: i32,
     pub behind: i32,
+    pub last_commit_hash: String,
+    pub last_commit_message: String,
+    pub last_commit_timestamp: i64,
     pub is_clean: bool,
 }
 
@@ -315,6 +318,9 @@ pub async fn get_all_project_statuses(
                     uncommitted_count: uncommitted as i32,
                     ahead: state.ahead as i32,
                     behind: state.behind as i32,
+                    last_commit_hash: state.last_commit_hash,
+                    last_commit_message: state.last_commit_message,
+                    last_commit_timestamp: state.last_commit_timestamp,
                     is_clean: uncommitted == 0 && state.ahead == 0 && state.behind == 0,
                 }
             }
@@ -324,6 +330,9 @@ pub async fn get_all_project_statuses(
                 uncommitted_count: 0,
                 ahead: 0,
                 behind: 0,
+                last_commit_hash: String::new(),
+                last_commit_message: String::new(),
+                last_commit_timestamp: 0,
                 is_clean: true,
             },
         };

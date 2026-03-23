@@ -39,6 +39,9 @@ export interface ProjectStatus {
   uncommittedCount: number;
   ahead: number;
   behind: number;
+  lastCommitHash?: string;
+  lastCommitMessage?: string;
+  lastCommitTimestamp?: number;
   isClean: boolean;
 }
 
