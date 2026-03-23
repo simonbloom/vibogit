@@ -1,0 +1,70 @@
+{
+  "surface": "tauri-rust-cli",
+  "status": "pass",
+  "assertions": [
+    {
+      "id": "VAL-PAIR-001",
+      "status": "pass",
+      "reason": "generate_pairing_code emits exactly 6 lowercase alphanumeric chars; covered by Rust tests.",
+      "evidence": [
+        "apps/desktop/src-tauri/src/commands.rs"
+      ]
+    },
+    {
+      "id": "VAL-PAIR-003",
+      "status": "pass",
+      "reason": "Pull path finds existing beacon gist by pairing code through gh gist list description matching.",
+      "evidence": [
+        "apps/desktop/src-tauri/src/commands.rs"
+      ]
+    },
+    {
+      "id": "VAL-PAIR-004",
+      "status": "pass",
+      "reason": "Unknown code returns the user-friendly error \"No beacon found for this code\".",
+      "evidence": [
+        "apps/desktop/src-tauri/src/commands.rs"
+      ]
+    },
+    {
+      "id": "VAL-SCOPE-001",
+      "status": "pass",
+      "reason": "Missing gist scope is detected and the exact recovery command `gh auth refresh -s gist` is included.",
+      "evidence": [
+        "apps/desktop/src-tauri/src/commands.rs"
+      ]
+    },
+    {
+      "id": "VAL-SYNC-001",
+      "status": "pass",
+      "reason": "Push creates a gist with description pattern vibogit-beacon-{code} when one does not already exist.",
+      "evidence": [
+        "apps/desktop/src-tauri/src/commands.rs"
+      ]
+    },
+    {
+      "id": "VAL-SYNC-002",
+      "status": "pass",
+      "reason": "Pull discovers the gist by pairing code and parses machine data from beacon JSON.",
+      "evidence": [
+        "apps/desktop/src-tauri/src/commands.rs"
+      ]
+    },
+    {
+      "id": "VAL-CROSS-002",
+      "status": "pass",
+      "reason": "Config now uses pairing-code field and tolerates missing legacy field during deserialization/normalization.",
+      "evidence": [
+        "apps/desktop/src-tauri/src/commands.rs",
+        "packages/ui/src/lib/config-context.tsx"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "cargo test",
+    "bun run typecheck",
+    "source-review"
+  ],
+  "frictions": [],
+  "blockers": []
+}

@@ -1,0 +1,72 @@
+{
+  "surface": "web-ui",
+  "status": "pass",
+  "assertions": [
+    {
+      "id": "VAL-PAIR-002",
+      "status": "pass",
+      "reason": "Settings renders a unified pairing code field with copy action, and first enable stores the returned pairing code immediately for display.",
+      "evidence": [
+        "packages/ui/src/components/settings/sections/SyncBeaconSettingsSection.tsx",
+        "packages/ui/src/lib/sync-beacon-context.tsx"
+      ]
+    },
+    {
+      "id": "VAL-UI-001",
+      "status": "pass",
+      "reason": "Settings now contains only the enable toggle, unified pairing code field, and machine name input; the old join/validate/interval controls are absent.",
+      "evidence": [
+        "packages/ui/src/components/settings/sections/SyncBeaconSettingsSection.tsx"
+      ]
+    },
+    {
+      "id": "VAL-UI-002",
+      "status": "pass",
+      "reason": "Machine name is auto-filled from hostname when blank via context effect and blur fallback.",
+      "evidence": [
+        "packages/ui/src/lib/sync-beacon-context.tsx",
+        "packages/ui/src/components/settings/sections/SyncBeaconSettingsSection.tsx"
+      ]
+    },
+    {
+      "id": "VAL-SYNC-003",
+      "status": "pass",
+      "reason": "Background timer is hardcoded to 300000ms and cleaned up on disable/unmount.",
+      "evidence": [
+        "packages/ui/src/lib/sync-beacon-context.tsx"
+      ]
+    },
+    {
+      "id": "VAL-SYNC-004",
+      "status": "pass",
+      "reason": "Beacon panel renders remote machines and repo status fields including branch, ahead/behind, and last commit info.",
+      "evidence": [
+        "packages/ui/src/components/sync-beacon-panel.tsx"
+      ]
+    },
+    {
+      "id": "VAL-SYNC-005",
+      "status": "pass",
+      "reason": "Disabling beacon clears interval and resets remote machine state.",
+      "evidence": [
+        "packages/ui/src/lib/sync-beacon-context.tsx"
+      ]
+    },
+    {
+      "id": "VAL-CROSS-001",
+      "status": "pass",
+      "reason": "First enable performs an immediate sync_beacon_push call, persists the returned pairing code, and shows a generation loading state so the code appears as part of the enable flow.",
+      "evidence": [
+        "packages/ui/src/components/settings/sections/SyncBeaconSettingsSection.tsx",
+        "packages/ui/src/lib/sync-beacon-context.tsx"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "source-review"
+  ],
+  "frictions": [
+    "Browser mode cannot execute Tauri commands, so user-surface confirmation relied on live rendering of the browser shell plus source review and the passing cargo/typecheck suite for backend-backed enable flow behavior."
+  ],
+  "blockers": []
+}
