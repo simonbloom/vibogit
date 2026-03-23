@@ -9,9 +9,16 @@ import { Badge } from "@/components/ui/badge";
 import { useDaemon } from "@/lib/daemon-context";
 import { toast } from "sonner";
 
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string" && err.trim()) return err;
+  return fallback;
+}
+
 interface SyncBeaconCheckResult {
   available: boolean;
   authenticated: boolean;
+  hasGistScope: boolean;
   message: string;
 }
 
@@ -72,6 +79,13 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
         return;
       }
 
+      if (!result.hasGistScope) {
+        const scopeMessage = "GitHub token missing gist scope. Run in terminal: gh auth refresh -s gist";
+        setInlineError(scopeMessage);
+        toast.error(scopeMessage);
+        return;
+      }
+
       // Enable first
       onSave({ syncBeaconEnabled: true });
 
@@ -94,7 +108,7 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
             toast.success("Sync Beacon enabled");
           }
         } catch (err) {
-          const message = err instanceof Error ? err.message : "Failed to generate pairing code";
+          const message = getErrorMessage(err, "Failed to generate pairing code");
           setInlineError(message);
           toast.error(message);
         } finally {
@@ -104,7 +118,7 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
         toast.success("Sync Beacon enabled");
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to enable Sync Beacon";
+      const message = getErrorMessage(error, "Unable to enable Sync Beacon");
       setInlineError(message);
       toast.error(message);
     } finally {
@@ -150,7 +164,7 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
       setEditCodeInput("");
       toast.success("Pairing code updated");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "No beacon found for this code";
+      const message = getErrorMessage(err, "No beacon found for this code");
       setInlineError(message);
       toast.error(message);
     } finally {
@@ -177,7 +191,7 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
         toast.success("New pairing code generated");
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to generate new code";
+      const message = getErrorMessage(err, "Failed to generate new code");
       setInlineError(message);
       toast.error(message);
     } finally {
