@@ -1,0 +1,88 @@
+{
+  "milestone": "sync-beacon",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "cd apps/desktop/src-tauri && cargo test",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "bun run typecheck",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "bun run lint",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 3,
+    "passed": 0,
+    "failed": 3,
+    "failedFeatures": [
+      "sync-beacon-backend",
+      "sync-beacon-frontend",
+      "fix-beacon-machine-name-and-commit-metadata"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "sync-beacon-backend",
+      "severity": "blocking",
+      "description": "The reviewed backend commit published the beacon machine name from the generic computer-name source instead of the dedicated Sync Beacon machine-name setting, so custom beacon names were not actually used until a later fix."
+    },
+    {
+      "featureId": "sync-beacon-frontend",
+      "severity": "blocking",
+      "description": "Sync Beacon payload generation reads last-commit metadata from the ProjectsContext status cache, but that cache does not include lastCommitHash, lastCommitMessage, or lastCommitTimestamp, so remote beacon entries can still publish blank commit details."
+    },
+    {
+      "featureId": "fix-beacon-machine-name-and-commit-metadata",
+      "severity": "blocking",
+      "description": "The follow-up fix corrected backend machine naming but still left the frontend beacon payload wired to the wrong status store, so last-commit metadata remains empty in published beacon data."
+    },
+    {
+      "featureId": "fix-beacon-machine-name-and-commit-metadata",
+      "severity": "blocking",
+      "description": "The shared GitStatus type was not updated to model lastCommitHash, lastCommitMessage, and lastCommitTimestamp even though the daemon now returns them, leaving the intended metadata path untyped and unused."
+    }
+  ],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "skills",
+      "suggestion": "Update the tauri-fullstack skill to explicitly cover validation strategies for backend commands that shell out to external CLIs such as `gh`, including how to exercise create/update/error branches and config persistence without relying only on helper-level unit tests.",
+      "evidence": "The sync-beacon-backend review found that the gh-backed command surface was shipped with only helper/JSON tests and missed the wrong machine-name source, requiring a later fix feature.",
+      "isSystemic": true
+    },
+    {
+      "target": "skills",
+      "suggestion": "Clarify in tauri-fullstack that browser/dev-server verification is only a limited smoke check for Tauri-dependent features, and document when workers should instead rely on Tauri/runtime-aware validation paths for features like Sync Beacon.",
+      "evidence": "The sync-beacon-frontend review noted that browser-only checks could confirm navigation/layout but not the Tauri + gh-backed beacon behavior, yet the current skill still frames browser verification as the default manual step.",
+      "isSystemic": true
+    },
+    {
+      "target": "library",
+      "suggestion": "Document that ProjectsContext status polling does not include last-commit metadata, and that Sync Beacon payloads must source commit details from the full daemon git-status path instead of the lightweight project-status cache.",
+      "evidence": "Both the sync-beacon-frontend review and the follow-up fix review found the same bug pattern: beacon payload generation assumed commit metadata existed in `projectsState.statuses`, which caused blank last-commit fields in published beacon data.",
+      "isSystemic": true
+    },
+    {
+      "target": "library",
+      "suggestion": "Document the distinction between the generic `computerName`/hostname field and the dedicated `syncBeaconMachineName` setting so future workers do not wire beacon identity to the wrong config source.",
+      "evidence": "The sync-beacon-backend review found the original backend implementation used the generic computer name rather than the Sync Beacon machine-name setting, and the later fix feature existed solely to repair that mismatch.",
+      "isSystemic": false
+    }
+  ],
+  "rejectedObservations": [
+    {
+      "observation": "Add a skill note that plumbing-only fixes may reasonably skip browser verification and strict Rust-first TDD in some cases.",
+      "reason": "rejected because this came from a single follow-up fix review and is weaker than the broader, higher-signal guidance to distinguish browser smoke checks from Tauri-runtime validation for this milestone."
+    }
+  ],
+  "previousRound": null
+}

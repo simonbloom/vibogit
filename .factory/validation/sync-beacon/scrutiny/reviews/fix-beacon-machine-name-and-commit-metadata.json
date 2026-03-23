@@ -1,0 +1,34 @@
+{
+  "featureId": "fix-beacon-machine-name-and-commit-metadata",
+  "reviewedAt": "2026-03-23T16:13:53Z",
+  "commitId": "7ddc406",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The backend machine-name fix is implemented correctly, and git status now exposes last-commit metadata from HEAD. However, the frontend beacon payload still reads commit metadata from projects-context status objects that do not contain those fields, and the shared GitStatus type was not updated to model them. As committed, beacon pushes still publish empty last-commit fields for every repo.",
+    "issues": [
+      {
+        "file": "packages/ui/src/lib/sync-beacon-context.tsx",
+        "line": 85,
+        "severity": "blocking",
+        "description": "Beacon payload generation still sources `lastCommitHash`, `lastCommitMessage`, and `lastCommitTimestamp` from `projectsState.statuses`, but those records are typed and populated as `ProjectStatus` objects from `get_all_project_statuses`, which only include branch/ahead/behind/uncommitted data. Because the status map never carries commit metadata, the fallback expressions on lines 90-93 resolve to empty strings/0, so this fix does not actually satisfy the requirement to publish non-empty last-commit metadata."
+      },
+      {
+        "file": "packages/shared/src/types.ts",
+        "line": 75,
+        "severity": "blocking",
+        "description": "The shared `GitStatus` interface was not extended with `lastCommitHash`, `lastCommitMessage`, or `lastCommitTimestamp`, even though `daemon-context.tsx` now returns those fields from the Tauri bridge. This leaves the new data path untyped and contributed to the frontend using the wrong status source for beacon payloads instead of consuming the daemon status object that actually has the commit metadata."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The tauri-fullstack skill says workers should write failing Rust tests first and perform browser verification, but this plumbing-only fix was reasonably validated with existing automated checks and no UI flow changes. The worker deviated for justified reasons.",
+      "evidence": "Worker transcript/handoff for session 18ab3509-860d-42ca-9ebe-e3311401b54f marks `followedProcedure: false` because it skipped TDD and browser verification; SKILL.md sections 3 and 6 still present those steps as the default procedure."
+    }
+  ],
+  "addressesFailureFrom": "/Users/simonbloom/apps-vol11/vibogit/.factory/validation/sync-beacon/scrutiny/reviews/fix-beacon-machine-name-and-commit-metadata.json",
+  "summary": "Reviewed commit 7ddc406 and the worker transcript/handoff. The machine-name fallback fix is good, but the frontend still cannot send real last-commit metadata because it reads from the wrong status store and the shared GitStatus type was not updated. Report marked fail."
+}
