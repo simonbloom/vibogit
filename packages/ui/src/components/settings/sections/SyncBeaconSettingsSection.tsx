@@ -1,21 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, Copy, Loader2, Radio } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertCircle, Copy, Check, Loader2, Radio } from "lucide-react";
 import type { Config } from "@vibogit/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useDaemon } from "@/lib/daemon-context";
 import { toast } from "sonner";
-
-const INTERVAL_OPTIONS = [
-  { label: "1 minute", value: 60_000 },
-  { label: "2 minutes", value: 120_000 },
-  { label: "5 minutes", value: 300_000 },
-  { label: "10 minutes", value: 600_000 },
-  { label: "15 minutes", value: 900_000 },
-] as const;
 
 interface SyncBeaconCheckResult {
   available: boolean;
@@ -31,25 +23,17 @@ interface SyncBeaconSettingsSectionProps {
 export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettingsSectionProps) {
   const { send, getHostname } = useDaemon();
   const [machineNameInput, setMachineNameInput] = useState(config.syncBeaconMachineName);
-  const [gistIdInput, setGistIdInput] = useState(config.syncBeaconPairingCode);
+  const [joinCodeInput, setJoinCodeInput] = useState("");
   const [isToggling, setIsToggling] = useState(false);
-  const [isValidatingGist, setIsValidatingGist] = useState(false);
-  const [isCopying, setIsCopying] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
 
   useEffect(() => {
     setMachineNameInput(config.syncBeaconMachineName);
   }, [config.syncBeaconMachineName]);
 
-  useEffect(() => {
-    setGistIdInput(config.syncBeaconPairingCode);
-  }, [config.syncBeaconPairingCode]);
-
-  const hasCreatedGist = Boolean(config.syncBeaconPairingCode.trim());
-  const selectedInterval = useMemo(
-    () => INTERVAL_OPTIONS.find((option) => option.value === config.syncBeaconInterval)?.value ?? 300_000,
-    [config.syncBeaconInterval]
-  );
+  const hasPairingCode = Boolean(config.syncBeaconPairingCode.trim());
 
   const handleMachineNameBlur = async () => {
     const trimmed = machineNameInput.trim();
@@ -61,32 +45,6 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
     const fallback = await getHostname();
     setMachineNameInput(fallback);
     onSave({ syncBeaconMachineName: fallback });
-  };
-
-  const handleValidateAndSaveGist = async () => {
-    const trimmed = gistIdInput.trim();
-    if (!trimmed) {
-      setGistIdInput("");
-      setInlineError(null);
-      onSave({ syncBeaconPairingCode: "" });
-      return;
-    }
-
-    setIsValidatingGist(true);
-    setInlineError(null);
-    try {
-      // Validate by attempting a pull with the pairing code
-      await send<unknown>("sync_beacon_pull", { pairingCode: trimmed });
-      onSave({ syncBeaconPairingCode: trimmed });
-      toast.success("Sync Beacon connected");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to validate pairing code";
-      setInlineError(message);
-      setGistIdInput(config.syncBeaconPairingCode);
-      toast.error(message);
-    } finally {
-      setIsValidatingGist(false);
-    }
   };
 
   const handleToggle = async () => {
@@ -106,7 +64,7 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
       }
 
       onSave({ syncBeaconEnabled: true });
-      toast.success(hasCreatedGist ? "Sync Beacon enabled" : "Sync Beacon enabled — creating your private Gist" );
+      toast.success(hasPairingCode ? "Sync Beacon enabled" : "Sync Beacon enabled — generating pairing code");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to enable Sync Beacon";
       setInlineError(message);
@@ -116,16 +74,35 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
     }
   };
 
-  const handleCopyGist = async () => {
+  const handleCopyCode = async () => {
     if (!config.syncBeaconPairingCode) return;
     try {
-      setIsCopying(true);
       await navigator.clipboard.writeText(config.syncBeaconPairingCode);
-      toast.success("Copied Gist ID");
+      setIsCopied(true);
+      toast.success("Pairing code copied");
+      setTimeout(() => setIsCopied(false), 2000);
     } catch {
-      toast.error("Couldn't copy Gist ID");
+      toast.error("Couldn't copy pairing code");
+    }
+  };
+
+  const handleJoinBeacon = async () => {
+    const trimmed = joinCodeInput.trim().toLowerCase();
+    if (!trimmed) return;
+
+    setIsJoining(true);
+    setInlineError(null);
+    try {
+      await send<unknown>("sync_beacon_pull", { pairingCode: trimmed });
+      onSave({ syncBeaconPairingCode: trimmed });
+      setJoinCodeInput("");
+      toast.success("Joined beacon successfully");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to join beacon";
+      setInlineError(message);
+      toast.error(message);
     } finally {
-      setIsCopying(false);
+      setIsJoining(false);
     }
   };
 
@@ -135,7 +112,7 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
         <div>
           <h3 className="text-sm font-medium text-foreground">Sync Beacon</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Share repo status between machines through a private GitHub Gist.
+            Share repo status between machines using a short pairing code.
           </p>
         </div>
         <Badge variant={config.syncBeaconEnabled ? "success" : "secondary"} className="gap-1">
@@ -144,6 +121,7 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
         </Badge>
       </div>
 
+      {/* Enable/disable toggle */}
       <div className="rounded-lg border border-border bg-muted/30 p-4">
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -164,6 +142,65 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
         </div>
       </div>
 
+      {/* Pairing code display */}
+      {config.syncBeaconEnabled && hasPairingCode ? (
+        <div className="rounded-lg border border-border bg-muted/20 p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">Pairing Code</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Share this code with your other machines to join the same beacon.
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <div className="flex-1 rounded-md border border-border bg-background px-4 py-2.5 font-mono text-lg tracking-widest text-foreground select-all">
+              {config.syncBeaconPairingCode}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void handleCopyCode()}
+            >
+              {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {isCopied ? "Copied" : "Copy"}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Join existing beacon */}
+      {config.syncBeaconEnabled ? (
+        <div className="rounded-lg border border-border bg-muted/20 p-4">
+          <div>
+            <p className="text-sm font-medium text-foreground">Join Existing Beacon</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Enter a 6-character pairing code from another machine to join its beacon.
+            </p>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <Input
+              value={joinCodeInput}
+              onChange={(event) => setJoinCodeInput(event.target.value)}
+              placeholder="Enter pairing code"
+              maxLength={6}
+              className="font-mono tracking-widest"
+              aria-label="Join beacon pairing code"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void handleJoinBeacon()}
+              disabled={isJoining || joinCodeInput.trim().length < 1}
+            >
+              {isJoining ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Join
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Machine name */}
       <div>
         <label className="mb-2 block text-sm font-medium text-foreground">Machine name</label>
         <Input
@@ -175,76 +212,13 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
         <p className="mt-1 text-xs text-muted-foreground">Shown to your other machines in the beacon panel.</p>
       </div>
 
-      <div>
-        <label className="mb-2 block text-sm font-medium text-foreground">Update interval</label>
-        <select
-          value={selectedInterval}
-          onChange={(event) => onSave({ syncBeaconInterval: Number(event.target.value) })}
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          {INTERVAL_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-foreground">Shared Gist ID</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Enter an existing Gist ID to join another machine, or enable Sync Beacon to create one automatically.
-            </p>
-          </div>
-          {hasCreatedGist ? (
-            <Badge variant="secondary" className="gap-1">
-              <CheckCircle2 className="h-3 w-3" />
-              Ready to share
-            </Badge>
-          ) : null}
+      {/* Error display */}
+      {inlineError ? (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{inlineError}</span>
         </div>
-
-        <div className="flex gap-2">
-          <Input
-            value={gistIdInput}
-            onChange={(event) => setGistIdInput(event.target.value)}
-            onBlur={() => void handleValidateAndSaveGist()}
-            placeholder="Paste a Gist ID to join an existing beacon"
-            aria-label="Sync Beacon Gist ID"
-            aria-invalid={inlineError ? true : undefined}
-          />
-          <Button type="button" variant="outline" onClick={() => void handleValidateAndSaveGist()} disabled={isValidatingGist}>
-            {isValidatingGist ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            Validate
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void handleCopyGist()}
-            disabled={isCopying || !gistIdInput.trim()}
-          >
-            {isCopying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-            Copy
-          </Button>
-        </div>
-
-        {inlineError ? (
-          <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{inlineError}</span>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-        <span>
-          {hasCreatedGist
-            ? "Share this Gist ID on your other machines to join the same beacon."
-            : "Enable Sync Beacon to create your first private Gist automatically."}
-        </span>
-      </div>
+      ) : null}
     </section>
   );
 }

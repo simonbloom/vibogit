@@ -205,7 +205,7 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
     void refreshBeacon();
     intervalRef.current = setInterval(() => {
       void pushBeacon();
-    }, config.syncBeaconInterval || 300_000);
+    }, 300_000);
 
     return () => {
       if (intervalRef.current) {
@@ -213,7 +213,7 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
         intervalRef.current = null;
       }
     };
-  }, [config.syncBeaconEnabled, config.syncBeaconInterval, pushBeacon, refreshBeacon, state.connection]);
+  }, [config.syncBeaconEnabled, pushBeacon, refreshBeacon, state.connection]);
 
   useEffect(() => {
     if (!config.syncBeaconEnabled) return;

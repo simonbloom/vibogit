@@ -75,7 +75,7 @@ export function SyncBeaconPanel({
         <div className="max-w-lg rounded-xl border border-border bg-card p-6 text-center">
           <h2 className="text-lg font-semibold text-foreground">Sync Beacon is off</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Enable Sync Beacon in Settings to create or join a shared Gist and monitor repo status on your other machines.
+            Enable Sync Beacon in Settings to create or join a beacon and monitor repo status on your other machines.
           </p>
           <Button className="mt-4" onClick={onOpenSettings}>
             Open Settings
@@ -92,7 +92,7 @@ export function SyncBeaconPanel({
           <div>
             <h2 className="text-lg font-semibold text-foreground">Sync Beacon</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Remote repo status from your shared Sync Beacon Gist.
+              Remote repo status from your Sync Beacon.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -119,7 +119,7 @@ export function SyncBeaconPanel({
           <div className="rounded-xl border border-dashed border-border bg-muted/20 px-6 py-10 text-center">
             <p className="text-sm font-medium text-foreground">No remote machines yet</p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Share your Gist ID with another machine, then refresh here to see its repo status.
+              Share your pairing code with another machine, then refresh here to see its repo status.
             </p>
           </div>
         ) : (
