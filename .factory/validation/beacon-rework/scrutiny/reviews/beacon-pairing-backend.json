@@ -1,0 +1,26 @@
+{
+  "featureId": "beacon-pairing-backend",
+  "reviewedAt": "2026-03-23T20:00:00Z",
+  "commitId": "759ef18",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The backend pairing-code rework satisfies the assigned backend requirements: Rust commands now use pairing-code gist discovery, scope checking is enforced with the required actionable error, the old validate command is removed from Tauri registration, config/types were migrated to pairing-code naming, and targeted Rust tests cover the new parsing and config-migration logic. I did not find a blocking or non-blocking defect within the reviewed feature scope.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The worker transcript claims it followed the tauri-fullstack skill's Rust TDD procedure, but the transcript shows implementation edits were made before any new failing tests were added or run. The skill currently requires writing failing Rust tests first, yet the actual workflow here was implementation-first and then tests.",
+      "evidence": "Worker transcript for session 97357a14-fd44-4ad0-8679-5e518aeb275c shows code edits to `apps/desktop/src-tauri/src/commands.rs` and `apps/desktop/src-tauri/src/lib.rs` before later adding tests in the sync_beacon test module and rerunning `cargo test`. `handoff.skillFeedback.followedProcedure` is still marked true."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The repo library documents `gh CLI` as a dependency, but it does not record the backend-specific contract that Sync Beacon pairing depends on `gh gist list --limit 100` returning tab-separated columns and `gh auth status` reporting gist scope in stderr/stdout text that is parsed by the app.",
+      "evidence": "Backend logic in `apps/desktop/src-tauri/src/commands.rs:1061-1110` parses `gh gist list` tab-separated output and `gh auth status` scope text, while `.factory/library/environment.md` only notes that `gh CLI` is required for Gist operations."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Pass. Reviewed transcript skeleton, handoff, and implementation at commit `759ef18`; the backend pairing-code feature meets its expected behavior and validation assertions with no feature-scope defects found. Report written to `.factory/validation/beacon-rework/scrutiny/reviews/beacon-pairing-backend.json`."
+}

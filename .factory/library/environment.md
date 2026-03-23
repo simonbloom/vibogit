@@ -18,3 +18,5 @@ Environment variables, external dependencies, and setup notes.
 - `next.config.js` sets `typescript: { ignoreBuildErrors: true }` -- always run `bun run typecheck` separately
 - No JS/TS test framework is installed; only Rust tests exist
 - The app runs in two modes: Tauri desktop (full functionality) and browser (UI only, no git ops)
+- Sync Beacon pairing-code discovery depends on `gh gist list --limit 100` returning tab-separated columns in the order `ID, DESCRIPTION, FILES, VISIBILITY, UPDATED`, because the Rust backend parses the description field to find `vibogit-beacon-{code}` gists.
+- Sync Beacon gist-scope detection depends on parsing `gh auth status` human-readable output for the `gist` scope, so CLI output format changes could affect validation or runtime behavior.
