@@ -4,13 +4,15 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use std::sync::{Arc, Mutex};
 use std::process::{Command, Child, Stdio};
 use std::io::{BufRead, BufReader};
 use std::thread;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
+
+const SYNC_BEACON_FILENAME: &str = "vibogit-beacon.json";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProjectInfo {
@@ -751,6 +753,8 @@ pub struct AppConfig {
     pub clean_shot_mode: bool,
     #[serde(default)]
     pub auto_execute_prompt: bool,
+    #[serde(default)]
+    pub sync_beacon_gist_id: String,
     pub recent_tabs: Vec<ConfigTab>,
     pub active_tab_id: Option<String>,
 }
@@ -778,10 +782,357 @@ impl Default for AppConfig {
             show_hidden_files: false,
             clean_shot_mode: false,
             auto_execute_prompt: false,
+            sync_beacon_gist_id: String::new(),
             recent_tabs: vec![],
             active_tab_id: None,
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BeaconRepo {
+    pub path: String,
+    pub name: String,
+    pub branch: String,
+    pub ahead: usize,
+    pub behind: usize,
+    pub last_commit_hash: String,
+    pub last_commit_message: String,
+    pub last_commit_timestamp: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BeaconPayload {
+    pub machine_name: String,
+    pub timestamp: i64,
+    pub repos: Vec<BeaconRepo>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncBeaconData {
+    pub machines: Vec<BeaconPayload>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncBeaconCheckResult {
+    pub available: bool,
+    pub authenticated: bool,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncBeaconValidationResult {
+    pub valid: bool,
+    pub message: String,
+}
+
+fn current_unix_timestamp() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
+}
+
+fn machine_name_from_config(config: &AppConfig) -> String {
+    let configured = config.computer_name.trim();
+    if !configured.is_empty() {
+        return configured.to_string();
+    }
+
+    std::env::var("HOSTNAME")
+        .ok()
+        .or_else(|| std::env::var("COMPUTERNAME").ok())
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "Unknown Machine".to_string())
+}
+
+fn normalize_sync_beacon_data(data: SyncBeaconData) -> SyncBeaconData {
+    let mut deduped: HashMap<String, BeaconPayload> = HashMap::new();
+
+    for payload in data.machines {
+        let key = payload.machine_name.trim().to_string();
+        if key.is_empty() {
+            continue;
+        }
+
+        match deduped.get(&key) {
+            Some(existing) if existing.timestamp > payload.timestamp => {}
+            _ => {
+                deduped.insert(key, payload);
+            }
+        }
+    }
+
+    let mut machines: Vec<_> = deduped.into_values().collect();
+    machines.sort_by(|left, right| left.machine_name.cmp(&right.machine_name));
+    SyncBeaconData { machines }
+}
+
+fn merge_beacon_payload(existing: SyncBeaconData, payload: BeaconPayload) -> SyncBeaconData {
+    let mut machines = existing.machines;
+    machines.retain(|entry| entry.machine_name != payload.machine_name);
+    machines.push(payload);
+    normalize_sync_beacon_data(SyncBeaconData { machines })
+}
+
+fn parse_sync_beacon_json(raw: &str) -> Result<SyncBeaconData, String> {
+    serde_json::from_str::<SyncBeaconData>(raw)
+        .map(normalize_sync_beacon_data)
+        .map_err(|error| format!("Sync Beacon data is malformed JSON: {}", error))
+}
+
+fn gh_command() -> Command {
+    let mut command = Command::new("gh");
+    command.env("PATH", get_merged_path());
+    command
+}
+
+fn friendly_gh_command_error(error: &std::io::Error, operation: &str) -> String {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        format!("GitHub CLI (`gh`) is not installed or not on PATH. Install GitHub CLI to {}.", operation)
+    } else {
+        format!("Failed to {}: {}", operation, error)
+    }
+}
+
+fn classify_gh_failure(stderr: &str, operation: &str) -> String {
+    let trimmed = stderr.trim();
+    let lowered = trimmed.to_lowercase();
+
+    if lowered.contains("not logged into")
+        || lowered.contains("authentication failed")
+        || lowered.contains("gh auth login")
+        || lowered.contains("no oauth token")
+    {
+        return "GitHub CLI is not authenticated. Run `gh auth login` in Terminal and try again.".to_string();
+    }
+
+    if lowered.contains("not found") || lowered.contains("404") {
+        return format!("Sync Beacon Gist was not found or you do not have access to it while attempting to {}.", operation);
+    }
+
+    if lowered.contains("could not resolve host")
+        || lowered.contains("network")
+        || lowered.contains("connection refused")
+        || lowered.contains("timeout")
+        || lowered.contains("tls")
+    {
+        return format!("Network error while trying to {}. Check your internet connection and try again.", operation);
+    }
+
+    if trimmed.is_empty() {
+        format!("GitHub CLI failed to {}.", operation)
+    } else {
+        format!("GitHub CLI failed to {}: {}", operation, trimmed)
+    }
+}
+
+fn write_temp_sync_beacon_file(content: &str) -> Result<PathBuf, String> {
+    let file_name = format!(
+        "vibogit-sync-beacon-{}-{}.json",
+        std::process::id(),
+        current_unix_timestamp()
+    );
+    let path = std::env::temp_dir().join(file_name);
+    std::fs::write(&path, content)
+        .map_err(|error| format!("Failed to prepare Sync Beacon payload file: {}", error))?;
+    Ok(path)
+}
+
+fn gh_output_success(output: &std::process::Output, operation: &str) -> Result<String, String> {
+    if output.status.success() {
+        return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    Err(classify_gh_failure(&stderr, operation))
+}
+
+fn gh_auth_status_output() -> Result<std::process::Output, String> {
+    let mut command = gh_command();
+    command.arg("auth").arg("status");
+    command
+        .output()
+        .map_err(|error| friendly_gh_command_error(&error, "check GitHub CLI authentication"))
+}
+
+fn read_sync_beacon_gist_raw(gist_id: &str) -> Result<String, String> {
+    let gist_id = gist_id.trim();
+    if gist_id.is_empty() {
+        return Err("Sync Beacon Gist ID is empty.".to_string());
+    }
+
+    let mut command = gh_command();
+    command.arg("gist").arg("view").arg(gist_id).arg("--raw");
+    let output = command
+        .output()
+        .map_err(|error| friendly_gh_command_error(&error, "read Sync Beacon Gist"))?;
+    gh_output_success(&output, "read Sync Beacon Gist")
+}
+
+fn read_sync_beacon_gist(gist_id: &str) -> Result<SyncBeaconData, String> {
+    let raw = read_sync_beacon_gist_raw(gist_id)?;
+    parse_sync_beacon_json(&raw)
+}
+
+fn create_sync_beacon_gist(content: &str) -> Result<String, String> {
+    let temp_path = write_temp_sync_beacon_file(content)?;
+    let result = (|| {
+        let mut command = gh_command();
+        command
+            .arg("gist")
+            .arg("create")
+            .arg("--public=false")
+            .arg("-f")
+            .arg(SYNC_BEACON_FILENAME)
+            .arg(&temp_path);
+        let output = command
+            .output()
+            .map_err(|error| friendly_gh_command_error(&error, "create Sync Beacon Gist"))?;
+        let stdout = gh_output_success(&output, "create Sync Beacon Gist")?;
+        extract_gist_id_from_output(&stdout)
+    })();
+    let _ = std::fs::remove_file(temp_path);
+    result
+}
+
+fn update_sync_beacon_gist(gist_id: &str, content: &str) -> Result<(), String> {
+    let temp_path = write_temp_sync_beacon_file(content)?;
+    let result = (|| {
+        let mut command = gh_command();
+        command
+            .arg("gist")
+            .arg("edit")
+            .arg(gist_id)
+            .arg("-f")
+            .arg(SYNC_BEACON_FILENAME)
+            .arg(&temp_path);
+        let output = command
+            .output()
+            .map_err(|error| friendly_gh_command_error(&error, "update Sync Beacon Gist"))?;
+        gh_output_success(&output, "update Sync Beacon Gist").map(|_| ())
+    })();
+    let _ = std::fs::remove_file(temp_path);
+    result
+}
+
+fn extract_gist_id_from_output(output: &str) -> Result<String, String> {
+    output
+        .split(|character: char| character.is_whitespace() || character == '/')
+        .find(|segment| {
+            let trimmed = segment.trim();
+            !trimmed.is_empty()
+                && trimmed.len() >= 8
+                && trimmed.chars().all(|character| character.is_ascii_hexdigit())
+        })
+        .map(|segment| segment.to_string())
+        .ok_or_else(|| format!("Failed to determine Sync Beacon Gist ID from GitHub CLI output: {}", output.trim()))
+}
+
+fn load_app_config_from_path(config_path: &str) -> Result<AppConfig, String> {
+    let path = PathBuf::from(config_path);
+    if !path.exists() {
+        return Ok(AppConfig::default());
+    }
+
+    let content = std::fs::read_to_string(&path)
+        .map_err(|error| format!("Failed to read config file at {}: {}", path.display(), error))?;
+    serde_json::from_str::<AppConfig>(&content)
+        .map_err(|error| format!("Failed to parse config file at {}: {}", path.display(), error))
+}
+
+fn save_app_config_to_path(config_path: &str, config: &AppConfig) -> Result<(), String> {
+    let path = PathBuf::from(config_path);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create config directory {}: {}", parent.display(), error))?;
+    }
+
+    let content = serde_json::to_string_pretty(config)
+        .map_err(|error| format!("Failed to serialize config file {}: {}", path.display(), error))?;
+    std::fs::write(&path, content)
+        .map_err(|error| format!("Failed to write config file at {}: {}", path.display(), error))
+}
+
+#[tauri::command]
+pub async fn sync_beacon_check_gh() -> Result<SyncBeaconCheckResult, String> {
+    let output = gh_auth_status_output()?;
+    if output.status.success() {
+        return Ok(SyncBeaconCheckResult {
+            available: true,
+            authenticated: true,
+            message: "GitHub CLI is installed and authenticated.".to_string(),
+        });
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    Ok(SyncBeaconCheckResult {
+        available: true,
+        authenticated: false,
+        message: classify_gh_failure(&stderr, "check GitHub CLI authentication"),
+    })
+}
+
+#[tauri::command]
+pub async fn sync_beacon_validate_gist(gist_id: String) -> Result<SyncBeaconValidationResult, String> {
+    match read_sync_beacon_gist(&gist_id) {
+        Ok(_) => Ok(SyncBeaconValidationResult {
+            valid: true,
+            message: "Sync Beacon Gist is valid and accessible.".to_string(),
+        }),
+        Err(message) => Ok(SyncBeaconValidationResult {
+            valid: false,
+            message,
+        }),
+    }
+}
+
+#[tauri::command]
+pub async fn sync_beacon_pull(gist_id: String) -> Result<SyncBeaconData, String> {
+    read_sync_beacon_gist(&gist_id)
+}
+
+#[tauri::command]
+pub async fn sync_beacon_push(config_path: String, repos: Vec<BeaconRepo>) -> Result<SyncBeaconData, String> {
+    let gh_status = sync_beacon_check_gh().await?;
+    if !gh_status.available || !gh_status.authenticated {
+        return Err(gh_status.message);
+    }
+
+    let mut config = load_app_config_from_path(&config_path)?;
+    let machine_name = machine_name_from_config(&config);
+    let payload = BeaconPayload {
+        machine_name,
+        timestamp: current_unix_timestamp(),
+        repos,
+    };
+
+    let gist_id = config.sync_beacon_gist_id.trim().to_string();
+    let merged = if gist_id.is_empty() {
+        let data = normalize_sync_beacon_data(SyncBeaconData {
+            machines: vec![payload.clone()],
+        });
+        let content = serde_json::to_string_pretty(&data)
+            .map_err(|error| format!("Failed to serialize Sync Beacon payload: {}", error))?;
+        let new_gist_id = create_sync_beacon_gist(&content)?;
+        config.sync_beacon_gist_id = new_gist_id;
+        save_app_config_to_path(&config_path, &config)?;
+        data
+    } else {
+        let existing = read_sync_beacon_gist(&gist_id)?;
+        let merged = merge_beacon_payload(existing, payload);
+        let content = serde_json::to_string_pretty(&merged)
+            .map_err(|error| format!("Failed to serialize Sync Beacon payload: {}", error))?;
+        update_sync_beacon_gist(&gist_id, &content)?;
+        merged
+    };
+
+    Ok(merged)
 }
 
 fn get_app_config_path() -> Option<PathBuf> {
@@ -2506,6 +2857,100 @@ fn resolve_agents_file_path(repo_path: &str) -> PathBuf {
     }
 
     base.join("AGENTS.md")
+}
+
+#[cfg(test)]
+mod sync_beacon_tests {
+    use super::*;
+
+    fn sample_repo(path: &str, name: &str) -> BeaconRepo {
+        BeaconRepo {
+            path: path.to_string(),
+            name: name.to_string(),
+            branch: "main".to_string(),
+            ahead: 2,
+            behind: 1,
+            last_commit_hash: "abc123def456".to_string(),
+            last_commit_message: "Add sync beacon".to_string(),
+            last_commit_timestamp: 1_710_000_000,
+        }
+    }
+
+    #[test]
+    fn beacon_payload_round_trips_json() {
+        let data = SyncBeaconData {
+            machines: vec![BeaconPayload {
+                machine_name: "Work MacBook".to_string(),
+                timestamp: 1_710_000_123,
+                repos: vec![sample_repo("/tmp/repo-one", "repo-one")],
+            }],
+        };
+
+        let json = serde_json::to_string(&data).expect("serialize beacon data");
+        let parsed: SyncBeaconData = serde_json::from_str(&json).expect("deserialize beacon data");
+
+        assert_eq!(parsed, data);
+    }
+
+    #[test]
+    fn merge_beacon_payload_preserves_other_machines() {
+        let existing = SyncBeaconData {
+            machines: vec![
+                BeaconPayload {
+                    machine_name: "Studio Mac".to_string(),
+                    timestamp: 100,
+                    repos: vec![sample_repo("/studio/repo", "studio")],
+                },
+                BeaconPayload {
+                    machine_name: "Travel Mac".to_string(),
+                    timestamp: 50,
+                    repos: vec![sample_repo("/travel/old", "old")],
+                },
+            ],
+        };
+
+        let merged = merge_beacon_payload(
+            existing,
+            BeaconPayload {
+                machine_name: "Travel Mac".to_string(),
+                timestamp: 200,
+                repos: vec![sample_repo("/travel/new", "new")],
+            },
+        );
+
+        assert_eq!(merged.machines.len(), 2);
+        assert!(merged.machines.iter().any(|payload| payload.machine_name == "Studio Mac"));
+        let updated = merged
+            .machines
+            .iter()
+            .find(|payload| payload.machine_name == "Travel Mac")
+            .expect("updated machine should exist");
+        assert_eq!(updated.timestamp, 200);
+        assert_eq!(updated.repos[0].path, "/travel/new");
+    }
+
+    #[test]
+    fn parse_sync_beacon_json_rejects_malformed_content() {
+        let error = parse_sync_beacon_json("{not json}").expect_err("invalid json should fail");
+        assert!(error.contains("malformed JSON"));
+    }
+
+    #[test]
+    fn extract_gist_id_from_cli_output_supports_url() {
+        let gist_id = extract_gist_id_from_output("- https://gist.github.com/user/abcdef1234567890")
+            .expect("gist id should be extracted");
+        assert_eq!(gist_id, "abcdef1234567890");
+    }
+
+    #[test]
+    fn machine_name_uses_config_or_hostname() {
+        let mut config = AppConfig::default();
+        config.computer_name = "Desk Mac".to_string();
+        assert_eq!(machine_name_from_config(&config), "Desk Mac");
+
+        config.computer_name.clear();
+        assert!(!machine_name_from_config(&config).trim().is_empty());
+    }
 }
 
 #[cfg(test)]
