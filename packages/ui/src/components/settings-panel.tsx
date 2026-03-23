@@ -10,6 +10,7 @@ import { ToolsSettingsSection } from "@/components/settings/sections/ToolsSettin
 import { AppearanceSettingsSection } from "@/components/settings/sections/AppearanceSettingsSection";
 import { CaptureSettingsSection } from "@/components/settings/sections/CaptureSettingsSection";
 import { AppSettingsSection } from "@/components/settings/sections/AppSettingsSection";
+import { SyncBeaconSettingsSection } from "@/components/settings/sections/SyncBeaconSettingsSection";
 import type { Config } from "@vibogit/shared";
 import type { AutoUpdateState, AutoUpdateActions } from "@/lib/use-auto-update";
 
@@ -20,7 +21,7 @@ interface SettingsPanelProps {
 
 const SETTINGS_TAB_STORAGE_KEY = "vibogit-settings-active-tab";
 
-const SETTINGS_TAB_VALUES: SettingsTabId[] = ["ai", "tools", "appearance", "capture", "app"];
+const SETTINGS_TAB_VALUES: SettingsTabId[] = ["ai", "tools", "appearance", "capture", "beacon", "app"];
 
 function getInitialTab(): SettingsTabId {
   if (typeof window === "undefined") return "ai";
@@ -94,6 +95,8 @@ export function SettingsPanel({ updateState, initialTab }: SettingsPanelProps) {
         return <AppearanceSettingsSection />;
       case "capture":
         return <CaptureSettingsSection config={config} onSave={handleSave} />;
+      case "beacon":
+        return <SyncBeaconSettingsSection config={config} onSave={handleSave} />;
       case "app":
         return (
           <AppSettingsSection

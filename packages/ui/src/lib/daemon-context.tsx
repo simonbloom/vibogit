@@ -15,6 +15,7 @@ import type {
   RepoHealth,
   GitStatus,
   GitBranch,
+  Config,
 } from "@vibogit/shared";
 import { MINI_COMMIT_COMPLETE } from "./mini-view-events";
 import { useWindowActivity } from "./use-window-activity";
@@ -251,6 +252,30 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
       return { config: result } as T;
     }
 
+    case "sync_beacon_check_gh": {
+      const result = await tauriInvoke("sync_beacon_check_gh");
+      return result as T;
+    }
+
+    case "sync_beacon_validate_gist": {
+      const gistId = (args.gistId as string | undefined) || "";
+      const result = await tauriInvoke("sync_beacon_validate_gist", { gistId });
+      return result as T;
+    }
+
+    case "sync_beacon_pull": {
+      const gistId = (args.gistId as string | undefined) || "";
+      const result = await tauriInvoke("sync_beacon_pull", { gistId });
+      return result as T;
+    }
+
+    case "sync_beacon_push": {
+      const repos = (args.repos as unknown[] | undefined) || [];
+      const configPath = (args.configPath as string | undefined) || "";
+      const result = await tauriInvoke("sync_beacon_push", { configPath, repos });
+      return result as T;
+    }
+
     case "listFiles": {
       const showHidden = args.showHidden as boolean | undefined;
       const result = await tauriInvoke("list_files", { path: repoPath, showHidden });
@@ -449,6 +474,8 @@ interface DaemonContextValue {
   refreshStatus: () => Promise<void>;
   refreshBranches: () => Promise<void>;
   reconnect: () => void;
+  getConfigPath: () => Promise<string>;
+  getHostname: () => Promise<string>;
 }
 
 export const DaemonContext = createContext<DaemonContextValue | null>(null);
@@ -489,6 +516,38 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
   const send = useCallback(<T = unknown,>(type: string, payload?: unknown): Promise<T> => {
     return tauriSend<T>(type, payload);
   }, []);
+
+  const getConfigPath = useCallback(async () => {
+    if (!(await ensureTauriAPIs())) {
+      return "";
+    }
+
+    try {
+      const { homeDir, join } = await import("@tauri-apps/api/path");
+      return await join(await homeDir(), ".vibogit", "config.json");
+    } catch {
+      return "";
+    }
+  }, []);
+
+  const getHostname = useCallback(async () => {
+    try {
+      const response = await send<{ config: Config }>("getConfig");
+      const configured = response.config?.computerName?.trim();
+      if (configured) return configured;
+    } catch {
+      // Ignore and fall through to browser hostname.
+    }
+
+    if (typeof window !== "undefined") {
+      const hostname = window.location.hostname.trim();
+      if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
+        return hostname;
+      }
+    }
+
+    return "This Machine";
+  }, [send]);
 
   const refreshStatusNow = useCallback(async (opts?: { allowBackground?: boolean; source?: string }) => {
     const path = repoPathRef.current;
@@ -730,7 +789,7 @@ export function DaemonProvider({ children }: { children: ReactNode }) {
   }, [connect, flushDebugCounters]);
 
   return (
-    <DaemonContext.Provider value={{ state, send, setRepoPath, refreshStatus, refreshBranches, reconnect }}>
+    <DaemonContext.Provider value={{ state, send, setRepoPath, refreshStatus, refreshBranches, reconnect, getConfigPath, getHostname }}>
       {children}
     </DaemonContext.Provider>
   );

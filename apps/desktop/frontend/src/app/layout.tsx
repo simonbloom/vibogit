@@ -9,6 +9,7 @@ import { DaemonProvider } from "@vibogit/ui/lib/daemon-context";
 import { ConfigProvider } from "@vibogit/ui/lib/config-context";
 import { TabsProvider } from "@vibogit/ui/lib/tabs-context";
 import { ProjectsProvider } from "@vibogit/ui/lib/projects-context";
+import { SyncBeaconProvider } from "@vibogit/ui/lib/sync-beacon-context";
 import { ThemeSync } from "@vibogit/ui/components/theme-sync";
 import { AgentationWrapper } from "@vibogit/ui/components/agentation-wrapper";
 
@@ -43,7 +44,9 @@ export default function RootLayout({
             <ProjectsProvider>
               <ConfigProvider>
                 <ThemeSync />
-                <TabsProvider>{children}</TabsProvider>
+                <SyncBeaconProvider>
+                  <TabsProvider>{children}</TabsProvider>
+                </SyncBeaconProvider>
               </ConfigProvider>
             </ProjectsProvider>
           </DaemonProvider>

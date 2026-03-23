@@ -337,6 +337,8 @@ export function FigmaMockProviders({
       refreshStatus,
       refreshBranches,
       reconnect,
+      getConfigPath: async () => "",
+      getHostname: async () => "Mock Machine",
     }),
     [daemon, reconnect, refreshBranches, refreshStatus, send, setRepoPath]
   );

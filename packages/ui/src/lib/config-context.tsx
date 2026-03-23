@@ -30,11 +30,19 @@ function normalizeConfig(config: Config): Config {
   const provider = getProviderById(config.aiProvider);
   const aiProvider = provider?.id ?? DEFAULT_CONFIG.aiProvider;
   const aiModel = getModelForProvider(aiProvider, config.aiModel);
+  const syncBeaconInterval = Number(config.syncBeaconInterval || DEFAULT_CONFIG.syncBeaconInterval);
 
   return {
     ...config,
     aiProvider,
     aiModel,
+    syncBeaconEnabled: Boolean(config.syncBeaconEnabled),
+    syncBeaconMachineName: config.syncBeaconMachineName?.trim() || config.computerName || DEFAULT_CONFIG.syncBeaconMachineName,
+    syncBeaconGistId: config.syncBeaconGistId?.trim() || "",
+    syncBeaconInterval:
+      Number.isFinite(syncBeaconInterval) && syncBeaconInterval > 0
+        ? syncBeaconInterval
+        : DEFAULT_CONFIG.syncBeaconInterval,
   };
 }
 
