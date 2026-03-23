@@ -15,6 +15,7 @@ import type { AutoUpdateState, AutoUpdateActions } from "@/lib/use-auto-update";
 
 interface SettingsPanelProps {
   updateState?: AutoUpdateState & AutoUpdateActions;
+  initialTab?: SettingsTabId;
 }
 
 const SETTINGS_TAB_STORAGE_KEY = "vibogit-settings-active-tab";
@@ -30,10 +31,10 @@ function getInitialTab(): SettingsTabId {
   return "ai";
 }
 
-export function SettingsPanel({ updateState }: SettingsPanelProps) {
+export function SettingsPanel({ updateState, initialTab }: SettingsPanelProps) {
   const { config, setConfig, isLoading, isSaving, lastSaveError } = useConfig();
   const { state } = useDaemon();
-  const [activeTab, setActiveTab] = useState<SettingsTabId>(getInitialTab);
+  const [activeTab, setActiveTab] = useState<SettingsTabId>(() => initialTab ?? getInitialTab());
   const [hasSaved, setHasSaved] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [appVersion, setAppVersion] = useState<string | null>(null);

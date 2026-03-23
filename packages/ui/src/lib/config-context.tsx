@@ -23,7 +23,7 @@ interface ConfigContextValue {
   lastSaveError: string | null;
 }
 
-const ConfigContext = createContext<ConfigContextValue | null>(null);
+export const ConfigContext = createContext<ConfigContextValue | null>(null);
 
 function getLocalConfig(): Config {
   if (typeof window === "undefined") return DEFAULT_CONFIG;

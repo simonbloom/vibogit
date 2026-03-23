@@ -451,7 +451,7 @@ interface DaemonContextValue {
   reconnect: () => void;
 }
 
-const DaemonContext = createContext<DaemonContextValue | null>(null);
+export const DaemonContext = createContext<DaemonContextValue | null>(null);
 
 const REFRESH_DEBOUNCE_MS = 250;
 const HEARTBEAT_REFRESH_INTERVAL_MS = 10_000;

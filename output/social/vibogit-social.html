@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ViboGit Social Concepts</title>
+    <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+    <style>
+      :root {
+        --bg: #f3f4f6;
+        --ink: #0f1729;
+        --muted: #8ea1c4;
+        --panel: #11192d;
+        --panel-2: #16213b;
+        --line: #23304f;
+        --blue: #517bfb;
+        --green: #00c950;
+        --orange: #ff8a1f;
+        --pink: #ff4f8d;
+        --white: #f8fafc;
+        --mono: "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace;
+        --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 32px;
+        background: #e9edf3;
+        color: var(--ink);
+        font-family: var(--sans);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1080px);
+        gap: 48px;
+        align-items: start;
+        width: max-content;
+      }
+
+      .post {
+        position: relative;
+        width: 1080px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--bg);
+      }
+
+      .post::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at 78% 22%, rgba(81, 123, 251, 0.15), transparent 26%),
+          radial-gradient(circle at 86% 72%, rgba(0, 201, 80, 0.1), transparent 18%);
+        pointer-events: none;
+      }
+
+      .content {
+        position: absolute;
+        inset: 72px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: rgba(17, 25, 45, 0.06);
+        color: var(--ink);
+        font-size: 24px;
+        font-weight: 600;
+        width: fit-content;
+      }
+
+      .eyebrow .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        background: var(--green);
+        box-shadow: 0 0 0 6px rgba(0, 201, 80, 0.12);
+      }
+
+      h1 {
+        margin: 26px 0 0;
+        max-width: 760px;
+        font-family: var(--mono);
+        font-size: 112px;
+        line-height: 0.92;
+        letter-spacing: -0.05em;
+      }
+
+      .sub {
+        margin-top: 28px;
+        max-width: 720px;
+        color: #445171;
+        font-size: 34px;
+        line-height: 1.25;
+      }
+
+      .mini-bar {
+        margin-top: auto;
+        align-self: flex-end;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-width: 640px;
+        height: 66px;
+        padding: 0 22px;
+        border-radius: 18px;
+        background: rgba(15, 23, 41, 0.96);
+        border: 1px solid #18233d;
+        box-shadow: 0 20px 40px rgba(15, 23, 41, 0.18);
+        color: var(--white);
+      }
+
+      .mini-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        border-radius: 12px;
+        background: rgba(81, 123, 251, 0.14);
+        font-size: 21px;
+        color: var(--white);
+      }
+
+      .mini-pill .online {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: var(--green);
+      }
+
+      .mini-icons {
+        display: flex;
+        gap: 10px;
+        margin-left: auto;
+        color: #d6e0ff;
+        font-size: 18px;
+      }
+
+      .mini-icons span {
+        opacity: 0.9;
+      }
+
+      .app-card {
+        position: absolute;
+        right: 74px;
+        bottom: 168px;
+        width: 460px;
+        border-radius: 24px;
+        overflow: hidden;
+        background: var(--panel);
+        border: 1px solid #1a2540;
+        box-shadow: 0 26px 60px rgba(15, 23, 41, 0.22);
+      }
+
+      .app-top {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 18px 20px;
+        background: #edf1f6;
+        border-bottom: 1px solid #d8dfea;
+      }
+
+      .branch {
+        padding: 10px 18px;
+        border-radius: 12px;
+        background: #1d2843;
+        color: var(--white);
+        font-family: var(--mono);
+        font-size: 21px;
+      }
+
+      .port {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 18px;
+        border-radius: 12px;
+        background: var(--green);
+        color: #04230f;
+        font-family: var(--mono);
+        font-size: 21px;
+        font-weight: 700;
+      }
+
+      .port::before {
+        content: "";
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: #d9ffe9;
+      }
+
+      .app-body {
+        padding: 22px;
+        color: var(--white);
+      }
+
+      .toolbar {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+
+      .tag {
+        padding: 10px 16px;
+        border-radius: 12px;
+        font-size: 20px;
+        font-weight: 600;
+        color: #06101f;
+        background: var(--blue);
+      }
+
+      .tag.dark {
+        color: var(--white);
+        background: #1a2440;
+      }
+
+      .panel {
+        border-radius: 18px;
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        padding: 18px;
+      }
+
+      .panel + .panel {
+        margin-top: 14px;
+      }
+
+      .panel-title {
+        color: #8ba7ff;
+        font-size: 22px;
+        font-weight: 700;
+      }
+
+      .file {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-top: 14px;
+        font-size: 18px;
+        color: #d8e0f4;
+      }
+
+      .file .status {
+        color: var(--orange);
+        font-size: 16px;
+        font-family: var(--mono);
+      }
+
+      .footer-lockup {
+        position: absolute;
+        left: 72px;
+        bottom: 62px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+
+      .brand-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        height: 62px;
+        padding: 0 22px;
+        border-radius: 999px;
+        background: var(--pink);
+        color: var(--white);
+        font-family: var(--mono);
+        font-size: 24px;
+        font-weight: 700;
+      }
+
+      .brand-mark {
+        width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        background: var(--white);
+      }
+
+      .robot {
+        position: absolute;
+        right: -56px;
+        bottom: -28px;
+        width: 470px;
+        height: 470px;
+        border-radius: 42px 42px 0 0;
+        border: 2px solid #0f1729;
+        background:
+          radial-gradient(circle at 38% 34%, #ffffff 0 8px, transparent 9px),
+          radial-gradient(circle at 58% 34%, #ffffff 0 8px, transparent 9px),
+          radial-gradient(circle at 48% 40%, #0f1729 0 90px, transparent 91px),
+          linear-gradient(180deg, #86a2ff 0%, #6c85ff 100%);
+        box-shadow: inset 0 0 0 8px rgba(255, 255, 255, 0.12);
+        transform: rotate(-8deg);
+        opacity: 0.98;
+      }
+
+      .robot::before,
+      .robot::after {
+        content: "";
+        position: absolute;
+        top: 88px;
+        width: 18px;
+        height: 92px;
+        background: #0f1729;
+      }
+
+      .robot::before {
+        left: 158px;
+        transform: rotate(-18deg);
+      }
+
+      .robot::after {
+        right: 142px;
+        transform: rotate(18deg);
+      }
+
+      .accent-card {
+        position: absolute;
+        right: 82px;
+        top: 86px;
+        width: 340px;
+        padding: 22px 24px;
+        border-radius: 22px;
+        background: #ffffff;
+        box-shadow: 0 18px 40px rgba(15, 23, 41, 0.1);
+        border: 1px solid #d8dfea;
+      }
+
+      .accent-card h2 {
+        margin: 0;
+        font-family: var(--mono);
+        font-size: 34px;
+        line-height: 1;
+      }
+
+      .accent-card p {
+        margin: 12px 0 0;
+        font-size: 21px;
+        line-height: 1.3;
+        color: #51617f;
+      }
+
+      .metric-row {
+        margin-top: 18px;
+        display: flex;
+        gap: 10px;
+      }
+
+      .metric {
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: #eef3ff;
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="grid">
+      <section class="post">
+        <div class="content">
+          <div class="eyebrow"><span class="dot"></span> ViboGit desktop</div>
+          <h1>Git + localhost should be one workflow.</h1>
+          <p class="sub">
+            Start the dev server, verify the port, open preview, inspect logs, and get back to the repo without bouncing
+            between five tools.
+          </p>
+
+          <div class="accent-card">
+            <h2>Local loop</h2>
+            <p>Start server. Check port. Open localhost. Fix fast.</p>
+            <div class="metric-row">
+              <div class="metric">:4158</div>
+              <div class="metric">logs</div>
+              <div class="metric">AI fix</div>
+            </div>
+          </div>
+
+          <div class="app-card">
+            <div class="app-top">
+              <div class="branch">main</div>
+              <div class="port">:4158</div>
+            </div>
+            <div class="app-body">
+              <div class="toolbar">
+                <div class="tag">Changes 5</div>
+                <div class="tag dark">Graph</div>
+                <div class="tag dark">Logs</div>
+              </div>
+              <div class="panel">
+                <div class="panel-title">Will Commit (5)</div>
+                <div class="file"><span>sidebar.tsx</span><span class="status">M</span></div>
+                <div class="file"><span>main-interface.tsx</span><span class="status">M</span></div>
+              </div>
+              <div class="panel">
+                <div class="panel-title">Prompt + terminal</div>
+                <div class="file"><span>Ask about this project...</span><span class="status">AI</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="footer-lockup">
+            <div class="brand-chip"><span class="brand-mark"></span> VIBOGIT</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="post">
+        <div class="content">
+          <div class="eyebrow"><span class="dot"></span> Workflow compression</div>
+          <h1>It doesn’t replace Git. It compresses the workflow around Git.</h1>
+          <p class="sub">
+            Repo switching, commit prep, PR drafting, terminal handoff, GitHub links, and prompt-ready context in one desktop workspace.
+          </p>
+
+          <div class="robot"></div>
+
+          <div class="mini-bar">
+            <div class="mini-pill"><span class="online"></span> :4158</div>
+            <div class="mini-pill">↑ 2</div>
+            <div class="mini-pill" style="background: rgba(255, 138, 31, 0.15); color: #fff5e8;">↓ 5</div>
+            <div class="mini-icons">
+              <span>folder</span>
+              <span>browser</span>
+              <span>PR</span>
+              <span>terminal</span>
+              <span>editor</span>
+            </div>
+          </div>
+
+          <div class="footer-lockup">
+            <div class="brand-chip"><span class="brand-mark"></span> VIBOGIT</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="post">
+        <div class="content">
+          <div class="eyebrow"><span class="dot"></span> Mini view</div>
+          <h1>A tiny always-on-top Git companion for active coding sessions.</h1>
+          <p class="sub">
+            Keep change count, localhost status, and quick repo actions visible while the real work stays in your editor.
+          </p>
+
+          <div class="accent-card" style="top: 110px; right: 92px;">
+            <h2>Why it lands</h2>
+            <p>Useful while coding, not after coding.</p>
+            <div class="metric-row">
+              <div class="metric">mini-view</div>
+              <div class="metric">quick commit</div>
+            </div>
+          </div>
+
+          <div style="margin-top: auto; display: flex; justify-content: flex-end;">
+            <div class="mini-bar" style="min-width: 760px; height: 74px;">
+              <div class="mini-pill" style="background: rgba(81,123,251,0.22);">vibogit</div>
+              <div class="mini-pill"><span class="online"></span> :4158</div>
+              <div class="mini-pill">commit</div>
+              <div class="mini-pill">pull</div>
+              <div class="mini-pill">push</div>
+              <div class="mini-icons">
+                <span>gh</span>
+                <span>↗</span>
+                <span>×</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="footer-lockup">
+            <div class="brand-chip"><span class="brand-mark"></span> VIBOGIT</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

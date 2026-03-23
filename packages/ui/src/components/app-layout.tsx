@@ -10,17 +10,28 @@ import { ProjectList } from "@/components/sidebar/project-list";
 import { SettingsPanel } from "@/components/settings-panel";
 import { UpdateBanner } from "@/components/update-banner";
 import { isMacTauri } from "@/platform";
+import type { AutoUpdateActions, AutoUpdateState } from "@/lib/use-auto-update";
+import type { SettingsTabId } from "@/components/settings/SettingsTabs";
 
 interface AppLayoutProps {
   children: React.ReactNode;
+  initialActivePane?: "project" | "settings";
+  autoUpdateOverride?: AutoUpdateState & AutoUpdateActions;
+  settingsInitialTab?: SettingsTabId;
 }
 
-export function AppLayout({ children }: AppLayoutProps) {
+export function AppLayout({
+  children,
+  initialActivePane = "project",
+  autoUpdateOverride,
+  settingsInitialTab,
+}: AppLayoutProps) {
   const { state: daemonState, setRepoPath, send } = useDaemon();
   const { state: projectsState, addProject } = useProjects();
-  const [activePane, setActivePane] = useState<"project" | "settings">("project");
+  const [activePane, setActivePane] = useState<"project" | "settings">(initialActivePane);
   const [isMacOverlayChrome, setIsMacOverlayChrome] = useState(false);
-  const autoUpdate = useAutoUpdate();
+  const autoUpdateState = useAutoUpdate();
+  const autoUpdate = autoUpdateOverride ?? autoUpdateState;
 
   useEffect(() => {
     setIsMacOverlayChrome(isMacTauri());
@@ -102,7 +113,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <div className="flex-1 overflow-hidden flex flex-col">
         <UpdateBanner {...autoUpdate} />
         <div className="flex-1 overflow-hidden">
-          {activePane === "settings" ? <SettingsPanel updateState={autoUpdate} /> : children}
+          {activePane === "settings" ? <SettingsPanel updateState={autoUpdate} initialTab={settingsInitialTab} /> : children}
         </div>
       </div>
     </div>

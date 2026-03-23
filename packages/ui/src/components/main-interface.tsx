@@ -102,38 +102,74 @@ function getRepoLabelFromCloneUrl(value: string): string {
 
 const AUTO_FETCH_INTERVAL_MS = 120_000;
 
-export function MainInterface() {
+interface MainInterfaceProps {
+  initialActiveView?: "graph" | "tree" | "changes" | "logs";
+  initialSelectedFile?: { path: string; name: string } | null;
+  initialShowCreatePR?: boolean;
+  initialShowCloneDialog?: boolean;
+  initialShowPortPrompt?: boolean;
+  initialCloneMode?: "url" | "repos";
+  initialCloneUrl?: string;
+  initialCloneQuery?: string;
+  initialCloneRepos?: GitHubRepo[];
+  initialCloneReposPage?: number;
+  initialCloneReposHasMore?: boolean;
+  initialCloneAuthStatus?: GitHubAuthStatus | null;
+  initialSelectedCloneRepo?: GitHubRepo | null;
+  initialCloneBranch?: string;
+  initialDevServerPort?: number | null;
+  initialIsMonorepo?: boolean;
+}
+
+export function MainInterface({
+  initialActiveView = "changes",
+  initialSelectedFile = null,
+  initialShowCreatePR = false,
+  initialShowCloneDialog = false,
+  initialShowPortPrompt = false,
+  initialCloneMode = "url",
+  initialCloneUrl = "",
+  initialCloneQuery = "",
+  initialCloneRepos = [],
+  initialCloneReposPage = 1,
+  initialCloneReposHasMore = false,
+  initialCloneAuthStatus = null,
+  initialSelectedCloneRepo = null,
+  initialCloneBranch = "",
+  initialDevServerPort = null,
+  initialIsMonorepo = false,
+}: MainInterfaceProps) {
   const { state, send, refreshStatus, refreshBranches, setRepoPath } = useDaemon();
   const { isForeground } = useWindowActivity();
   const [isPulling, setIsPulling] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
-  const [activeView, setActiveView] = useState<"graph" | "tree" | "changes" | "logs">("changes");
-  const [showCreatePR, setShowCreatePR] = useState(false);
-  const [devServerPort, setDevServerPort] = useState<number | null>(null);
-  const [showPortPrompt, setShowPortPrompt] = useState(false);
-  const [isMonorepo, setIsMonorepo] = useState(false);
+  const [activeView, setActiveView] = useState<"graph" | "tree" | "changes" | "logs">(initialActiveView);
+  const [showCreatePR, setShowCreatePR] = useState(initialShowCreatePR);
+  const [devServerPort, setDevServerPort] = useState<number | null>(initialDevServerPort);
+  const [showPortPrompt, setShowPortPrompt] = useState(initialShowPortPrompt);
+  const [isMonorepo, setIsMonorepo] = useState(initialIsMonorepo);
   const [projectFiles, setProjectFiles] = useState<string[]>([]);
-  const [selectedFile, setSelectedFile] = useState<{ path: string; name: string } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{ path: string; name: string } | null>(initialSelectedFile);
   const [graphRefreshKey, setGraphRefreshKey] = useState(0);
   const [isMacOverlayChrome, setIsMacOverlayChrome] = useState(false);
   const [miniViewOpen, setMiniViewOpen] = useState(false);
   const [isTauriEnv, setIsTauriEnv] = useState(false);
   const lastFetchAtRef = useRef(0);
   const wasForegroundRef = useRef(isForeground);
-  const [showCloneDialog, setShowCloneDialog] = useState(false);
-  const [cloneMode, setCloneMode] = useState<"url" | "repos">("url");
-  const [cloneUrl, setCloneUrl] = useState("");
-  const [cloneQuery, setCloneQuery] = useState("");
-  const [cloneRepos, setCloneRepos] = useState<GitHubRepo[]>([]);
-  const [cloneReposPage, setCloneReposPage] = useState(1);
-  const [cloneReposHasMore, setCloneReposHasMore] = useState(false);
+  const [showCloneDialog, setShowCloneDialog] = useState(initialShowCloneDialog);
+  const [cloneMode, setCloneMode] = useState<"url" | "repos">(initialCloneMode);
+  const [cloneUrl, setCloneUrl] = useState(initialCloneUrl);
+  const [cloneQuery, setCloneQuery] = useState(initialCloneQuery);
+  const [cloneRepos, setCloneRepos] = useState<GitHubRepo[]>(initialCloneRepos);
+  const [cloneReposPage, setCloneReposPage] = useState(initialCloneReposPage);
+  const [cloneReposHasMore, setCloneReposHasMore] = useState(initialCloneReposHasMore);
   const [cloneLoading, setCloneLoading] = useState(false);
   const [cloneError, setCloneError] = useState<string | null>(null);
-  const [cloneAuthStatus, setCloneAuthStatus] = useState<GitHubAuthStatus | null>(null);
-  const [selectedCloneRepo, setSelectedCloneRepo] = useState<GitHubRepo | null>(null);
-  const [cloneBranch, setCloneBranch] = useState("");
+  const [cloneAuthStatus, setCloneAuthStatus] = useState<GitHubAuthStatus | null>(initialCloneAuthStatus);
+  const [selectedCloneRepo, setSelectedCloneRepo] = useState<GitHubRepo | null>(initialSelectedCloneRepo);
+  const [cloneBranch, setCloneBranch] = useState(initialCloneBranch);
   const [isCloning, setIsCloning] = useState(false);
 
   const { status, branches, repoPath } = state;
@@ -148,9 +184,9 @@ export function MainInterface() {
 
   // Clear selected file when repo changes
   useEffect(() => {
-    setSelectedFile(null);
+    setSelectedFile(initialSelectedFile);
     lastFetchAtRef.current = 0;
-  }, [repoPath]);
+  }, [initialSelectedFile, repoPath]);
 
   useEffect(() => {
     setIsMacOverlayChrome(isMacTauri());

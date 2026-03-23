@@ -15,6 +15,7 @@ interface SidebarProps {
   isSettingsActive?: boolean;
   isMacOverlayChrome?: boolean;
   className?: string;
+  initialCollapsed?: boolean;
 }
 
 const THEME_SEQUENCE = ["light", "dark", "ember", "matrix", "system"] as const;
@@ -47,9 +48,13 @@ export function Sidebar({
   onOpenSettings,
   isSettingsActive = false,
   isMacOverlayChrome = false,
-  className 
+  className,
+  initialCollapsed,
 }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof initialCollapsed === "boolean") {
+      return initialCollapsed;
+    }
     if (typeof window !== "undefined") {
       return localStorage.getItem("vibogit-sidebar-collapsed") === "true";
     }
