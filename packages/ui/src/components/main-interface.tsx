@@ -409,19 +409,36 @@ export function MainInterface({
   const handlePush = async () => {
     if (!repoPath) return;
     setIsPushing(true);
+    
+    // Show sync toast if behind remote (smart push will auto-rebase)
+    const isBehind = (status?.behind || 0) > 0;
+    let syncToastId: string | number | undefined;
+    if (isBehind) {
+      syncToastId = toast.loading("Syncing with remote...");
+    }
+    
     try {
       await send("push", { repoPath });
+      if (syncToastId !== undefined) {
+        toast.dismiss(syncToastId);
+      }
       await refreshStatus();
       toast.success("Pushed successfully");
     } catch (error) {
+      if (syncToastId !== undefined) {
+        toast.dismiss(syncToastId);
+      }
       console.error("Failed to push:", error);
-      // Handle Tauri error objects which have a message property
-      const errorMsg = error instanceof Error 
-        ? error.message 
-        : typeof error === 'object' && error !== null && 'message' in error
-          ? String((error as { message: unknown }).message)
-          : JSON.stringify(error);
-      toast.error(`Push failed: ${errorMsg}`);
+      const errorMsg = getErrorMessage(error, "Push failed");
+      
+      // Show user-friendly error messages based on error type
+      if (errorMsg.toLowerCase().includes("rebase conflict") || errorMsg.toLowerCase().includes("conflict")) {
+        toast.error("Push failed: Conflicts detected with remote changes. Please resolve conflicts manually and try again.");
+      } else if (errorMsg.toLowerCase().includes("rebase succeeded but push failed")) {
+        toast.error("Push failed: Synced with remote successfully, but push failed. Please try pushing again.");
+      } else {
+        toast.error(`Push failed: ${errorMsg}`);
+      }
     } finally {
       setIsPushing(false);
     }
