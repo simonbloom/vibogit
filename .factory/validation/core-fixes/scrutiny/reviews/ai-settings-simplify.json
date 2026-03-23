@@ -1,39 +1,26 @@
 {
   "featureId": "ai-settings-simplify",
-  "reviewedAt": "2026-03-23T14:02:50Z",
+  "reviewedAt": "2026-03-23T14:15:18.195722+00:00",
   "commitId": "197698f53ddd6fbac556b186899c753168580f80",
   "transcriptSkeletonReviewed": true,
   "diffReviewed": true,
-  "status": "fail",
+  "status": "pass",
   "codeReview": {
-    "summary": "The core simplification is implemented: shared/provider types exclude Gemini, provider metadata is reduced to Anthropic/OpenAI single-model options, and backend config migration rewrites stale Gemini daemon config. However, local browser config hydration does not migrate stored Gemini provider values in the main config context, so non-Tauri/browser sessions can render an invalid provider with no selected metadata and save an impossible config state instead of gracefully falling back to defaults.",
-    "issues": [
-      {
-        "file": "packages/ui/src/lib/config-context.tsx",
-        "line": 25,
-        "severity": "blocking",
-        "description": "`getLocalConfig()` merges raw localStorage into `DEFAULT_CONFIG` without migrating `aiProvider: \"gemini\"`. In browser mode or before daemon config loads, a persisted Gemini provider survives into `config`, which breaks the requirement to gracefully fall back from old Gemini config. With `config.aiProvider === \"gemini\"`, `AISettingsSection` has no matching provider, so the provider select has no valid option selected, provider-specific help/placeholder disappear, and saving unrelated settings can preserve the invalid provider in localStorage."
-      },
-      {
-        "file": "apps/desktop/frontend/src/app/figma-capture/_lib/mock-data.ts",
-        "line": 490,
-        "severity": "non_blocking",
-        "description": "The demo/mock config still references the removed OpenAI model `gpt-5.3-codex-spark`. This does not break runtime settings flow, but it leaves internal fixtures inconsistent with the simplified provider/model contract and can mislead future UI verification or demos."
-      }
-    ]
+    "summary": "The feature requirements are satisfied in the current code: AI settings are limited to Anthropic and OpenAI, each provider exposes exactly one hardcoded model so the model selector stays hidden, shared types/defaults were updated to OpenAI + gpt-5.4, Rust commit/PR generation no longer supports Gemini, and both daemon-side and browser-side config hydration now normalize stale Gemini provider/model values back to supported defaults.",
+    "issues": []
   },
   "sharedStateObservations": [
     {
-      "area": "skills",
-      "observation": "The `tauri-fullstack` skill assumes implementation work and browser verification every time, but this worker session was a verification-only run because the feature was already committed. The transcript shows a justified deviation and a commit attempt that failed with 'nothing to commit'.",
-      "evidence": ".factory/skills/tauri-fullstack/SKILL.md Step 7 says to commit; worker transcript for session 66b1f04f-12aa-4e06-a4b6-49d7deddffff shows `git commit` failed because the working tree was already clean, and `skillFeedback.followedProcedure` was false for that reason."
+      "area": "knowledge",
+      "observation": "A repo fixture still carries the retired OpenAI model string `gpt-5.3-codex-spark`, so internal demo/mock data no longer matches the simplified AI defaults even though runtime code is correct.",
+      "evidence": "apps/desktop/frontend/src/app/figma-capture/_lib/mock-data.ts:490 sets `aiModel: \"gpt-5.3-codex-spark\"` while packages/ui/src/lib/ai-service.ts:27-33 and packages/shared/src/types.ts:347-349 define the supported/default OpenAI model as `gpt-5.4`."
     },
     {
-      "area": "knowledge",
-      "observation": "AI settings migration behavior spans two separate config stores, but shared state docs only describe the storage locations, not the need to keep migration logic mirrored in both localStorage and daemon config hydration paths.",
-      "evidence": "Mission AGENTS.md and .factory/library/architecture.md describe frontend settings/localStorage and daemon config separately. Review found migration implemented in `packages/ui/src/lib/settings.ts` and `apps/desktop/src-tauri/src/commands.rs`, but missing in `packages/ui/src/lib/config-context.tsx:getLocalConfig()`, which suggests the dual-store migration requirement is not documented clearly enough."
+      "area": "skills",
+      "observation": "The worker correctly treated this as a verification-only session because the feature was already present, but the `tauri-fullstack` skill still frames the workflow primarily as an implementation flow and makes browser verification sound mandatory even for already-landed or non-visual changes.",
+      "evidence": "worker-transcripts.jsonl entry for session 66b1f04f-12aa-4e06-a4b6-49d7deddffff shows no code changes were needed and skillFeedback marks the procedure as not followed for skipping TDD/browser steps; .factory/skills/tauri-fullstack/SKILL.md sections 3 and 6 require test-first Rust work and browser verification without an explicit verification-only exception."
     }
   ],
   "addressesFailureFrom": null,
-  "summary": "Review failed due to one blocking regression: stale `aiProvider: \"gemini\"` values are still accepted from browser localStorage in `config-context.tsx`, so old configs do not always gracefully fall back to a supported provider. Backend migration and provider/model simplification are otherwise in place; there is also one non-blocking stale mock-data model string."
+  "summary": "Pass. The reviewed commit and current code satisfy the AI settings simplification requirements, including Gemini removal and migration fallback behavior. I noted two non-blocking shared-state observations: stale mock data still references `gpt-5.3-codex-spark`, and the `tauri-fullstack` skill could better document verification-only runs for already-implemented features."
 }

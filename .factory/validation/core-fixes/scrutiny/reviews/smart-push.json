@@ -1,33 +1,39 @@
 {
   "featureId": "smart-push",
-  "reviewedAt": "2026-03-23T14:05:00Z",
+  "reviewedAt": "2026-03-23T14:20:00Z",
   "commitId": "ef3640d",
   "transcriptSkeletonReviewed": true,
   "diffReviewed": true,
   "status": "fail",
   "codeReview": {
-    "summary": "The feature adds the intended auto-rebase and UI toast behavior, but it does not fully satisfy the required validation contract because the Rust test coverage never exercises the real pull-rebase-push path or conflict-abort behavior. The implementation relies on string-based classification helpers instead of end-to-end ship() tests, leaving the core smart-push flow insufficiently verified.",
+    "summary": "The feature implements the requested auto-rebase flow, adds matching sync/error toasts in both frontend views, and later gained real ship() integration tests in a follow-up fix. However, the original smart-push commit still contains a logic bug in its own new simple-push test: it asserts `commits_pushed == 0` even though the feature requirement says successful pushes must return an accurate pushed commit count. That leaves the commit's verification story internally inconsistent and misses the required partial-failure test coverage inside this feature itself.",
     "issues": [
       {
         "file": "apps/desktop/src-tauri/src/git.rs",
-        "line": 977,
+        "line": 1272,
         "severity": "blocking",
-        "description": "The added tests only cover classify_push_error/classify_rebase_error helpers and serialization, not the actual ship() workflow. The feature explicitly required unit tests for simple push, rebase-then-push, conflict abort, and partial failure, but no test exercises ship() against a repo with a remote, so regressions in the real pull-rebase-push flow can still ship unnoticed."
+        "description": "`ship_simple_push_updates_remote_and_clears_ahead` expects `result.commits_pushed` to be `0` after pushing the initial local commit, but the feature contract requires `ship()` to return an accurate pushed commit count. For this scenario the accurate count should be non-zero, so the feature's own test suite codifies the wrong behavior and would not catch a broken count implementation."
+      },
+      {
+        "file": "apps/desktop/src-tauri/src/git.rs",
+        "line": 1264,
+        "severity": "non_blocking",
+        "description": "Although a later fix feature adds real smart-push integration coverage, the original smart-push feature itself did not include a `ship()` partial-failure test for the required "rebase succeeds but push fails" path. The only coverage in this commit for that case is string-classification helper testing, which is weaker than the requested workflow-level verification."
       }
     ]
   },
   "sharedStateObservations": [
     {
       "area": "skills",
-      "observation": "The tauri-fullstack skill requires writing failing Rust tests first and its example handoff suggests real ship() smart-push scenarios, but the worker deviated to helper-only tests because realistic repo/remote fixtures were not described. The skill should either document how to create local bare-remotes for git.rs tests or explicitly permit helper-level coverage when end-to-end fixtures are impractical.",
-      "evidence": "Skill file .factory/skills/tauri-fullstack/SKILL.md says 'Write failing tests first' and shows ship_simple_push / ship_rebase_when_behind examples, while the transcript handoff states the worker wrote classification-function tests instead of real ship() tests."
+      "observation": "The tauri-fullstack skill tells workers to write failing Rust tests first and its example handoff explicitly names real smart-push tests like `ship_simple_push` and `ship_rebase_when_behind`, but it does not document the local bare-remote fixture pattern needed to implement them. That gap likely contributed to the original worker defaulting to helper-level tests instead of end-to-end ship() coverage.",
+      "evidence": ".factory/skills/tauri-fullstack/SKILL.md:35 says 'Write failing tests first', and lines 99, 123-124 show `ship_simple_push` / `ship_rebase_when_behind` examples; the original smart-push handoff says helper classification tests were used instead of realistic remote-backed ship() tests."
     },
     {
       "area": "knowledge",
-      "observation": "The library does not document a recommended pattern for testing git CLI flows locally with temporary repositories and bare remotes, even though smart-push correctness depends on that capability.",
-      "evidence": "The worker transcript says actual git push/pull tests were skipped due to needing real remotes/credentials, and .factory/library/architecture.md plus user-testing.md contain no guidance for local bare-remote testing of git.rs operations."
+      "observation": "The shared library documents command and settings flow but does not capture a reusable pattern for testing git CLI workflows with temporary local repos and bare remotes, even though smart-push and similar features depend on it.",
+      "evidence": ".factory/library/architecture.md:9-20 documents only command/settings/AI patterns and contains no guidance for git.rs test fixtures or local bare-remote integration testing."
     }
   ],
   "addressesFailureFrom": null,
-  "summary": "Reviewed smart-push commit ef3640d, its handoff, transcript skeleton, and mission/shared-state docs. The implementation appears directionally correct, but I marked the feature failed because the required Rust coverage for the real ship() rebase/push/conflict scenarios is missing; only helper-classification tests were added."
+  "summary": "Reviewed the smart-push feature handoff, transcript skeleton, commit diff, current code paths, and shared-state docs. Result: fail, because the feature's own simple-push test asserts the wrong `commits_pushed` value and the original feature still lacks workflow-level partial-failure coverage, even though the core implementation and frontend parity look correct."
 }
