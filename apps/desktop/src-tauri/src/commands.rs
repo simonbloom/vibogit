@@ -1180,6 +1180,23 @@ fn save_app_config_to_path(config_path: &str, config: &AppConfig) -> Result<(), 
         .map_err(|error| format!("Failed to write config file at {}: {}", path.display(), error))
 }
 
+fn persist_sync_beacon_enable_state(
+    config_path: &str,
+    config: &mut AppConfig,
+    pairing_code: &str,
+    machine_name: &str,
+) -> Result<(), String> {
+    config.sync_beacon_enabled = true;
+    config.sync_beacon_pairing_code = pairing_code.to_string();
+
+    let trimmed_machine_name = machine_name.trim();
+    if !trimmed_machine_name.is_empty() {
+        config.sync_beacon_machine_name = trimmed_machine_name.to_string();
+    }
+
+    save_app_config_to_path(config_path, config)
+}
+
 #[tauri::command]
 pub async fn sync_beacon_check_gh() -> Result<SyncBeaconCheckResult, String> {
     let output = gh_auth_status_output()?;
@@ -1241,6 +1258,7 @@ pub async fn sync_beacon_push(
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| machine_name_from_config(&config));
+    let persisted_machine_name = machine_name.clone();
     let payload = BeaconPayload {
         machine_name,
         timestamp: current_unix_timestamp(),
@@ -1281,11 +1299,7 @@ pub async fn sync_beacon_push(
         data
     };
 
-    // Save pairing code to config if changed
-    if config.sync_beacon_pairing_code != code {
-        config.sync_beacon_pairing_code = code.clone();
-        save_app_config_to_path(&config_path, &config)?;
-    }
+    persist_sync_beacon_enable_state(&config_path, &mut config, &code, &persisted_machine_name)?;
 
     Ok(SyncBeaconPushResult {
         data: merged,
@@ -3352,6 +3366,56 @@ mod sync_beacon_tests {
         assert_eq!(deserialized.pairing_code, "abc123");
         assert_eq!(deserialized.data.machines.len(), 1);
         assert_eq!(deserialized.data.machines[0].machine_name, "test-machine");
+    }
+
+    #[test]
+    fn test_persist_sync_beacon_enable_state_saves_enabled_code_and_machine_name_together() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let config_path = temp_dir.path().join("config.json");
+        let config_path_str = config_path.to_string_lossy().to_string();
+        let mut config = AppConfig {
+            sync_beacon_enabled: false,
+            sync_beacon_machine_name: "".to_string(),
+            sync_beacon_pairing_code: "".to_string(),
+            ..AppConfig::default()
+        };
+
+        persist_sync_beacon_enable_state(&config_path_str, &mut config, "abc123", "Laptop")
+            .expect("persist beacon state");
+
+        assert!(config.sync_beacon_enabled);
+        assert_eq!(config.sync_beacon_pairing_code, "abc123");
+        assert_eq!(config.sync_beacon_machine_name, "Laptop");
+
+        let saved = load_app_config_from_path(&config_path_str).expect("load saved config");
+        assert!(saved.sync_beacon_enabled);
+        assert_eq!(saved.sync_beacon_pairing_code, "abc123");
+        assert_eq!(saved.sync_beacon_machine_name, "Laptop");
+    }
+
+    #[test]
+    fn test_persist_sync_beacon_enable_state_preserves_existing_machine_name_when_new_one_empty() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let config_path = temp_dir.path().join("config.json");
+        let config_path_str = config_path.to_string_lossy().to_string();
+        let mut config = AppConfig {
+            sync_beacon_enabled: false,
+            sync_beacon_machine_name: "Desk Mac".to_string(),
+            sync_beacon_pairing_code: "".to_string(),
+            ..AppConfig::default()
+        };
+
+        persist_sync_beacon_enable_state(&config_path_str, &mut config, "xyz789", "   ")
+            .expect("persist beacon state");
+
+        assert!(config.sync_beacon_enabled);
+        assert_eq!(config.sync_beacon_pairing_code, "xyz789");
+        assert_eq!(config.sync_beacon_machine_name, "Desk Mac");
+
+        let saved = load_app_config_from_path(&config_path_str).expect("load saved config");
+        assert!(saved.sync_beacon_enabled);
+        assert_eq!(saved.sync_beacon_pairing_code, "xyz789");
+        assert_eq!(saved.sync_beacon_machine_name, "Desk Mac");
     }
 }
 

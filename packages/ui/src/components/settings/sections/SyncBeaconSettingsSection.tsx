@@ -25,6 +25,7 @@ interface SyncBeaconCheckResult {
 interface SyncBeaconPushResult {
   data: unknown;
   pairingCode: string;
+  config?: Config;
 }
 
 interface SyncBeaconSettingsSectionProps {
@@ -109,11 +110,11 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
           });
           if (pushResult.pairingCode) {
             setLocalPairingCode(pushResult.pairingCode);
-            // Single atomic save: enable + pairing code together to avoid race
-            onSave({ syncBeaconEnabled: true, syncBeaconPairingCode: pushResult.pairingCode });
+            if (machineNameInput.trim() !== machineName) {
+              setMachineNameInput(machineName);
+            }
             toast.success("Sync Beacon enabled — pairing code generated");
           } else {
-            onSave({ syncBeaconEnabled: true });
             toast.success("Sync Beacon enabled");
           }
         } catch (err) {
