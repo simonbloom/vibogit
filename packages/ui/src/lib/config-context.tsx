@@ -32,13 +32,15 @@ function normalizeConfig(config: Config): Config {
   const aiModel = getModelForProvider(aiProvider, config.aiModel);
   const syncBeaconInterval = Number(config.syncBeaconInterval || DEFAULT_CONFIG.syncBeaconInterval);
 
+  // Migration: old syncBeaconGistId field is ignored, normalized to syncBeaconPairingCode
+
   return {
     ...config,
     aiProvider,
     aiModel,
     syncBeaconEnabled: Boolean(config.syncBeaconEnabled),
     syncBeaconMachineName: config.syncBeaconMachineName?.trim() || config.computerName || DEFAULT_CONFIG.syncBeaconMachineName,
-    syncBeaconGistId: config.syncBeaconGistId?.trim() || "",
+    syncBeaconPairingCode: config.syncBeaconPairingCode?.trim() || "",
     syncBeaconInterval:
       Number.isFinite(syncBeaconInterval) && syncBeaconInterval > 0
         ? syncBeaconInterval

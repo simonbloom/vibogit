@@ -263,15 +263,9 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
       return result as T;
     }
 
-    case "sync_beacon_validate_gist": {
-      const gistId = (args.gistId as string | undefined) || "";
-      const result = await tauriInvoke("sync_beacon_validate_gist", { gistId });
-      return result as T;
-    }
-
     case "sync_beacon_pull": {
-      const gistId = (args.gistId as string | undefined) || "";
-      const result = await tauriInvoke("sync_beacon_pull", { gistId });
+      const pairingCode = (args.pairingCode as string | undefined) || "";
+      const result = await tauriInvoke("sync_beacon_pull", { pairingCode });
       return result as T;
     }
 
@@ -279,7 +273,8 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
       const repos = (args.repos as unknown[] | undefined) || [];
       const configPath = (args.configPath as string | undefined) || "";
       const machineName = args.machineName as string | undefined;
-      const result = await tauriInvoke("sync_beacon_push", { configPath, repos, machineName });
+      const pairingCode = args.pairingCode as string | undefined;
+      const result = await tauriInvoke("sync_beacon_push", { configPath, repos, machineName, pairingCode });
       return result as T;
     }
 

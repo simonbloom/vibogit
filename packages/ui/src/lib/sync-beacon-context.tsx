@@ -114,7 +114,7 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
   );
 
   const refreshBeacon = useCallback(async () => {
-    if (!config.syncBeaconEnabled || !config.syncBeaconGistId.trim()) {
+    if (!config.syncBeaconEnabled || !config.syncBeaconPairingCode.trim()) {
       setRemoteMachines([]);
       return;
     }
@@ -122,7 +122,7 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
     setIsRefreshing(true);
     try {
       const hostnameFallback = await getHostname();
-      const data = await send<SyncBeaconData>("sync_beacon_pull", { gistId: config.syncBeaconGistId.trim() });
+      const data = await send<SyncBeaconData>("sync_beacon_pull", { pairingCode: config.syncBeaconPairingCode.trim() });
       applyBeaconData(data, hostnameFallback);
     } catch (err) {
       const message = getErrorMessage(err, "Unable to refresh Sync Beacon");
@@ -134,7 +134,7 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsRefreshing(false);
     }
-  }, [applyBeaconData, config.syncBeaconEnabled, config.syncBeaconGistId, getHostname, send]);
+  }, [applyBeaconData, config.syncBeaconEnabled, config.syncBeaconPairingCode, getHostname, send]);
 
   const pushBeacon = useCallback(async () => {
     if (!config.syncBeaconEnabled) return;
@@ -146,22 +146,23 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
         configPath,
         repos: beaconRepos,
         machineName: localMachineName || hostnameFallback,
+        pairingCode: config.syncBeaconPairingCode.trim() || undefined,
       });
 
       if (!config.syncBeaconMachineName.trim()) {
         void setConfig({ syncBeaconMachineName: hostnameFallback });
       }
 
-      const persistedGistId = config.syncBeaconGistId.trim();
-      if (!persistedGistId) {
+      const persistedCode = config.syncBeaconPairingCode.trim();
+      if (!persistedCode) {
         try {
           const response = await send<{ config: typeof config }>("getConfig");
-          const gistId = response.config.syncBeaconGistId?.trim();
-          if (gistId && gistId !== persistedGistId) {
-            await setConfig({ syncBeaconGistId: gistId });
+          const pairingCode = response.config.syncBeaconPairingCode?.trim();
+          if (pairingCode && pairingCode !== persistedCode) {
+            await setConfig({ syncBeaconPairingCode: pairingCode });
           }
         } catch {
-          // Ignore gist ID refresh failure.
+          // Ignore pairing code refresh failure.
         }
       }
 

@@ -23,11 +23,6 @@ interface SyncBeaconCheckResult {
   message: string;
 }
 
-interface SyncBeaconValidationResult {
-  valid: boolean;
-  message: string;
-}
-
 interface SyncBeaconSettingsSectionProps {
   config: Config;
   onSave: (updates: Partial<Config>) => void;
@@ -36,7 +31,7 @@ interface SyncBeaconSettingsSectionProps {
 export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettingsSectionProps) {
   const { send, getHostname } = useDaemon();
   const [machineNameInput, setMachineNameInput] = useState(config.syncBeaconMachineName);
-  const [gistIdInput, setGistIdInput] = useState(config.syncBeaconGistId);
+  const [gistIdInput, setGistIdInput] = useState(config.syncBeaconPairingCode);
   const [isToggling, setIsToggling] = useState(false);
   const [isValidatingGist, setIsValidatingGist] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
@@ -47,10 +42,10 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
   }, [config.syncBeaconMachineName]);
 
   useEffect(() => {
-    setGistIdInput(config.syncBeaconGistId);
-  }, [config.syncBeaconGistId]);
+    setGistIdInput(config.syncBeaconPairingCode);
+  }, [config.syncBeaconPairingCode]);
 
-  const hasCreatedGist = Boolean(config.syncBeaconGistId.trim());
+  const hasCreatedGist = Boolean(config.syncBeaconPairingCode.trim());
   const selectedInterval = useMemo(
     () => INTERVAL_OPTIONS.find((option) => option.value === config.syncBeaconInterval)?.value ?? 300_000,
     [config.syncBeaconInterval]
@@ -73,27 +68,21 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
     if (!trimmed) {
       setGistIdInput("");
       setInlineError(null);
-      onSave({ syncBeaconGistId: "" });
+      onSave({ syncBeaconPairingCode: "" });
       return;
     }
 
     setIsValidatingGist(true);
     setInlineError(null);
     try {
-      const result = await send<SyncBeaconValidationResult>("sync_beacon_validate_gist", { gistId: trimmed });
-      if (!result.valid) {
-        setInlineError(result.message);
-        setGistIdInput(config.syncBeaconGistId);
-        toast.error(result.message);
-        return;
-      }
-
-      onSave({ syncBeaconGistId: trimmed });
-      toast.success("Sync Beacon Gist connected");
+      // Validate by attempting a pull with the pairing code
+      await send<unknown>("sync_beacon_pull", { pairingCode: trimmed });
+      onSave({ syncBeaconPairingCode: trimmed });
+      toast.success("Sync Beacon connected");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to validate Sync Beacon Gist";
+      const message = error instanceof Error ? error.message : "Unable to validate pairing code";
       setInlineError(message);
-      setGistIdInput(config.syncBeaconGistId);
+      setGistIdInput(config.syncBeaconPairingCode);
       toast.error(message);
     } finally {
       setIsValidatingGist(false);
@@ -128,10 +117,10 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
   };
 
   const handleCopyGist = async () => {
-    if (!config.syncBeaconGistId) return;
+    if (!config.syncBeaconPairingCode) return;
     try {
       setIsCopying(true);
-      await navigator.clipboard.writeText(config.syncBeaconGistId);
+      await navigator.clipboard.writeText(config.syncBeaconPairingCode);
       toast.success("Copied Gist ID");
     } catch {
       toast.error("Couldn't copy Gist ID");

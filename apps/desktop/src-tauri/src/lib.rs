@@ -127,7 +127,6 @@ pub fn run() {
             commands::set_config,
             commands::sync_beacon_push,
             commands::sync_beacon_pull,
-            commands::sync_beacon_validate_gist,
             commands::sync_beacon_check_gh,
             // GitHub commands
             commands::github_list_repos,

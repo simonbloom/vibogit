@@ -333,7 +333,7 @@ export interface Config {
   githubPat: string;
   syncBeaconEnabled: boolean;
   syncBeaconMachineName: string;
-  syncBeaconGistId: string;
+  syncBeaconPairingCode: string;
   syncBeaconInterval: number;
   editor: EditorOption;
   customEditorCommand: string;
@@ -355,7 +355,7 @@ export const DEFAULT_CONFIG: Config = {
   githubPat: "",
   syncBeaconEnabled: false,
   syncBeaconMachineName: "",
-  syncBeaconGistId: "",
+  syncBeaconPairingCode: "",
   syncBeaconInterval: 300000,
   editor: "cursor",
   customEditorCommand: "",

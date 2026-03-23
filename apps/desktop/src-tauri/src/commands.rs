@@ -765,7 +765,7 @@ pub struct AppConfig {
     #[serde(default)]
     pub auto_execute_prompt: bool,
     #[serde(default)]
-    pub sync_beacon_gist_id: String,
+    pub sync_beacon_pairing_code: String,
     pub recent_tabs: Vec<ConfigTab>,
     pub active_tab_id: Option<String>,
 }
@@ -794,7 +794,7 @@ impl Default for AppConfig {
             show_hidden_files: false,
             clean_shot_mode: false,
             auto_execute_prompt: false,
-            sync_beacon_gist_id: String::new(),
+            sync_beacon_pairing_code: String::new(),
             recent_tabs: vec![],
             active_tab_id: None,
         }
@@ -833,13 +833,7 @@ pub struct SyncBeaconData {
 pub struct SyncBeaconCheckResult {
     pub available: bool,
     pub authenticated: bool,
-    pub message: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct SyncBeaconValidationResult {
-    pub valid: bool,
+    pub has_gist_scope: bool,
     pub message: String,
 }
 
@@ -998,7 +992,7 @@ fn read_sync_beacon_gist(gist_id: &str) -> Result<SyncBeaconData, String> {
     parse_sync_beacon_json(&raw)
 }
 
-fn create_sync_beacon_gist(content: &str) -> Result<String, String> {
+fn create_sync_beacon_gist(content: &str, description: &str) -> Result<String, String> {
     let temp_path = write_temp_sync_beacon_file(content)?;
     let result = (|| {
         let mut command = gh_command();
@@ -1006,6 +1000,8 @@ fn create_sync_beacon_gist(content: &str) -> Result<String, String> {
             .arg("gist")
             .arg("create")
             .arg("--public=false")
+            .arg("-d")
+            .arg(description)
             .arg("-f")
             .arg(SYNC_BEACON_FILENAME)
             .arg(&temp_path);
@@ -1052,6 +1048,77 @@ fn extract_gist_id_from_output(output: &str) -> Result<String, String> {
         .ok_or_else(|| format!("Failed to determine Sync Beacon Gist ID from GitHub CLI output: {}", output.trim()))
 }
 
+fn generate_pairing_code() -> String {
+    const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let pid = std::process::id() as u128;
+    let mut seed = nanos.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(pid);
+    let mut code = String::with_capacity(6);
+    for _ in 0..6 {
+        seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+        let index = ((seed >> 33) as usize) % CHARSET.len();
+        code.push(CHARSET[index] as char);
+    }
+    code
+}
+
+fn find_beacon_gist_from_output(output: &str, code: &str) -> Option<String> {
+    let description_pattern = format!("vibogit-beacon-{}", code);
+    for line in output.lines() {
+        let columns: Vec<&str> = line.split('\t').collect();
+        if columns.len() >= 2 {
+            let gist_id = columns[0].trim();
+            let description = columns[1].trim();
+            if description == description_pattern {
+                return Some(gist_id.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn find_beacon_gist(code: &str) -> Result<Option<String>, String> {
+    let code = code.trim();
+    if code.is_empty() {
+        return Ok(None);
+    }
+
+    let mut command = gh_command();
+    command.arg("gist").arg("list").arg("--limit").arg("100");
+    let output = command
+        .output()
+        .map_err(|error| friendly_gh_command_error(&error, "list gists"))?;
+    let stdout = gh_output_success(&output, "list gists")?;
+    Ok(find_beacon_gist_from_output(&stdout, code))
+}
+
+fn check_gist_scope_from_output(output: &str) -> bool {
+    // gh auth status includes a line like "Token scopes: 'gist', 'read:org', 'repo'"
+    // or "Token scopes: gist, read:org, repo"
+    for line in output.lines() {
+        let lower = line.to_lowercase();
+        if lower.contains("token scopes") || lower.contains("scopes:") {
+            // Check if 'gist' appears as a scope in this line
+            let after_colon = line.split(':').skip(1).collect::<Vec<_>>().join(":");
+            let scopes: Vec<&str> = after_colon.split(',').map(|s| s.trim().trim_matches('\'').trim_matches('"').trim()).collect();
+            return scopes.iter().any(|scope| *scope == "gist");
+        }
+    }
+    false
+}
+
+fn check_gist_scope() -> Result<bool, String> {
+    let output = gh_auth_status_output()?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    // gh auth status outputs to stderr
+    let combined = format!("{}\n{}", stdout, stderr);
+    Ok(check_gist_scope_from_output(&combined))
+}
+
 fn load_app_config_from_path(config_path: &str) -> Result<AppConfig, String> {
     let path = PathBuf::from(config_path);
     if !path.exists() {
@@ -1081,10 +1148,19 @@ fn save_app_config_to_path(config_path: &str, config: &AppConfig) -> Result<(), 
 pub async fn sync_beacon_check_gh() -> Result<SyncBeaconCheckResult, String> {
     let output = gh_auth_status_output()?;
     if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let combined = format!("{}\n{}", stdout, stderr);
+        let has_gist_scope = check_gist_scope_from_output(&combined);
         return Ok(SyncBeaconCheckResult {
             available: true,
             authenticated: true,
-            message: "GitHub CLI is installed and authenticated.".to_string(),
+            has_gist_scope,
+            message: if has_gist_scope {
+                "GitHub CLI is installed and authenticated with gist scope.".to_string()
+            } else {
+                "GitHub CLI is authenticated but missing gist scope. Run: gh auth refresh -s gist".to_string()
+            },
         });
     }
 
@@ -1092,26 +1168,20 @@ pub async fn sync_beacon_check_gh() -> Result<SyncBeaconCheckResult, String> {
     Ok(SyncBeaconCheckResult {
         available: true,
         authenticated: false,
+        has_gist_scope: false,
         message: classify_gh_failure(&stderr, "check GitHub CLI authentication"),
     })
 }
 
 #[tauri::command]
-pub async fn sync_beacon_validate_gist(gist_id: String) -> Result<SyncBeaconValidationResult, String> {
-    match read_sync_beacon_gist(&gist_id) {
-        Ok(_) => Ok(SyncBeaconValidationResult {
-            valid: true,
-            message: "Sync Beacon Gist is valid and accessible.".to_string(),
-        }),
-        Err(message) => Ok(SyncBeaconValidationResult {
-            valid: false,
-            message,
-        }),
+pub async fn sync_beacon_pull(pairing_code: String) -> Result<SyncBeaconData, String> {
+    let code = pairing_code.trim();
+    if code.is_empty() {
+        return Err("No pairing code provided.".to_string());
     }
-}
 
-#[tauri::command]
-pub async fn sync_beacon_pull(gist_id: String) -> Result<SyncBeaconData, String> {
+    let gist_id = find_beacon_gist(code)?
+        .ok_or_else(|| "No beacon found for this code".to_string())?;
     read_sync_beacon_gist(&gist_id)
 }
 
@@ -1120,10 +1190,12 @@ pub async fn sync_beacon_push(
     config_path: String,
     repos: Vec<BeaconRepo>,
     machine_name: Option<String>,
+    pairing_code: Option<String>,
 ) -> Result<SyncBeaconData, String> {
-    let gh_status = sync_beacon_check_gh().await?;
-    if !gh_status.available || !gh_status.authenticated {
-        return Err(gh_status.message);
+    // Check gist scope first
+    let has_scope = check_gist_scope().unwrap_or(false);
+    if !has_scope {
+        return Err("GitHub token missing gist scope. Run: gh auth refresh -s gist".to_string());
     }
 
     let mut config = load_app_config_from_path(&config_path)?;
@@ -1139,25 +1211,45 @@ pub async fn sync_beacon_push(
         repos,
     };
 
-    let gist_id = config.sync_beacon_gist_id.trim().to_string();
-    let merged = if gist_id.is_empty() {
+    // Determine pairing code: use provided, fall back to config, or generate new
+    let code = pairing_code
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| {
+            let stored = config.sync_beacon_pairing_code.trim().to_string();
+            if stored.is_empty() { None } else { Some(stored) }
+        })
+        .unwrap_or_else(generate_pairing_code);
+
+    let description = format!("vibogit-beacon-{}", code);
+
+    // Find existing gist or create new one
+    let gist_id = find_beacon_gist(&code)?;
+
+    let merged = if let Some(existing_gist_id) = gist_id {
+        let existing = read_sync_beacon_gist(&existing_gist_id)?;
+        let merged = merge_beacon_payload(existing, payload);
+        let content = serde_json::to_string_pretty(&merged)
+            .map_err(|error| format!("Failed to serialize Sync Beacon payload: {}", error))?;
+        update_sync_beacon_gist(&existing_gist_id, &content)?;
+        merged
+    } else {
         let data = normalize_sync_beacon_data(SyncBeaconData {
             machines: vec![payload.clone()],
         });
         let content = serde_json::to_string_pretty(&data)
             .map_err(|error| format!("Failed to serialize Sync Beacon payload: {}", error))?;
-        let new_gist_id = create_sync_beacon_gist(&content)?;
-        config.sync_beacon_gist_id = new_gist_id;
-        save_app_config_to_path(&config_path, &config)?;
+        create_sync_beacon_gist(&content, &description)?;
         data
-    } else {
-        let existing = read_sync_beacon_gist(&gist_id)?;
-        let merged = merge_beacon_payload(existing, payload);
-        let content = serde_json::to_string_pretty(&merged)
-            .map_err(|error| format!("Failed to serialize Sync Beacon payload: {}", error))?;
-        update_sync_beacon_gist(&gist_id, &content)?;
-        merged
     };
+
+    // Save pairing code to config if changed
+    if config.sync_beacon_pairing_code != code {
+        config.sync_beacon_pairing_code = code;
+        save_app_config_to_path(&config_path, &config)?;
+    }
 
     Ok(merged)
 }
@@ -2981,6 +3073,104 @@ mod sync_beacon_tests {
 
         config.computer_name.clear();
         assert!(!machine_name_from_config(&config).trim().is_empty());
+    }
+
+    // --- Pairing code tests ---
+
+    #[test]
+    fn test_generate_pairing_code() {
+        let code = generate_pairing_code();
+        assert_eq!(code.len(), 6, "pairing code must be 6 characters");
+        assert!(
+            code.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()),
+            "pairing code must be lowercase alphanumeric, got: {}",
+            code
+        );
+    }
+
+    #[test]
+    fn test_generate_pairing_code_not_all_same() {
+        // Generate several codes and verify they aren't all identical
+        // (a minimal randomness sanity check)
+        let mut codes = std::collections::HashSet::new();
+        for _ in 0..5 {
+            codes.insert(generate_pairing_code());
+            // Small delay to change the seed
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        assert!(codes.len() > 1, "multiple generated codes should not all be identical");
+    }
+
+    #[test]
+    fn test_find_beacon_gist_parses_output() {
+        let output = "abc123def45678\tvibogit-beacon-x7k2m9\t1 file\tsecret\t2024-03-20T12:00:00Z\n\
+                      zzz999fff00000\tsome-other-gist\t2 files\tsecret\t2024-03-19T12:00:00Z";
+        let result = find_beacon_gist_from_output(output, "x7k2m9");
+        assert_eq!(result, Some("abc123def45678".to_string()));
+    }
+
+    #[test]
+    fn test_find_beacon_gist_not_found() {
+        let output = "abc123def45678\tvibogit-beacon-x7k2m9\t1 file\tsecret\t2024-03-20T12:00:00Z\n\
+                      zzz999fff00000\tsome-other-gist\t2 files\tsecret\t2024-03-19T12:00:00Z";
+        let result = find_beacon_gist_from_output(output, "nocode");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_find_beacon_gist_empty_output() {
+        let result = find_beacon_gist_from_output("", "x7k2m9");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_check_gist_scope_present() {
+        let output = "github.com\n  ✓ Logged in to github.com account user (keyring)\n  - Active account: true\n  - Git operations protocol: https\n  - Token: ghp_****\n  - Token scopes: 'gist', 'read:org', 'repo'";
+        assert!(check_gist_scope_from_output(output));
+    }
+
+    #[test]
+    fn test_check_gist_scope_missing() {
+        let output = "github.com\n  ✓ Logged in to github.com account user (keyring)\n  - Active account: true\n  - Git operations protocol: https\n  - Token: ghp_****\n  - Token scopes: 'read:org', 'repo'";
+        assert!(!check_gist_scope_from_output(output));
+    }
+
+    #[test]
+    fn test_check_gist_scope_no_scopes_line() {
+        let output = "github.com\n  ✓ Logged in to github.com account user (keyring)\n  - Active account: true";
+        assert!(!check_gist_scope_from_output(output));
+    }
+
+    #[test]
+    fn test_check_gist_scope_unquoted_format() {
+        let output = "  - Token scopes: gist, read:org, repo";
+        assert!(check_gist_scope_from_output(output));
+    }
+
+    #[test]
+    fn test_app_config_uses_pairing_code() {
+        let config = AppConfig::default();
+        assert_eq!(config.sync_beacon_pairing_code, "");
+
+        // Ensure serialization uses the new field name
+        let json = serde_json::to_string(&config).expect("serialize config");
+        assert!(json.contains("syncBeaconPairingCode"), "JSON should contain syncBeaconPairingCode");
+        assert!(!json.contains("syncBeaconGistId"), "JSON should not contain syncBeaconGistId");
+    }
+
+    #[test]
+    fn test_config_deserializes_with_pairing_code() {
+        let json = r#"{"computerName":"","aiProvider":"openai","aiApiKey":"","githubPat":"","syncBeaconMachineName":"","editor":"cursor","customEditorCommand":"","terminal":"Terminal","theme":"dark","imageBasePath":"","showHiddenFiles":false,"cleanShotMode":false,"autoExecutePrompt":false,"syncBeaconPairingCode":"abc123","recentTabs":[],"activeTabId":null}"#;
+        let config: AppConfig = serde_json::from_str(json).expect("deserialize config");
+        assert_eq!(config.sync_beacon_pairing_code, "abc123");
+    }
+
+    #[test]
+    fn test_config_deserializes_without_pairing_code_defaults_empty() {
+        // Old config format without the field should use default (empty string)
+        let json = r#"{"computerName":"","aiProvider":"openai","aiApiKey":"","githubPat":"","syncBeaconMachineName":"","editor":"cursor","customEditorCommand":"","terminal":"Terminal","theme":"dark","imageBasePath":"","showHiddenFiles":false,"cleanShotMode":false,"autoExecutePrompt":false,"recentTabs":[],"activeTabId":null}"#;
+        let config: AppConfig = serde_json::from_str(json).expect("deserialize config");
+        assert_eq!(config.sync_beacon_pairing_code, "");
     }
 }
 
