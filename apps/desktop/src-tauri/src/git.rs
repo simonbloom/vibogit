@@ -977,6 +977,104 @@ pub fn classify_rebase_error(stderr: &str) -> GitError {
 #[cfg(test)]
 mod ship_tests {
     use super::*;
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+        process::Command,
+    };
+
+    fn run_git<I, S>(cwd: &Path, args: I) -> std::process::Output
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<std::ffi::OsStr>,
+    {
+        let output = Command::new("git").args(args).current_dir(cwd).output().unwrap();
+        assert!(
+            output.status.success(),
+            "git command failed in {}: stdout={} stderr={}",
+            cwd.display(),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        output
+    }
+
+    fn run_git_allow_failure<I, S>(cwd: &Path, args: I) -> std::process::Output
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<std::ffi::OsStr>,
+    {
+        Command::new("git").args(args).current_dir(cwd).output().unwrap()
+    }
+
+    fn write_file(path: &Path, contents: &str) {
+        fs::write(path, contents).unwrap();
+    }
+
+    fn commit_file(repo_path: &Path, file_name: &str, contents: &str, message: &str) {
+        write_file(&repo_path.join(file_name), contents);
+        run_git(repo_path, ["add", file_name]);
+        run_git(repo_path, ["commit", "-m", message]);
+    }
+
+    fn clone_repo_on_branch(remote_path: &Path, destination: &Path, branch: &str) {
+        let output = Command::new("git")
+            .args([
+                "clone",
+                "--branch",
+                branch,
+                remote_path.to_str().unwrap(),
+                destination.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git clone --branch failed: stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn get_head(repo_path: &Path) -> String {
+        let output = run_git(repo_path, ["rev-parse", "HEAD"]);
+        String::from_utf8(output.stdout).unwrap().trim().to_string()
+    }
+
+    fn has_rebase_state(repo_path: &Path) -> bool {
+        let git_dir_output = run_git(repo_path, ["rev-parse", "--git-dir"]);
+        let git_dir = String::from_utf8(git_dir_output.stdout).unwrap();
+        let git_dir = repo_path.join(git_dir.trim());
+        git_dir.join("rebase-merge").exists() || git_dir.join("rebase-apply").exists()
+    }
+
+    fn setup_repo_with_remote() -> (tempfile::TempDir, PathBuf, PathBuf) {
+        let temp = tempfile::tempdir().unwrap();
+        let remote_path = temp.path().join("remote.git");
+        let repo_path = temp.path().join("local");
+
+        let init_remote = Command::new("git")
+            .args(["init", "--bare", remote_path.to_str().unwrap()])
+            .output()
+            .unwrap();
+        assert!(
+            init_remote.status.success(),
+            "git init --bare failed: stdout={} stderr={}",
+            String::from_utf8_lossy(&init_remote.stdout),
+            String::from_utf8_lossy(&init_remote.stderr)
+        );
+
+        fs::create_dir_all(&repo_path).unwrap();
+        run_git(&repo_path, ["init", "-b", "main"]);
+        run_git(&repo_path, ["config", "user.name", "Test User"]);
+        run_git(&repo_path, ["config", "user.email", "test@example.com"]);
+        run_git(
+            &repo_path,
+            ["remote", "add", "origin", remote_path.to_str().unwrap()],
+        );
+
+        (temp, repo_path, remote_path)
+    }
 
     #[test]
     fn classify_push_error_auth_failed() {
@@ -1160,5 +1258,111 @@ mod ship_tests {
             Err(GitError::NoRemote) => {} // expected
             other => panic!("Expected NoRemote, got: {:?}", other),
         }
+    }
+
+    #[test]
+    fn ship_simple_push_updates_remote_and_clears_ahead() {
+        let (_temp, repo_path, remote_path) = setup_repo_with_remote();
+        commit_file(&repo_path, "file.txt", "hello\n", "initial commit");
+
+        let result = ship(repo_path.to_str().unwrap()).unwrap();
+        assert!(result.pushed);
+        assert_eq!(result.branch, "main");
+        assert_eq!(result.remote, "origin");
+        assert_eq!(result.commits_pushed, 0);
+        assert!(!result.rebased);
+
+        let status = get_status(repo_path.to_str().unwrap()).unwrap();
+        assert_eq!(status.ahead, 0);
+        assert_eq!(status.behind, 0);
+        assert!(!status.has_remote);
+
+        let remote_head_output = run_git(&remote_path, ["rev-parse", "refs/heads/main"]);
+        let remote_head = String::from_utf8(remote_head_output.stdout).unwrap().trim().to_string();
+        assert_eq!(get_head(&repo_path), remote_head);
+    }
+
+    #[test]
+    fn ship_rebases_then_pushes_when_remote_is_ahead() {
+        let (_temp, repo_path, remote_path) = setup_repo_with_remote();
+        commit_file(&repo_path, "shared.txt", "base\n", "base commit");
+        run_git(&repo_path, ["push", "-u", "origin", "main"]);
+
+        let other_dir = tempfile::tempdir().unwrap();
+        let other_path = other_dir.path().join("other");
+        clone_repo_on_branch(&remote_path, &other_path, "main");
+        run_git(&other_path, ["config", "user.name", "Remote User"]);
+        run_git(&other_path, ["config", "user.email", "remote@example.com"]);
+        commit_file(&other_path, "shared.txt", "base\nremote change\n", "remote commit");
+        run_git(&other_path, ["push", "origin", "main"]);
+
+        run_git(&repo_path, ["fetch", "origin"]);
+
+        commit_file(&repo_path, "local.txt", "local change\n", "local commit");
+
+        let result = ship(repo_path.to_str().unwrap()).unwrap();
+        assert!(result.pushed);
+        assert!(result.rebased);
+        assert_eq!(result.commits_pushed, 1);
+
+        let status = get_status(repo_path.to_str().unwrap()).unwrap();
+        assert_eq!(status.ahead, 0);
+        assert_eq!(status.behind, 0);
+
+        let log_output = run_git(&repo_path, ["log", "--oneline", "--decorate=short", "-3"]);
+        let log = String::from_utf8(log_output.stdout).unwrap();
+        assert!(log.contains("local commit"));
+        assert!(log.contains("remote commit"));
+
+        let remote_head = String::from_utf8(run_git(&remote_path, ["rev-parse", "refs/heads/main"]).stdout)
+            .unwrap()
+            .trim()
+            .to_string();
+        assert_eq!(get_head(&repo_path), remote_head);
+        assert!(String::from_utf8(run_git(&remote_path, ["show", "refs/heads/main:local.txt"]).stdout)
+            .unwrap()
+            .contains("local change"));
+        assert!(String::from_utf8(run_git(&remote_path, ["show", "refs/heads/main:shared.txt"]).stdout)
+            .unwrap()
+            .contains("remote change"));
+    }
+
+    #[test]
+    fn ship_conflict_aborts_rebase_and_leaves_repo_clean() {
+        let (_temp, repo_path, remote_path) = setup_repo_with_remote();
+        commit_file(&repo_path, "shared.txt", "base\n", "base commit");
+        run_git(&repo_path, ["push", "-u", "origin", "main"]);
+
+        let before_ship_head = get_head(&repo_path);
+
+        let other_dir = tempfile::tempdir().unwrap();
+        let other_path = other_dir.path().join("other");
+        clone_repo_on_branch(&remote_path, &other_path, "main");
+        run_git(&other_path, ["config", "user.name", "Remote User"]);
+        run_git(&other_path, ["config", "user.email", "remote@example.com"]);
+        commit_file(&other_path, "shared.txt", "remote version\n", "remote conflict");
+        run_git(&other_path, ["push", "origin", "main"]);
+
+        run_git(&repo_path, ["fetch", "origin"]);
+
+        commit_file(&repo_path, "shared.txt", "local version\n", "local conflict");
+        let local_head_before_ship = get_head(&repo_path);
+
+        let result = ship(repo_path.to_str().unwrap());
+        match result {
+            Err(GitError::RebaseConflict(message)) => assert!(message.to_lowercase().contains("conflict")),
+            other => panic!("Expected RebaseConflict, got: {:?}", other),
+        }
+
+        assert_eq!(get_head(&repo_path), local_head_before_ship);
+        assert_ne!(local_head_before_ship, before_ship_head);
+        assert!(!has_rebase_state(&repo_path));
+
+        let status_output = run_git(&repo_path, ["status", "--short"]);
+        assert!(String::from_utf8(status_output.stdout).unwrap().trim().is_empty());
+        assert_eq!(fs::read_to_string(repo_path.join("shared.txt")).unwrap(), "local version\n");
+
+        let rebase_abort_check = run_git_allow_failure(&repo_path, ["rebase", "--abort"]);
+        assert!(!rebase_abort_check.status.success());
     }
 }
