@@ -350,19 +350,51 @@ pub fn save(repo_path: &str, message: Option<String>) -> Result<SaveResult, GitE
 
 pub fn ship(repo_path: &str) -> Result<ShipResult, GitError> {
     // First scope: open repo to get branch name and check ahead/behind
-    let (branch_name, behind) = {
+    let (branch_name, commits_pushed_before_push) = {
         let repo = open_repo(repo_path)?;
         let head = repo.head()?;
         let branch_name = head.shorthand().unwrap_or("main").to_string();
         // Verify origin remote exists
         let _remote = repo.find_remote("origin").map_err(|_| GitError::NoRemote)?;
-        let (_ahead, behind, _has_remote) = get_ahead_behind(&repo, &branch_name)?;
-        (branch_name, behind)
+        let (ahead, _behind, has_remote) = get_ahead_behind(&repo, &branch_name)?;
+
+        let commits_pushed_before_push = if has_remote {
+            Some(ahead)
+        } else {
+            let output = std::process::Command::new("git")
+                .args(["rev-list", "--count", "HEAD"])
+                .current_dir(repo_path)
+                .output()
+                .map_err(|e| GitError::Io(format!("Failed to count commits before first push: {}", e)))?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(GitError::Io(format!(
+                    "Failed to count commits before first push: {}",
+                    stderr.trim()
+                )));
+            }
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            Some(stdout.trim().parse::<usize>().map_err(|e| {
+                GitError::Io(format!("Failed to parse commit count before first push: {}", e))
+            })?)
+        };
+
+        (branch_name, commits_pushed_before_push)
     };
 
     let mut rebased = false;
 
     // If behind remote, auto-pull with rebase before pushing
+    let behind = if commits_pushed_before_push.is_some() {
+        let repo = open_repo(repo_path)?;
+        let (_ahead, behind, _has_remote) = get_ahead_behind(&repo, &branch_name)?;
+        behind
+    } else {
+        0
+    };
+
     if behind > 0 {
         eprintln!("Local is {} behind remote, running git pull --rebase before push", behind);
 
@@ -402,17 +434,11 @@ pub fn ship(repo_path: &str) -> Result<ShipResult, GitError> {
     }
 
     // Re-check ahead count after potential rebase to get accurate commits_pushed
-    let ahead_after = {
-        let repo = open_repo(repo_path)?;
-        let (ahead, _, _) = get_ahead_behind(&repo, &branch_name)?;
-        ahead
-    };
-    
     // Use git CLI for push - it has proper credential helper support
     eprintln!("Pushing via git CLI: origin/{}", branch_name);
     
     let output = std::process::Command::new("git")
-        .args(["push", "origin", &branch_name])
+        .args(["push", "-u", "origin", &branch_name])
         .current_dir(repo_path)
         .output()
         .map_err(|e| GitError::Io(format!("Failed to run git push: {}", e)))?;
@@ -423,9 +449,11 @@ pub fn ship(repo_path: &str) -> Result<ShipResult, GitError> {
         return Err(classify_push_error(&stderr, rebased));
     }
 
+    let commits_pushed = commits_pushed_before_push.unwrap_or(0);
+
     Ok(ShipResult {
         pushed: true,
-        commits_pushed: ahead_after,
+        commits_pushed,
         remote: "origin".to_string(),
         branch: branch_name,
         rebased,
@@ -1269,13 +1297,13 @@ mod ship_tests {
         assert!(result.pushed);
         assert_eq!(result.branch, "main");
         assert_eq!(result.remote, "origin");
-        assert_eq!(result.commits_pushed, 0);
+        assert_eq!(result.commits_pushed, 1);
         assert!(!result.rebased);
 
         let status = get_status(repo_path.to_str().unwrap()).unwrap();
         assert_eq!(status.ahead, 0);
         assert_eq!(status.behind, 0);
-        assert!(!status.has_remote);
+        assert!(status.has_remote);
 
         let remote_head_output = run_git(&remote_path, ["rev-parse", "refs/heads/main"]);
         let remote_head = String::from_utf8(remote_head_output.stdout).unwrap().trim().to_string();
