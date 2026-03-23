@@ -68,6 +68,9 @@ pub struct ProjectState {
     pub behind: usize,
     pub has_remote: bool,
     pub is_empty_repo: bool,
+    pub last_commit_hash: String,
+    pub last_commit_message: String,
+    pub last_commit_timestamp: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -247,6 +250,19 @@ pub fn get_status(repo_path: &str) -> Result<ProjectState, GitError> {
         get_ahead_behind(&repo, &branch).unwrap_or((0, 0, false))
     };
 
+    let (last_commit_hash, last_commit_message, last_commit_timestamp) = if is_empty_repo || is_head_unborn {
+        (String::new(), String::new(), 0)
+    } else {
+        match repo.head().and_then(|head_ref| head_ref.peel_to_commit()) {
+            Ok(commit) => (
+                commit.id().to_string(),
+                commit.message().unwrap_or_default().to_string(),
+                commit.time().seconds(),
+            ),
+            Err(_) => (String::new(), String::new(), 0),
+        }
+    };
+
     Ok(ProjectState {
         branch,
         is_detached,
@@ -257,6 +273,9 @@ pub fn get_status(repo_path: &str) -> Result<ProjectState, GitError> {
         behind,
         has_remote,
         is_empty_repo,
+        last_commit_hash,
+        last_commit_message,
+        last_commit_timestamp,
     })
 }
 
@@ -313,6 +332,9 @@ pub fn save(repo_path: &str, message: Option<String>) -> Result<SaveResult, GitE
             behind: 0,
             has_remote: false,
             is_empty_repo: false,
+            last_commit_hash: String::new(),
+            last_commit_message: String::new(),
+            last_commit_timestamp: 0,
         });
 
         let total_files = status.staged_files.len() + status.changed_files.len() + status.untracked_files.len();

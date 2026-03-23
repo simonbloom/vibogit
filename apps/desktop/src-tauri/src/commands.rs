@@ -847,11 +847,6 @@ fn machine_name_from_config(config: &AppConfig) -> String {
         return sync_beacon_name.to_string();
     }
 
-    let configured = config.computer_name.trim();
-    if !configured.is_empty() {
-        return configured.to_string();
-    }
-
     std::env::var("HOSTNAME")
         .ok()
         .or_else(|| std::env::var("COMPUTERNAME").ok())
@@ -2967,7 +2962,7 @@ mod sync_beacon_tests {
 
         config.sync_beacon_machine_name.clear();
         config.computer_name = "Desk Mac".to_string();
-        assert_eq!(machine_name_from_config(&config), "Desk Mac");
+        assert!(!machine_name_from_config(&config).trim().is_empty());
 
         config.computer_name.clear();
         assert!(!machine_name_from_config(&config).trim().is_empty());

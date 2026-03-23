@@ -92,6 +92,9 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
         untrackedFiles: string[];
         ahead: number;
         behind: number;
+        lastCommitHash?: string;
+        lastCommitMessage?: string;
+        lastCommitTimestamp?: number;
         isEmptyRepo?: boolean;
       };
       return {
@@ -102,6 +105,9 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
           untracked: state.untrackedFiles.map((f) => ({ path: f, status: "untracked", staged: false })),
           ahead: state.ahead,
           behind: state.behind,
+          lastCommitHash: state.lastCommitHash ?? "",
+          lastCommitMessage: state.lastCommitMessage ?? "",
+          lastCommitTimestamp: state.lastCommitTimestamp ?? 0,
           isEmptyRepo: state.isEmptyRepo ?? false,
         }
       } as T;
