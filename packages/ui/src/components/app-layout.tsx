@@ -126,6 +126,7 @@ export function AppLayout({
           ) : activePane === "beacon" ? (
             <SyncBeaconPanel
               machines={remoteMachines}
+              localMachineName={config.syncBeaconMachineName || config.computerName}
               isEnabled={config.syncBeaconEnabled}
               isLoading={isRefreshing}
               error={error}

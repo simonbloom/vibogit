@@ -980,7 +980,13 @@ fn read_sync_beacon_gist_raw(gist_id: &str) -> Result<String, String> {
     }
 
     let mut command = gh_command();
-    command.arg("gist").arg("view").arg(gist_id).arg("--raw");
+    command
+        .arg("gist")
+        .arg("view")
+        .arg(gist_id)
+        .arg("--raw")
+        .arg("-f")
+        .arg(SYNC_BEACON_FILENAME);
     let output = command
         .output()
         .map_err(|error| friendly_gh_command_error(&error, "read Sync Beacon Gist"))?;

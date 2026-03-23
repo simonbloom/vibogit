@@ -24,6 +24,7 @@ export interface SyncBeaconMachine {
 
 interface SyncBeaconPanelProps {
   machines: SyncBeaconMachine[];
+  localMachineName: string;
   isEnabled: boolean;
   isLoading: boolean;
   error: string | null;
@@ -53,6 +54,7 @@ function formatRelativeTime(timestamp: number): string {
 
 export function SyncBeaconPanel({
   machines,
+  localMachineName,
   isEnabled,
   isLoading,
   error,
@@ -61,8 +63,10 @@ export function SyncBeaconPanel({
   onOpenSettings,
 }: SyncBeaconPanelProps) {
   const sortedMachines = useMemo(
-    () => [...machines].sort((left, right) => right.timestamp - left.timestamp),
-    [machines]
+    () => [...machines]
+      .filter((machine) => machine.machineName.trim() !== localMachineName.trim())
+      .sort((left, right) => right.timestamp - left.timestamp),
+    [localMachineName, machines]
   );
 
   if (!isEnabled) {

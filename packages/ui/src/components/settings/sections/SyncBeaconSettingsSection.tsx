@@ -217,29 +217,29 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
           ) : null}
         </div>
 
-        {hasCreatedGist ? (
-          <div className="flex gap-2">
-            <Input value={config.syncBeaconGistId} readOnly aria-label="Sync Beacon Gist ID" />
-            <Button type="button" variant="outline" onClick={() => void handleCopyGist()} disabled={isCopying}>
-              {isCopying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-              Copy
-            </Button>
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            <Input
-              value={gistIdInput}
-              onChange={(event) => setGistIdInput(event.target.value)}
-              onBlur={() => void handleValidateAndSaveGist()}
-              placeholder="Paste a Gist ID to join an existing beacon"
-              aria-invalid={inlineError ? true : undefined}
-            />
-            <Button type="button" variant="outline" onClick={() => void handleValidateAndSaveGist()} disabled={isValidatingGist}>
-              {isValidatingGist ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Validate
-            </Button>
-          </div>
-        )}
+        <div className="flex gap-2">
+          <Input
+            value={gistIdInput}
+            onChange={(event) => setGistIdInput(event.target.value)}
+            onBlur={() => void handleValidateAndSaveGist()}
+            placeholder="Paste a Gist ID to join an existing beacon"
+            aria-label="Sync Beacon Gist ID"
+            aria-invalid={inlineError ? true : undefined}
+          />
+          <Button type="button" variant="outline" onClick={() => void handleValidateAndSaveGist()} disabled={isValidatingGist}>
+            {isValidatingGist ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+            Validate
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void handleCopyGist()}
+            disabled={isCopying || !gistIdInput.trim()}
+          >
+            {isCopying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+            Copy
+          </Button>
+        </div>
 
         {inlineError ? (
           <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
