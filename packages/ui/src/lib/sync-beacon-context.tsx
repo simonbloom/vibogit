@@ -142,7 +142,7 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
     try {
       const configPath = await getConfigPath();
       const hostnameFallback = await getHostname();
-      const data = await send<SyncBeaconData>("sync_beacon_push", {
+      const result = await send<{ data: SyncBeaconData; pairingCode: string }>("sync_beacon_push", {
         configPath,
         repos: beaconRepos,
         machineName: localMachineName || hostnameFallback,
@@ -153,20 +153,11 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
         void setConfig({ syncBeaconMachineName: hostnameFallback });
       }
 
-      const persistedCode = config.syncBeaconPairingCode.trim();
-      if (!persistedCode) {
-        try {
-          const response = await send<{ config: typeof config }>("getConfig");
-          const pairingCode = response.config.syncBeaconPairingCode?.trim();
-          if (pairingCode && pairingCode !== persistedCode) {
-            await setConfig({ syncBeaconPairingCode: pairingCode });
-          }
-        } catch {
-          // Ignore pairing code refresh failure.
-        }
+      if (result.pairingCode && result.pairingCode !== config.syncBeaconPairingCode.trim()) {
+        void setConfig({ syncBeaconPairingCode: result.pairingCode });
       }
 
-      applyBeaconData(data, hostnameFallback);
+      applyBeaconData(result.data, hostnameFallback);
     } catch (err) {
       const message = getErrorMessage(err, "Unable to update Sync Beacon");
       setError(message);
@@ -175,7 +166,7 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
         lastToastErrorRef.current = message;
       }
     }
-  }, [applyBeaconData, beaconRepos, config, getConfigPath, getHostname, send, setConfig]);
+  }, [applyBeaconData, beaconRepos, config, getConfigPath, getHostname, localMachineName, send, setConfig]);
 
   useEffect(() => {
     if (!config.syncBeaconMachineName.trim()) {

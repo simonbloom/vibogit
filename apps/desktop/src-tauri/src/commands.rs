@@ -830,6 +830,13 @@ pub struct SyncBeaconData {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct SyncBeaconPushResult {
+    pub data: SyncBeaconData,
+    pub pairing_code: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncBeaconCheckResult {
     pub available: bool,
     pub authenticated: bool,
@@ -1191,7 +1198,7 @@ pub async fn sync_beacon_push(
     repos: Vec<BeaconRepo>,
     machine_name: Option<String>,
     pairing_code: Option<String>,
-) -> Result<SyncBeaconData, String> {
+) -> Result<SyncBeaconPushResult, String> {
     // Check gist scope first
     let has_scope = check_gist_scope().unwrap_or(false);
     if !has_scope {
@@ -1247,11 +1254,14 @@ pub async fn sync_beacon_push(
 
     // Save pairing code to config if changed
     if config.sync_beacon_pairing_code != code {
-        config.sync_beacon_pairing_code = code;
+        config.sync_beacon_pairing_code = code.clone();
         save_app_config_to_path(&config_path, &config)?;
     }
 
-    Ok(merged)
+    Ok(SyncBeaconPushResult {
+        data: merged,
+        pairing_code: code,
+    })
 }
 
 fn get_app_config_path() -> Option<PathBuf> {
@@ -3171,6 +3181,31 @@ mod sync_beacon_tests {
         let json = r#"{"computerName":"","aiProvider":"openai","aiApiKey":"","githubPat":"","syncBeaconMachineName":"","editor":"cursor","customEditorCommand":"","terminal":"Terminal","theme":"dark","imageBasePath":"","showHiddenFiles":false,"cleanShotMode":false,"autoExecutePrompt":false,"recentTabs":[],"activeTabId":null}"#;
         let config: AppConfig = serde_json::from_str(json).expect("deserialize config");
         assert_eq!(config.sync_beacon_pairing_code, "");
+    }
+
+    #[test]
+    fn test_sync_beacon_push_result_serializes_with_pairing_code() {
+        let result = SyncBeaconPushResult {
+            data: SyncBeaconData {
+                machines: vec![BeaconPayload {
+                    machine_name: "test-machine".to_string(),
+                    timestamp: 1000,
+                    repos: vec![sample_repo("/tmp/repo", "repo")],
+                }],
+            },
+            pairing_code: "abc123".to_string(),
+        };
+        let json = serde_json::to_string(&result).expect("serialize push result");
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("parse json");
+        assert_eq!(parsed["pairingCode"], "abc123");
+        assert!(parsed["data"]["machines"].is_array());
+        assert_eq!(parsed["data"]["machines"][0]["machineName"], "test-machine");
+
+        // Verify round-trip deserialization
+        let deserialized: SyncBeaconPushResult = serde_json::from_str(&json).expect("deserialize push result");
+        assert_eq!(deserialized.pairing_code, "abc123");
+        assert_eq!(deserialized.data.machines.len(), 1);
+        assert_eq!(deserialized.data.machines[0].machine_name, "test-machine");
     }
 }
 
