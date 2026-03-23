@@ -39,6 +39,7 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
   const [isCopied, setIsCopied] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [localPairingCode, setLocalPairingCode] = useState<string>("");
 
   // Unified code field state
   const [isEditing, setIsEditing] = useState(false);
@@ -49,7 +50,14 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
     setMachineNameInput(config.syncBeaconMachineName);
   }, [config.syncBeaconMachineName]);
 
-  const hasPairingCode = Boolean(config.syncBeaconPairingCode.trim());
+  useEffect(() => {
+    if (config.syncBeaconPairingCode.trim()) {
+      setLocalPairingCode(config.syncBeaconPairingCode.trim());
+    }
+  }, [config.syncBeaconPairingCode]);
+
+  const displayCode = localPairingCode || config.syncBeaconPairingCode.trim();
+  const hasPairingCode = Boolean(displayCode);
 
   const handleMachineNameBlur = async () => {
     const trimmed = machineNameInput.trim();
@@ -66,6 +74,7 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
   const handleToggle = async () => {
     setInlineError(null);
     if (config.syncBeaconEnabled) {
+      setLocalPairingCode("");
       onSave({ syncBeaconEnabled: false });
       return;
     }
@@ -102,6 +111,7 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
             pairingCode: undefined,
           });
           if (pushResult.pairingCode) {
+            setLocalPairingCode(pushResult.pairingCode);
             onSave({ syncBeaconPairingCode: pushResult.pairingCode });
             toast.success("Sync Beacon enabled — pairing code generated");
           } else {
@@ -127,9 +137,9 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
   };
 
   const handleCopyCode = async () => {
-    if (!config.syncBeaconPairingCode) return;
+    if (!displayCode) return;
     try {
-      await navigator.clipboard.writeText(config.syncBeaconPairingCode);
+      await navigator.clipboard.writeText(displayCode);
       setIsCopied(true);
       toast.success("Pairing code copied");
       setTimeout(() => setIsCopied(false), 2000);
@@ -139,7 +149,7 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
   };
 
   const handleStartEdit = () => {
-    setEditCodeInput(config.syncBeaconPairingCode);
+    setEditCodeInput(displayCode);
     setIsEditing(true);
     setInlineError(null);
   };
@@ -159,6 +169,7 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
     try {
       // Verify the code exists by pulling
       await send<unknown>("sync_beacon_pull", { pairingCode: trimmed });
+      setLocalPairingCode(trimmed);
       onSave({ syncBeaconPairingCode: trimmed });
       setIsEditing(false);
       setEditCodeInput("");
@@ -185,6 +196,7 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
         pairingCode: undefined,
       });
       if (pushResult.pairingCode) {
+        setLocalPairingCode(pushResult.pairingCode);
         onSave({ syncBeaconPairingCode: pushResult.pairingCode });
         setIsEditing(false);
         setEditCodeInput("");
@@ -307,7 +319,7 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
             /* Display mode */
             <div className="mt-3 flex items-center gap-2">
               <div className="flex-1 rounded-md border border-border bg-background px-4 py-2.5 font-mono text-lg tracking-widest text-foreground select-all">
-                {config.syncBeaconPairingCode}
+                {displayCode}
               </div>
               <Button
                 type="button"
