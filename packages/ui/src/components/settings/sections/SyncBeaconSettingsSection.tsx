@@ -95,10 +95,7 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
         return;
       }
 
-      // Enable first
-      onSave({ syncBeaconEnabled: true });
-
-      // If no pairing code exists, generate one immediately
+      // If no pairing code exists, generate one and save everything atomically
       if (!hasPairingCode) {
         setIsGenerating(true);
         try {
@@ -112,9 +109,11 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
           });
           if (pushResult.pairingCode) {
             setLocalPairingCode(pushResult.pairingCode);
-            onSave({ syncBeaconPairingCode: pushResult.pairingCode });
+            // Single atomic save: enable + pairing code together to avoid race
+            onSave({ syncBeaconEnabled: true, syncBeaconPairingCode: pushResult.pairingCode });
             toast.success("Sync Beacon enabled — pairing code generated");
           } else {
+            onSave({ syncBeaconEnabled: true });
             toast.success("Sync Beacon enabled");
           }
         } catch (err) {
@@ -125,6 +124,7 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
           setIsGenerating(false);
         }
       } else {
+        onSave({ syncBeaconEnabled: true });
         toast.success("Sync Beacon enabled");
       }
     } catch (error) {
