@@ -1,0 +1,29 @@
+{
+  "featureId": "fix-ship-push-tracking-and-tests",
+  "reviewedAt": "2026-03-23T14:30:00Z",
+  "commitId": "c201bfd",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The fix addresses both prior blocking failures. ship() now establishes upstream tracking on first push via `git push -u origin <branch>`, reports a non-zero first-push `commits_pushed` count by snapshotting the pre-push local commit count when no upstream existed, and the simple-push integration test now asserts the correct post-push state (`commits_pushed == 1`, `has_remote == true`). The rebase path still preserves the smart-push behavior introduced earlier and no new correctness regressions were evident in the reviewed diff.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The tauri-fullstack skill now includes smart-push test names in its example handoff, but it still does not state the key postconditions those tests must assert for first-push semantics, such as upstream tracking becoming active and `commits_pushed` reflecting the pushed local commits. That omission likely contributed to both earlier review failures.",
+      "evidence": ".factory/skills/tauri-fullstack/SKILL.md example handoff mentions `ship_simple_push` / `ship_rebase_when_behind`, but does not specify expected assertions like `has_remote == true` after first push or accurate first-push `commits_pushed`; earlier commits e9202dc and ef3640d both encoded incorrect first-push expectations that this fix corrects in apps/desktop/src-tauri/src/git.rs:1292-1306."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The shared architecture/library docs still do not capture the repo pattern for testing git CLI workflows with temporary local repositories and bare remotes, even though multiple smart-push fixes depended on that setup.",
+      "evidence": ".factory/library/architecture.md documents command/settings/AI flows only and contains no guidance for `git.rs` integration-test fixtures like the bare-remote helpers in apps/desktop/src-tauri/src/git.rs:977-1258."
+    }
+  ],
+  "addressesFailureFrom": [
+    "/Users/simonbloom/apps-vol11/vibogit/.factory/validation/core-fixes/scrutiny/reviews/smart-push.json",
+    "/Users/simonbloom/apps-vol11/vibogit/.factory/validation/core-fixes/scrutiny/reviews/fix-ship-integration-tests.json"
+  ],
+  "summary": "Reviewed handoff, transcript skeleton, commit c201bfd, current git.rs implementation, and the two prior failing reviews. Result: pass. This fix closes the original smart-push/simple-push semantics gaps by establishing upstream tracking on first push and aligning the implementation plus integration assertions with the intended `commits_pushed` and `has_remote` behavior."
+}

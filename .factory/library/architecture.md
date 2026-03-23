@@ -18,3 +18,8 @@ Frontend Component -> `send(action)` -> `daemon-context.tsx` switch -> `tauriInv
 - Providers defined in `ai-service.ts` with `AI_PROVIDERS` array
 - `getModelForProvider(providerId, modelId?)` resolves model
 - Rust backend dispatches to correct API based on `provider` string parameter
+
+## Git CLI Integration Test Pattern
+- For `apps/desktop/src-tauri/src/git.rs` workflows that shell out to `git`, use `tempfile` directories with a bare remote plus one or more working clones instead of mocking command output.
+- First-push tests should assert both transport effects and tracking semantics after success, including a non-zero `commits_pushed` count when local commits were sent and `status.has_remote == true` once upstream tracking is established.
+- Smart-push regression coverage should include at least: simple push, pull-rebase-then-push when remote is ahead, conflict-triggered rebase abort cleanup, and no-remote failure behavior.

@@ -1,7 +1,7 @@
 {
   "milestone": "core-fixes",
-  "round": 2,
-  "status": "fail",
+  "round": 3,
+  "status": "pass",
   "validatorsRun": {
     "test": {
       "passed": true,
@@ -20,53 +20,37 @@
     }
   },
   "reviewsSummary": {
-    "total": 4,
-    "passed": 2,
-    "failed": 2,
-    "failedFeatures": [
-      "smart-push",
-      "fix-ship-integration-tests"
-    ]
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "failedFeatures": []
   },
-  "blockingIssues": [
+  "blockingIssues": [],
+  "appliedUpdates": [
     {
-      "featureId": "smart-push",
-      "severity": "blocking",
-      "description": "apps/desktop/src-tauri/src/git.rs:1272 has a simple-push test that asserts `result.commits_pushed == 0`, which contradicts the requirement that successful pushes report an accurate non-zero pushed count for that scenario."
-    },
-    {
-      "featureId": "fix-ship-integration-tests",
-      "severity": "blocking",
-      "description": "apps/desktop/src-tauri/src/git.rs:1271 still encodes incorrect simple-push expectations by asserting both `result.commits_pushed == 0` and `!status.has_remote` after a successful initial push, so the integration suite can pass while preserving broken post-push semantics."
+      "target": "library",
+      "description": "Documented the temporary local repo plus bare remote integration-test pattern and first-push postconditions for git CLI workflows in .factory/library/architecture.md.",
+      "sourceFeature": "smart-push"
     }
   ],
-  "appliedUpdates": [],
   "suggestedGuidanceUpdates": [
     {
       "target": "skills",
-      "suggestion": "Update the tauri-fullstack skill to document the temporary local repo + bare remote fixture pattern for validating git CLI workflows like smart push, and explicitly call out key postconditions such as `commits_pushed` and `has_remote` that those tests should assert.",
-      "evidence": "Both failing reviews on smart push identified incorrect or missing ship() workflow assertions, and one reviewer noted the skill asks for ship() tests without specifying the fixture pattern or critical postconditions.",
+      "suggestion": "Update the tauri-fullstack skill to explicitly document the temporary local repo + bare remote fixture pattern for git CLI workflow tests and to name first-push postconditions like upstream tracking, `commits_pushed`, and `has_remote` that those tests must assert.",
+      "evidence": "Shared-state observations from smart-push, fix-ship-integration-tests, and fix-ship-push-tracking-and-tests all point to the same omission, and prior scrutiny failures in those features were corrected only after follow-up fixes added/adjusted those assertions.",
       "isSystemic": true
     },
     {
       "target": "skills",
-      "suggestion": "Clarify in tauri-fullstack that verification-only reruns or non-visual config migrations may skip browser/manual UI validation when the change does not affect a browser-testable surface.",
-      "evidence": "Pass reviews for ai-settings-simplify and fix-gemini-config-migration both noted the skill's default browser-verification procedure did not fit already-landed or non-visual config-only work, causing explicit deviations.",
-      "isSystemic": false
+      "suggestion": "Clarify in tauri-fullstack that verification-only or non-visual fixes may skip browser verification and Rust-first TDD when the feature scope is limited to already-landed code review or small frontend config migrations.",
+      "evidence": "Shared-state observations from ai-settings-simplify and fix-gemini-config-migration both noted that the current skill wording over-prescribes implementation/browser steps for verification-only and frontend-only config work, leading workers to record avoidable procedure deviations.",
+      "isSystemic": true
     }
   ],
   "rejectedObservations": [
     {
-      "observation": "Add a library note right now for bare-remote git fixture patterns.",
-      "reason": "Rejected because the current round surfaced incorrect assertions in the first implementation of those tests; guidance should not be promoted to shared reference material until a correct, validated pattern exists in the codebase."
-    },
-    {
-      "observation": "Document the stale `gpt-5.3-codex-spark` mock value in shared library docs.",
-      "reason": "Rejected because this is isolated mock-data drift rather than durable architectural knowledge, and documenting it would not improve future worker execution."
-    },
-    {
-      "observation": "Add ConfigContext AI normalization guidance to the library immediately.",
-      "reason": "Rejected because the migration behavior is feature-specific and already reflected in code; no repeated cross-feature confusion was shown in this scrutiny round."
+      "observation": "Stale mock fixture still references `gpt-5.3-codex-spark`.",
+      "reason": "rejected because this is isolated fixture drift rather than shared operational knowledge or milestone-blocking guidance; it can be fixed in normal product work if needed."
     }
   ],
   "previousRound": ".factory/validation/core-fixes/scrutiny/synthesis.json"

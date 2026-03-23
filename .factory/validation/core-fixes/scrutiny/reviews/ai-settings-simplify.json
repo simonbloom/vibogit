@@ -1,6 +1,6 @@
 {
   "featureId": "ai-settings-simplify",
-  "reviewedAt": "2026-03-23T14:15:18.195722+00:00",
+  "reviewedAt": "2026-03-23T14:25:52.091007+00:00",
   "commitId": "197698f53ddd6fbac556b186899c753168580f80",
   "transcriptSkeletonReviewed": true,
   "diffReviewed": true,
@@ -13,7 +13,7 @@
     {
       "area": "knowledge",
       "observation": "A repo fixture still carries the retired OpenAI model string `gpt-5.3-codex-spark`, so internal demo/mock data no longer matches the simplified AI defaults even though runtime code is correct.",
-      "evidence": "apps/desktop/frontend/src/app/figma-capture/_lib/mock-data.ts:490 sets `aiModel: \"gpt-5.3-codex-spark\"` while packages/ui/src/lib/ai-service.ts:27-33 and packages/shared/src/types.ts:347-349 define the supported/default OpenAI model as `gpt-5.4`."
+      "evidence": "apps/desktop/frontend/src/app/figma-capture/_lib/mock-data.ts:490 sets `aiModel: \"gpt-5.3-codex-spark\"` while packages/ui/src/lib/ai-service.ts:15-33 and packages/shared/src/types.ts:345-349 define the supported/default OpenAI model as `gpt-5.4`. git blame shows the stale fixture line came from commit 87123ebd on 2026-03-23, after the simplification change."
     },
     {
       "area": "skills",

@@ -1,26 +1,21 @@
 {
   "featureId": "fix-gemini-config-migration",
-  "reviewedAt": "2026-03-23T14:14:55.427653+00:00",
+  "reviewedAt": "2026-03-23T14:25:48.336612+00:00",
   "commitId": "c6bec25dd34c709f808670903decf155667bec58",
   "transcriptSkeletonReviewed": true,
   "diffReviewed": true,
   "status": "pass",
   "codeReview": {
-    "summary": "The migration fix is complete for the local config hydration path. `getLocalConfig()` now normalizes unsupported `aiProvider` values to the default provider and resolves stale `aiModel` values through the current provider defaults, and the same normalization is applied when persisting local config and when hydrating daemon responses.",
+    "summary": "The fix correctly normalizes legacy or unsupported AI providers from localStorage and daemon responses to the supported provider set, and it resets mismatched model IDs to the active provider default before state is used or persisted.",
     "issues": []
   },
   "sharedStateObservations": [
     {
-      "area": "knowledge",
-      "observation": "The shared-state docs note the settings flow and AI provider pattern, but they do not document that `ConfigContext` must normalize unsupported `aiProvider` values and provider/model combinations with `normalizeConfig()` / `getModelForProvider()` when hydrating `vibogit-settings` from localStorage or daemon config.",
-      "evidence": "packages/ui/src/lib/config-context.tsx:29-57 and 80-83 now normalize localStorage and daemon config; .factory/library/architecture.md only says settings flow uses localStorage and `getModelForProvider()` resolves models without recording this migration requirement."
-    },
-    {
       "area": "skills",
-      "observation": "The `tauri-fullstack` skill assumes browser verification as a standard step even for small non-visual config-migration fixes, which did not match the actual work needed here and led the worker to explicitly deviate from the procedure.",
-      "evidence": "worker-transcripts.jsonl entry for session b5c0db09-92d1-477f-815e-1fb27880601e records `skillFeedback.followedProcedure=false` because step 6 manual browser verification was skipped for this non-visual config change; .factory/skills/tauri-fullstack/SKILL.md step 6 currently treats browser verification as part of the default workflow."
+      "observation": "The tauri-fullstack skill currently requires Rust-first TDD and browser verification even for small frontend-only config migration fixes, which did not match this feature's implementation needs.",
+      "evidence": "Feature description only targeted `packages/ui/src/lib/config-context.tsx`; transcript handoff.skillFeedback marks `followedProcedure: false` because steps 3 and 6 were intentionally skipped for this TypeScript-only migration, yet the implementation and validators still matched the feature requirements."
     }
   ],
   "addressesFailureFrom": null,
-  "summary": "Pass. The committed change fixes the previously missing Gemini/localStorage migration in `config-context.tsx`, keeps browser and daemon hydration aligned, and I found no blocking or non-blocking code issues in scope."
+  "summary": "Reviewed commit c6bec25 for fix-gemini-config-migration. The implementation satisfies the requested migration behavior in config hydration, no blocking or non-blocking code issues were found, and one skill-procedure gap was noted for scrutiny triage."
 }
