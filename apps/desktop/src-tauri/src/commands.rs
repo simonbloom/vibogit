@@ -744,6 +744,8 @@ pub struct AppConfig {
     pub ai_api_key: String,
     #[serde(default)]
     pub github_pat: String,
+    #[serde(default)]
+    pub sync_beacon_machine_name: String,
     pub editor: String,
     pub custom_editor_command: String,
     pub terminal: String,
@@ -774,6 +776,7 @@ impl Default for AppConfig {
             ai_provider: "openai".to_string(),
             ai_api_key: String::new(),
             github_pat: String::new(),
+            sync_beacon_machine_name: String::new(),
             editor: "cursor".to_string(),
             custom_editor_command: String::new(),
             terminal: "Terminal".to_string(),
@@ -839,6 +842,11 @@ fn current_unix_timestamp() -> i64 {
 }
 
 fn machine_name_from_config(config: &AppConfig) -> String {
+    let sync_beacon_name = config.sync_beacon_machine_name.trim();
+    if !sync_beacon_name.is_empty() {
+        return sync_beacon_name.to_string();
+    }
+
     let configured = config.computer_name.trim();
     if !configured.is_empty() {
         return configured.to_string();
@@ -1098,14 +1106,23 @@ pub async fn sync_beacon_pull(gist_id: String) -> Result<SyncBeaconData, String>
 }
 
 #[tauri::command]
-pub async fn sync_beacon_push(config_path: String, repos: Vec<BeaconRepo>) -> Result<SyncBeaconData, String> {
+pub async fn sync_beacon_push(
+    config_path: String,
+    repos: Vec<BeaconRepo>,
+    machine_name: Option<String>,
+) -> Result<SyncBeaconData, String> {
     let gh_status = sync_beacon_check_gh().await?;
     if !gh_status.available || !gh_status.authenticated {
         return Err(gh_status.message);
     }
 
     let mut config = load_app_config_from_path(&config_path)?;
-    let machine_name = machine_name_from_config(&config);
+    let machine_name = machine_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| machine_name_from_config(&config));
     let payload = BeaconPayload {
         machine_name,
         timestamp: current_unix_timestamp(),
@@ -2945,6 +2962,10 @@ mod sync_beacon_tests {
     #[test]
     fn machine_name_uses_config_or_hostname() {
         let mut config = AppConfig::default();
+        config.sync_beacon_machine_name = "Beacon Name".to_string();
+        assert_eq!(machine_name_from_config(&config), "Beacon Name");
+
+        config.sync_beacon_machine_name.clear();
         config.computer_name = "Desk Mac".to_string();
         assert_eq!(machine_name_from_config(&config), "Desk Mac");
 

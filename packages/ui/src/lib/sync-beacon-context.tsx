@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { toast } from "sonner";
+import type { GitCommit } from "@vibogit/shared";
 import { useConfig } from "@/lib/config-context";
 import { useDaemon } from "@/lib/daemon-context";
 import { useProjects } from "@/lib/projects-context";
@@ -47,6 +48,8 @@ interface SyncBeaconContextValue {
 
 const SyncBeaconContext = createContext<SyncBeaconContextValue | null>(null);
 
+type RepoCommitMetadata = Pick<SyncBeaconRepo, "lastCommitHash" | "lastCommitMessage" | "lastCommitTimestamp">;
+
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "string" && error) return error;
@@ -63,19 +66,89 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastToastErrorRef = useRef<string | null>(null);
+  const repoCommitMetadataRef = useRef<Record<string, RepoCommitMetadata>>({});
+
+  const loadRepoCommitMetadata = useCallback(
+    async (projectPath: string): Promise<RepoCommitMetadata> => {
+      try {
+        const response = await send<{ commits: GitCommit[] }>("log", { repoPath: projectPath, limit: 1 });
+        const commit = response.commits?.[0];
+        if (!commit) {
+          return {
+            lastCommitHash: "",
+            lastCommitMessage: "",
+            lastCommitTimestamp: 0,
+          };
+        }
+
+        const timestampMs = Date.parse(commit.date);
+        return {
+          lastCommitHash: commit.hash || "",
+          lastCommitMessage: commit.message || "",
+          lastCommitTimestamp: Number.isNaN(timestampMs) ? 0 : Math.floor(timestampMs / 1000),
+        };
+      } catch {
+        return {
+          lastCommitHash: "",
+          lastCommitMessage: "",
+          lastCommitTimestamp: 0,
+        };
+      }
+    },
+    [send]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const missingPaths = projectsState.projects
+      .map((project) => project.path)
+      .filter((projectPath) => !(projectPath in repoCommitMetadataRef.current));
+
+    if (missingPaths.length === 0) {
+      const validPaths = new Set(projectsState.projects.map((project) => project.path));
+      repoCommitMetadataRef.current = Object.fromEntries(
+        Object.entries(repoCommitMetadataRef.current).filter(([projectPath]) => validPaths.has(projectPath))
+      );
+      return;
+    }
+
+    void Promise.all(
+      missingPaths.map(async (projectPath) => [projectPath, await loadRepoCommitMetadata(projectPath)] as const)
+    ).then((entries) => {
+      if (cancelled) return;
+
+      const validPaths = new Set(projectsState.projects.map((project) => project.path));
+      repoCommitMetadataRef.current = {
+        ...Object.fromEntries(
+          Object.entries(repoCommitMetadataRef.current).filter(([projectPath]) => validPaths.has(projectPath))
+        ),
+        ...Object.fromEntries(entries),
+      };
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadRepoCommitMetadata, projectsState.projects]);
 
   const beaconRepos = useMemo<SyncBeaconRepo[]>(() => {
     return projectsState.projects.map((project) => {
       const projectStatus = projectsState.statuses[project.path];
+      const commitMetadata = repoCommitMetadataRef.current[project.path] ?? {
+        lastCommitHash: "",
+        lastCommitMessage: "",
+        lastCommitTimestamp: 0,
+      };
       return {
         path: project.path,
         name: project.name,
         branch: projectStatus?.currentBranch || "unknown",
         ahead: projectStatus?.ahead || 0,
         behind: projectStatus?.behind || 0,
-        lastCommitHash: "",
-        lastCommitMessage: "",
-        lastCommitTimestamp: 0,
+        lastCommitHash: commitMetadata.lastCommitHash,
+        lastCommitMessage: commitMetadata.lastCommitMessage,
+        lastCommitTimestamp: commitMetadata.lastCommitTimestamp,
       };
     });
   }, [projectsState.projects, projectsState.statuses]);
@@ -130,6 +203,7 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
       const data = await send<SyncBeaconData>("sync_beacon_push", {
         configPath,
         repos: beaconRepos,
+        machineName: localMachineName || hostnameFallback,
       });
 
       if (!config.syncBeaconMachineName.trim()) {

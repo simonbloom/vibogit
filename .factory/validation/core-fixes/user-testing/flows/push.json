@@ -1,0 +1,106 @@
+{
+  "surface": "tauri-rust-cli",
+  "assertionsTested": [
+    "VAL-PUSH-001",
+    "VAL-PUSH-002",
+    "VAL-PUSH-003",
+    "VAL-PUSH-010",
+    "VAL-PUSH-011",
+    "VAL-PUSH-012",
+    "VAL-PUSH-020",
+    "VAL-PUSH-021",
+    "VAL-PUSH-030",
+    "VAL-PUSH-050",
+    "VAL-PUSH-051",
+    "VAL-PUSH-060"
+  ],
+  "passedAssertions": [
+    {
+      "id": "VAL-PUSH-001",
+      "verdict": "passed",
+      "reason": "Rust integration test `ship_simple_push_updates_remote_and_clears_ahead` proves simple push succeeds, remote HEAD matches local HEAD, and refreshed status reports ahead=0/behind=0. Frontend handler shows success toast after awaiting push and refreshStatus."
+    },
+    {
+      "id": "VAL-PUSH-002",
+      "verdict": "passed",
+      "reason": "Source inspection shows main-interface disables the push button when `(status?.ahead || 0) === 0`, and mini-view disables when `!status?.ahead`; both enable when ahead > 0 subject to repo readiness."
+    },
+    {
+      "id": "VAL-PUSH-003",
+      "verdict": "passed",
+      "reason": "Source inspection shows main-interface renders `Push (${status.ahead})` and mini-view renders a green numeric count when `status?.ahead` is truthy, matching the ahead value from status."
+    },
+    {
+      "id": "VAL-PUSH-010",
+      "verdict": "passed",
+      "reason": "`ship()` checks behind count and runs `git pull --rebase origin <branch>` before push. Integration test `ship_rebases_then_pushes_when_remote_is_ahead` verifies rebased=true, ahead=0, behind=0, local and remote commits preserved, and remote HEAD matches local HEAD."
+    },
+    {
+      "id": "VAL-PUSH-011",
+      "verdict": "passed",
+      "reason": "Both `main-interface.tsx` and `mini-view.tsx` show `toast.loading(\"Syncing with remote...\")` whenever `status.behind > 0`, and dismiss it on completion or failure."
+    },
+    {
+      "id": "VAL-PUSH-020",
+      "verdict": "passed",
+      "reason": "`ship()` classifies rebase conflicts as `GitError::RebaseConflict`, aborts the rebase, and returns without leaving rebase state. Integration test `ship_conflict_aborts_rebase_and_leaves_repo_clean` verifies conflict text, unchanged local HEAD, clean status, and no rebase state remains. Frontend maps conflict messages to a user-friendly conflict toast."
+    },
+    {
+      "id": "VAL-PUSH-021",
+      "verdict": "passed",
+      "reason": "The same conflict integration test verifies no data loss: local HEAD is unchanged and `shared.txt` still contains the local version after the failed push attempt."
+    },
+    {
+      "id": "VAL-PUSH-030",
+      "verdict": "passed",
+      "reason": "Push/rebase classification no longer routes behind/divergence failures to `AuthFailed`: `classify_rebase_error` returns `RebaseConflict` or `PushRejected`, and frontend conflict handling emits conflict-specific messaging instead of auth language. Cargo tests cover conflict and rejected classification helpers."
+    },
+    {
+      "id": "VAL-PUSH-050",
+      "verdict": "passed",
+      "reason": "Both views set `isPushing` before invoking push, render `Loader2` while pushing, disable the push control during the operation, and reset `isPushing` in `finally`, restoring normal state after success or failure."
+    },
+    {
+      "id": "VAL-PUSH-051",
+      "verdict": "passed",
+      "reason": "Main-interface and mini-view share equivalent smart-push logic: same behind check, same syncing toast text, same conflict and partial-failure toast branches, same backend `send(\"push\")` call, and same `refreshStatus()` on success."
+    },
+    {
+      "id": "VAL-PUSH-060",
+      "verdict": "passed",
+      "reason": "`git_ship` invalidates cached status in Rust after success, and both frontend handlers call `await refreshStatus()` before showing the success toast. Integration tests confirm post-push status resolves to ahead=0."
+    }
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [
+    {
+      "id": "VAL-PUSH-012",
+      "verdict": "blocked",
+      "reason": "No automated test or existing harness in this repo simulates the specific partial failure where `git pull --rebase` succeeds but the subsequent push fails due to a transient transport/network error. Source inspection shows intended handling via `classify_push_error(stderr, rebased)` and dedicated frontend toast text, but without a controllable Tauri/runtime fixture this user-surface assertion cannot be fully proven."
+    }
+  ],
+  "frictions": [
+    "The tauri-rust-cli validation surface is guidance-limited to source inspection plus existing automated verification; no real Tauri runtime harness is available here for observing live toasts or inducing post-rebase transport failures.",
+    "`cargo test` must be run from `apps/desktop/src-tauri` via `--manifest-path`; running it from the repo root fails because there is no top-level Cargo.toml."
+  ],
+  "blockers": [
+    "VAL-PUSH-012 requires a controllable push failure after a successful rebase in a real Tauri/runtime-backed flow; existing tests do not cover that scenario and browser mode cannot exercise git push."
+  ],
+  "toolsUsed": [
+    "Read",
+    "LS",
+    "Grep",
+    "Glob",
+    "Execute",
+    "TodoWrite"
+  ],
+  "evidenceFiles": [
+    "/Users/simonbloom/apps-vol11/vibogit/apps/desktop/src-tauri/src/git.rs",
+    "/Users/simonbloom/apps-vol11/vibogit/apps/desktop/src-tauri/src/commands.rs",
+    "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/components/main-interface.tsx",
+    "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/components/mini-view.tsx",
+    "/Users/simonbloom/apps-vol11/vibogit/.factory/library/user-testing.md",
+    "/Users/simonbloom/.factory/missions/6ceb9638-91db-4dfe-938e-8ab0637de724/validation-contract.md"
+  ],
+  "summary": "Validated 12 assigned Smart Push assertions for the tauri-rust-cli surface using mission guidance, targeted source inspection, `bun run typecheck`, and `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`. Eleven assertions pass based on direct code paths plus Rust integration coverage for simple push, auto-rebase push, conflict abort cleanup, parity across views, and status refresh. One assertion (VAL-PUSH-012) remains blocked because the repository lacks an automated/runtime harness to force a push transport failure after a successful rebase and observe the resulting user-surface behavior end-to-end."
+}

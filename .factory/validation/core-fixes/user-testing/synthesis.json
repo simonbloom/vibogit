@@ -1,0 +1,67 @@
+{
+  "milestone": "core-fixes",
+  "round": 2,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 20,
+    "passed": 20,
+    "failed": 0,
+    "blocked": 1
+  },
+  "passedAssertions": [
+    "VAL-AI-001",
+    "VAL-AI-002",
+    "VAL-AI-003",
+    "VAL-AI-005",
+    "VAL-AI-007",
+    "VAL-AI-009",
+    "VAL-AI-010",
+    "VAL-AI-016",
+    "VAL-AI-019",
+    "VAL-AI-023",
+    "VAL-AI-024",
+    "VAL-AI-032",
+    "VAL-CROSS-001",
+    "VAL-PUSH-001",
+    "VAL-PUSH-002",
+    "VAL-PUSH-003",
+    "VAL-PUSH-010",
+    "VAL-PUSH-011",
+    "VAL-PUSH-020",
+    "VAL-PUSH-021",
+    "VAL-PUSH-030",
+    "VAL-PUSH-050",
+    "VAL-PUSH-051",
+    "VAL-PUSH-060"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [
+    {
+      "id": "VAL-PUSH-012",
+      "blockedBy": "The repo proves successful rebase+push and the post-rebase push-failure classification/message branches separately, but still lacks an integrated harness that forces a real push transport failure after a successful `git pull --rebase` and verifies the preserved rebased state end-to-end."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Added validation concurrency limits and flow-validator guidance for web-ui and tauri-rust-cli surfaces.",
+      "source": "setup"
+    },
+    {
+      "target": "synthesis.json|validation-state.json",
+      "description": "Recorded rerun results after the frontend became reachable: resolved the previously blocked AI assertions and kept VAL-PUSH-012 blocked with refined evidence.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": "/Users/simonbloom/apps-vol11/vibogit/.factory/validation/core-fixes/user-testing/synthesis.json#round-1",
+  "notes": {
+    "frictions": [
+      "The shared root UI at http://localhost:4158 serves the onboarding/browser shell, so AI settings validation still relied heavily on source-backed analysis even after reachability was restored.",
+      "The tauri-rust-cli validation surface is guidance-limited to source inspection plus existing automated verification; no real Tauri runtime harness is available here for observing live toasts or inducing post-rebase transport failures.",
+      "`cargo test` must be run from `apps/desktop/src-tauri` via `--manifest-path`; running it from the repo root fails because there is no top-level Cargo.toml."
+    ],
+    "blockers": [
+      "VAL-PUSH-012 requires a controllable push failure after a successful rebase in a real Tauri/runtime-backed flow; existing tests do not cover that scenario and browser mode cannot exercise git push."
+    ]
+  }
+}

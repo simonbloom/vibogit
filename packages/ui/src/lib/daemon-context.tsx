@@ -272,7 +272,8 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
     case "sync_beacon_push": {
       const repos = (args.repos as unknown[] | undefined) || [];
       const configPath = (args.configPath as string | undefined) || "";
-      const result = await tauriInvoke("sync_beacon_push", { configPath, repos });
+      const machineName = args.machineName as string | undefined;
+      const result = await tauriInvoke("sync_beacon_push", { configPath, repos, machineName });
       return result as T;
     }
 

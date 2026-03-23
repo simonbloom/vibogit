@@ -1,0 +1,155 @@
+{
+  "surface": "web-ui",
+  "assertionsTested": [
+    "VAL-AI-001",
+    "VAL-AI-002",
+    "VAL-AI-003",
+    "VAL-AI-005",
+    "VAL-AI-009",
+    "VAL-AI-010",
+    "VAL-AI-019",
+    "VAL-CROSS-001"
+  ],
+  "passedAssertions": [
+    {
+      "id": "VAL-AI-001",
+      "status": "pass",
+      "method": "repo-inspection-fallback",
+      "reason": "AI_PROVIDERS defines exactly two providers, Anthropic and OpenAI.",
+      "evidence": [
+        "packages/ui/src/lib/ai-service.ts"
+      ]
+    },
+    {
+      "id": "VAL-AI-002",
+      "status": "pass",
+      "method": "repo-inspection-fallback",
+      "reason": "Fresh settings/config default aiProvider to openai, giving new users a sensible pre-selected provider.",
+      "evidence": [
+        "packages/ui/src/lib/settings.ts",
+        "packages/shared/src/types.ts"
+      ]
+    },
+    {
+      "id": "VAL-AI-003",
+      "status": "pass",
+      "method": "repo-inspection-fallback",
+      "reason": "Provider changes are persisted into localStorage through ConfigProvider/saveLocalConfig and restored on reopen via getLocalConfig.",
+      "evidence": [
+        "packages/ui/src/lib/config-context.tsx",
+        "packages/ui/src/components/settings/sections/AISettingsSection.tsx"
+      ]
+    },
+    {
+      "id": "VAL-AI-005",
+      "status": "pass",
+      "method": "repo-inspection-fallback",
+      "reason": "The Model control is gated behind selectedProvider.models.length > 1; both supported providers expose only one model, so no model dropdown renders for either provider.",
+      "evidence": [
+        "packages/ui/src/components/settings/sections/AISettingsSection.tsx",
+        "packages/ui/src/lib/ai-service.ts"
+      ]
+    },
+    {
+      "id": "VAL-AI-009",
+      "status": "pass",
+      "method": "repo-inspection-fallback",
+      "reason": "API key input defaults to password, toggles to text via eye button, and persists because changes flow through onSave/setConfig into localStorage.",
+      "evidence": [
+        "packages/ui/src/components/settings/sections/AISettingsSection.tsx",
+        "packages/ui/src/lib/config-context.tsx"
+      ]
+    },
+    {
+      "id": "VAL-AI-010",
+      "status": "pass",
+      "method": "repo-inspection-fallback",
+      "reason": "Placeholder and help link are sourced from the selected provider metadata, which differs for Anthropic and OpenAI and updates on provider switch.",
+      "evidence": [
+        "packages/ui/src/lib/ai-service.ts",
+        "packages/ui/src/components/settings/sections/AISettingsSection.tsx"
+      ]
+    },
+    {
+      "id": "VAL-AI-019",
+      "status": "pass",
+      "method": "repo-inspection-fallback",
+      "reason": "Legacy gemini localStorage values are migrated to DEFAULT_SETTINGS (openai/gpt-5.4) and API key cleared, preventing crashes and invalid provider display.",
+      "evidence": [
+        "packages/ui/src/lib/settings.ts",
+        "packages/ui/src/lib/config-context.tsx"
+      ]
+    },
+    {
+      "id": "VAL-CROSS-001",
+      "status": "pass",
+      "method": "repo-inspection-fallback",
+      "reason": "Settings persistence is implemented via ConfigProvider/localStorage, and AI commit/PR generation always resolves the model from the current provider using getModelForProvider before invoking backend commands.",
+      "evidence": [
+        "packages/ui/src/lib/config-context.tsx",
+        "packages/ui/src/components/ai-commit-button.tsx",
+        "packages/ui/src/components/create-pr-dialog.tsx",
+        "packages/ui/src/lib/ai-service.ts"
+      ]
+    }
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [
+    {
+      "id": "VAL-AI-001",
+      "scope": "browser-evidence",
+      "reason": "Unable to capture live dropdown DOM/screenshot because http://localhost:4158 timed out and did not serve a usable UI."
+    },
+    {
+      "id": "VAL-AI-002",
+      "scope": "browser-evidence",
+      "reason": "Unable to capture fresh-start UI screenshot because http://localhost:4158 timed out and did not serve a usable UI."
+    },
+    {
+      "id": "VAL-AI-003",
+      "scope": "browser-evidence",
+      "reason": "Unable to verify open/close interaction in browser because http://localhost:4158 timed out and did not serve a usable UI."
+    },
+    {
+      "id": "VAL-AI-005",
+      "scope": "browser-evidence",
+      "reason": "Unable to inspect rendered settings form in browser because http://localhost:4158 timed out and did not serve a usable UI."
+    },
+    {
+      "id": "VAL-AI-009",
+      "scope": "browser-evidence",
+      "reason": "Unable to exercise show/hide UI toggle in browser because http://localhost:4158 timed out and did not serve a usable UI."
+    },
+    {
+      "id": "VAL-AI-010",
+      "scope": "browser-evidence",
+      "reason": "Unable to confirm runtime placeholder/help-link swapping in browser because http://localhost:4158 timed out and did not serve a usable UI."
+    },
+    {
+      "id": "VAL-AI-019",
+      "scope": "browser-evidence",
+      "reason": "Unable to observe migrated localStorage state in a live browser session because http://localhost:4158 timed out and did not serve a usable UI."
+    },
+    {
+      "id": "VAL-CROSS-001",
+      "scope": "browser-evidence",
+      "reason": "Unable to validate post-switch runtime behavior or restart persistence through the live UI because http://localhost:4158 timed out and did not serve a usable UI."
+    }
+  ],
+  "frictions": [
+    "Local dev server on port 4158 was unreachable within timeout, preventing browser automation and screenshot capture.",
+    "Validation had to fall back to source inspection for all assigned assertions."
+  ],
+  "blockers": [
+    "http://localhost:4158 did not respond with a usable UI during validation."
+  ],
+  "toolsUsed": [
+    "Read",
+    "Grep",
+    "Execute"
+  ],
+  "evidenceFiles": [
+    "/Users/simonbloom/.factory/missions/6ceb9638-91db-4dfe-938e-8ab0637de724/evidence/core-fixes/ai-ui/reachability.json"
+  ],
+  "summary": "The assigned AI settings assertions were validated via repo-inspection fallback because the shared web UI at http://localhost:4158 timed out and could not be browser-tested. Source inspection supports all assigned assertions as implemented, but live browser evidence remains blocked until the frontend becomes reachable."
+}
