@@ -1,0 +1,33 @@
+{
+  "featureId": "smart-push",
+  "reviewedAt": "2026-03-23T14:05:00Z",
+  "commitId": "ef3640d",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature adds the intended auto-rebase and UI toast behavior, but it does not fully satisfy the required validation contract because the Rust test coverage never exercises the real pull-rebase-push path or conflict-abort behavior. The implementation relies on string-based classification helpers instead of end-to-end ship() tests, leaving the core smart-push flow insufficiently verified.",
+    "issues": [
+      {
+        "file": "apps/desktop/src-tauri/src/git.rs",
+        "line": 977,
+        "severity": "blocking",
+        "description": "The added tests only cover classify_push_error/classify_rebase_error helpers and serialization, not the actual ship() workflow. The feature explicitly required unit tests for simple push, rebase-then-push, conflict abort, and partial failure, but no test exercises ship() against a repo with a remote, so regressions in the real pull-rebase-push flow can still ship unnoticed."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The tauri-fullstack skill requires writing failing Rust tests first and its example handoff suggests real ship() smart-push scenarios, but the worker deviated to helper-only tests because realistic repo/remote fixtures were not described. The skill should either document how to create local bare-remotes for git.rs tests or explicitly permit helper-level coverage when end-to-end fixtures are impractical.",
+      "evidence": "Skill file .factory/skills/tauri-fullstack/SKILL.md says 'Write failing tests first' and shows ship_simple_push / ship_rebase_when_behind examples, while the transcript handoff states the worker wrote classification-function tests instead of real ship() tests."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The library does not document a recommended pattern for testing git CLI flows locally with temporary repositories and bare remotes, even though smart-push correctness depends on that capability.",
+      "evidence": "The worker transcript says actual git push/pull tests were skipped due to needing real remotes/credentials, and .factory/library/architecture.md plus user-testing.md contain no guidance for local bare-remote testing of git.rs operations."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed smart-push commit ef3640d, its handoff, transcript skeleton, and mission/shared-state docs. The implementation appears directionally correct, but I marked the feature failed because the required Rust coverage for the real ship() rebase/push/conflict scenarios is missing; only helper-classification tests were added."
+}

@@ -1,0 +1,67 @@
+{
+  "milestone": "core-fixes",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "cd apps/desktop/src-tauri && cargo test",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "bun run typecheck",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "bun run lint",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 2,
+    "passed": 0,
+    "failed": 2,
+    "failedFeatures": [
+      "smart-push",
+      "ai-settings-simplify"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "smart-push",
+      "severity": "blocking",
+      "description": "apps/desktop/src-tauri/src/git.rs lacks real ship() tests for simple push, rebase-then-push, conflict abort, and partial failure; only helper classification/serialization tests were added, so the required smart-push flow coverage is missing."
+    },
+    {
+      "featureId": "ai-settings-simplify",
+      "severity": "blocking",
+      "description": "packages/ui/src/lib/config-context.tsx:getLocalConfig() still accepts aiProvider: \"gemini\" from browser localStorage without migrating it, so stale Gemini configs do not reliably fall back to a supported provider."
+    }
+  ],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "skills",
+      "suggestion": "Update the tauri-fullstack skill to document a concrete pattern for testing git CLI flows with temporary repositories and local bare remotes, or explicitly state when helper-level coverage is acceptable if end-to-end fixtures are impractical.",
+      "evidence": "The smart-push review failed because required ship() scenarios were not covered with real repo/remote tests; the review noted the skill asked for such tests but did not explain how to build local bare-remote fixtures.",
+      "isSystemic": false
+    }
+  ],
+  "rejectedObservations": [
+    {
+      "observation": "Add a library note that AI settings migration spans both localStorage and daemon config hydration paths.",
+      "reason": "This is a reasonable knowledge gap, but it is tightly tied to the specific failed feature and should be handled with the fix rather than documented as stable reference material before the implementation is corrected."
+    },
+    {
+      "observation": "Adjust the tauri-fullstack skill to skip commit steps during verification-only reruns.",
+      "reason": "This is a procedural nuance for already-completed features rather than a demonstrated systemic repository issue, so it is better surfaced to the orchestrator than applied directly here."
+    },
+    {
+      "observation": "Add a library entry for local bare-remote git fixture patterns immediately.",
+      "reason": "The repo currently has no validated reference implementation for that fixture pattern; adding guidance without first proving it in code would be premature."
+    }
+  ],
+  "previousRound": null
+}
