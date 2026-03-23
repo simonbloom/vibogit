@@ -252,9 +252,7 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
 
     case "setConfig": {
       const configPatch = args.config as Record<string, unknown> | undefined;
-      const current = await tauriInvoke("get_config") as Record<string, unknown>;
-      const merged = { ...current, ...configPatch };
-      const result = await tauriInvoke("set_config", { config: merged });
+      const result = await tauriInvoke("set_config", { config: configPatch ?? {} });
       return { config: result } as T;
     }
 

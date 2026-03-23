@@ -752,12 +752,18 @@ pub struct AppConfig {
     pub computer_name: String,
     #[serde(default)]
     pub ai_provider: String,
+    #[serde(default = "default_ai_model")]
+    pub ai_model: String,
     #[serde(default)]
     pub ai_api_key: String,
     #[serde(default)]
     pub github_pat: String,
     #[serde(default)]
+    pub sync_beacon_enabled: bool,
+    #[serde(default)]
     pub sync_beacon_machine_name: String,
+    #[serde(default = "default_sync_beacon_interval")]
+    pub sync_beacon_interval: i64,
     #[serde(default)]
     pub editor: String,
     #[serde(default)]
@@ -790,14 +796,25 @@ pub struct ConfigTab {
     pub name: String,
 }
 
+fn default_ai_model() -> String {
+    "gpt-5.4".to_string()
+}
+
+fn default_sync_beacon_interval() -> i64 {
+    300_000
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
             computer_name: String::new(),
             ai_provider: "openai".to_string(),
+            ai_model: default_ai_model(),
             ai_api_key: String::new(),
             github_pat: String::new(),
+            sync_beacon_enabled: false,
             sync_beacon_machine_name: String::new(),
+            sync_beacon_interval: default_sync_beacon_interval(),
             editor: "cursor".to_string(),
             custom_editor_command: String::new(),
             terminal: "Terminal".to_string(),
@@ -1314,10 +1331,60 @@ pub async fn get_config() -> Result<AppConfig, String> {
     Ok(load_app_config())
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AppConfigPatch {
+    pub computer_name: Option<String>,
+    pub ai_provider: Option<String>,
+    pub ai_model: Option<String>,
+    pub ai_api_key: Option<String>,
+    pub github_pat: Option<String>,
+    pub sync_beacon_enabled: Option<bool>,
+    pub sync_beacon_machine_name: Option<String>,
+    pub sync_beacon_pairing_code: Option<String>,
+    pub sync_beacon_interval: Option<i64>,
+    pub editor: Option<String>,
+    pub custom_editor_command: Option<String>,
+    pub terminal: Option<String>,
+    pub theme: Option<String>,
+    pub image_base_path: Option<String>,
+    pub show_hidden_files: Option<bool>,
+    pub clean_shot_mode: Option<bool>,
+    pub auto_execute_prompt: Option<bool>,
+    pub recent_tabs: Option<Vec<ConfigTab>>,
+    pub active_tab_id: Option<Option<String>>,
+}
+
+impl AppConfig {
+    fn merge_patch(mut self, patch: AppConfigPatch) -> Self {
+        if let Some(value) = patch.computer_name { self.computer_name = value; }
+        if let Some(value) = patch.ai_provider { self.ai_provider = value; }
+        if let Some(value) = patch.ai_model { self.ai_model = value; }
+        if let Some(value) = patch.ai_api_key { self.ai_api_key = value; }
+        if let Some(value) = patch.github_pat { self.github_pat = value; }
+        if let Some(value) = patch.sync_beacon_enabled { self.sync_beacon_enabled = value; }
+        if let Some(value) = patch.sync_beacon_machine_name { self.sync_beacon_machine_name = value; }
+        if let Some(value) = patch.sync_beacon_pairing_code { self.sync_beacon_pairing_code = value; }
+        if let Some(value) = patch.sync_beacon_interval { self.sync_beacon_interval = value; }
+        if let Some(value) = patch.editor { self.editor = value; }
+        if let Some(value) = patch.custom_editor_command { self.custom_editor_command = value; }
+        if let Some(value) = patch.terminal { self.terminal = value; }
+        if let Some(value) = patch.theme { self.theme = value; }
+        if let Some(value) = patch.image_base_path { self.image_base_path = value; }
+        if let Some(value) = patch.show_hidden_files { self.show_hidden_files = value; }
+        if let Some(value) = patch.clean_shot_mode { self.clean_shot_mode = value; }
+        if let Some(value) = patch.auto_execute_prompt { self.auto_execute_prompt = value; }
+        if let Some(value) = patch.recent_tabs { self.recent_tabs = value; }
+        if let Some(value) = patch.active_tab_id { self.active_tab_id = value; }
+        self
+    }
+}
+
 #[tauri::command]
-pub async fn set_config(config: AppConfig) -> Result<AppConfig, String> {
-    save_app_config(&config);
-    Ok(config)
+pub async fn set_config(config: AppConfigPatch) -> Result<AppConfig, String> {
+    let merged = load_app_config().merge_patch(config);
+    save_app_config(&merged);
+    Ok(merged)
 }
 
 // GitHub Commands
@@ -3173,26 +3240,93 @@ mod sync_beacon_tests {
     fn test_app_config_uses_pairing_code() {
         let config = AppConfig::default();
         assert_eq!(config.sync_beacon_pairing_code, "");
+        assert!(!config.sync_beacon_enabled);
+        assert_eq!(config.sync_beacon_interval, 300_000);
+        assert_eq!(config.ai_model, "gpt-5.4");
 
-        // Ensure serialization uses the new field name
+        // Ensure serialization uses the new field names
         let json = serde_json::to_string(&config).expect("serialize config");
         assert!(json.contains("syncBeaconPairingCode"), "JSON should contain syncBeaconPairingCode");
+        assert!(json.contains("syncBeaconEnabled"), "JSON should contain syncBeaconEnabled");
+        assert!(json.contains("syncBeaconInterval"), "JSON should contain syncBeaconInterval");
+        assert!(json.contains("aiModel"), "JSON should contain aiModel");
         assert!(!json.contains("syncBeaconGistId"), "JSON should not contain syncBeaconGistId");
     }
 
     #[test]
     fn test_config_deserializes_with_pairing_code() {
-        let json = r#"{"computerName":"","aiProvider":"openai","aiApiKey":"","githubPat":"","syncBeaconMachineName":"","editor":"cursor","customEditorCommand":"","terminal":"Terminal","theme":"dark","imageBasePath":"","showHiddenFiles":false,"cleanShotMode":false,"autoExecutePrompt":false,"syncBeaconPairingCode":"abc123","recentTabs":[],"activeTabId":null}"#;
+        let json = r#"{"computerName":"","aiProvider":"openai","aiModel":"sonnet-4.6","aiApiKey":"","githubPat":"","syncBeaconEnabled":true,"syncBeaconMachineName":"","syncBeaconInterval":600000,"editor":"cursor","customEditorCommand":"","terminal":"Terminal","theme":"dark","imageBasePath":"","showHiddenFiles":false,"cleanShotMode":false,"autoExecutePrompt":false,"syncBeaconPairingCode":"abc123","recentTabs":[],"activeTabId":null}"#;
         let config: AppConfig = serde_json::from_str(json).expect("deserialize config");
         assert_eq!(config.sync_beacon_pairing_code, "abc123");
+        assert!(config.sync_beacon_enabled);
+        assert_eq!(config.sync_beacon_interval, 600000);
+        assert_eq!(config.ai_model, "sonnet-4.6");
     }
 
     #[test]
     fn test_config_deserializes_without_pairing_code_defaults_empty() {
-        // Old config format without the field should use default (empty string)
+        // Old config format without the new fields should use defaults
         let json = r#"{"computerName":"","aiProvider":"openai","aiApiKey":"","githubPat":"","syncBeaconMachineName":"","editor":"cursor","customEditorCommand":"","terminal":"Terminal","theme":"dark","imageBasePath":"","showHiddenFiles":false,"cleanShotMode":false,"autoExecutePrompt":false,"recentTabs":[],"activeTabId":null}"#;
         let config: AppConfig = serde_json::from_str(json).expect("deserialize config");
         assert_eq!(config.sync_beacon_pairing_code, "");
+        assert!(!config.sync_beacon_enabled);
+        assert_eq!(config.sync_beacon_interval, 300_000);
+        assert_eq!(config.ai_model, "gpt-5.4");
+    }
+
+    #[test]
+    fn test_app_config_patch_preserves_existing_fields() {
+        let existing = AppConfig {
+            computer_name: "Work Mac".to_string(),
+            ai_provider: "anthropic".to_string(),
+            ai_model: "sonnet-4.6".to_string(),
+            ai_api_key: "secret".to_string(),
+            github_pat: "ghp_123".to_string(),
+            sync_beacon_enabled: false,
+            sync_beacon_machine_name: "Studio".to_string(),
+            sync_beacon_interval: 900000,
+            editor: "cursor".to_string(),
+            custom_editor_command: "".to_string(),
+            terminal: "Terminal".to_string(),
+            theme: "dark".to_string(),
+            image_base_path: "/tmp".to_string(),
+            show_hidden_files: true,
+            clean_shot_mode: true,
+            auto_execute_prompt: true,
+            sync_beacon_pairing_code: "abc123".to_string(),
+            recent_tabs: vec![],
+            active_tab_id: Some("tab-1".to_string()),
+        };
+
+        let merged = existing.clone().merge_patch(AppConfigPatch {
+            sync_beacon_enabled: Some(true),
+            sync_beacon_pairing_code: Some("xyz789".to_string()),
+            ..AppConfigPatch::default()
+        });
+
+        assert!(merged.sync_beacon_enabled);
+        assert_eq!(merged.sync_beacon_pairing_code, "xyz789");
+        assert_eq!(merged.ai_model, existing.ai_model);
+        assert_eq!(merged.sync_beacon_interval, existing.sync_beacon_interval);
+        assert_eq!(merged.github_pat, existing.github_pat);
+        assert_eq!(merged.active_tab_id, existing.active_tab_id);
+    }
+
+    #[test]
+    fn test_app_config_patch_round_trips_sync_beacon_fields_together() {
+        let merged = AppConfig::default().merge_patch(AppConfigPatch {
+            sync_beacon_enabled: Some(true),
+            sync_beacon_pairing_code: Some("abc123".to_string()),
+            sync_beacon_machine_name: Some("Laptop".to_string()),
+            ..AppConfigPatch::default()
+        });
+
+        let json = serde_json::to_string(&merged).expect("serialize merged config");
+        let parsed: AppConfig = serde_json::from_str(&json).expect("deserialize merged config");
+
+        assert!(parsed.sync_beacon_enabled);
+        assert_eq!(parsed.sync_beacon_pairing_code, "abc123");
+        assert_eq!(parsed.sync_beacon_machine_name, "Laptop");
     }
 
     #[test]
