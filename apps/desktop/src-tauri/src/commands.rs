@@ -1003,12 +1003,13 @@ fn gh_auth_status_output() -> Result<std::process::Output, String> {
         .map_err(|error| friendly_gh_command_error(&error, "check GitHub CLI authentication"))
 }
 
-fn read_sync_beacon_gist_raw(gist_id: &str) -> Result<String, String> {
-    let gist_id = gist_id.trim();
-    if gist_id.is_empty() {
-        return Err("Sync Beacon Gist ID is empty.".to_string());
-    }
+fn sync_beacon_missing_canonical_filename(stderr: &str) -> bool {
+    stderr
+        .to_lowercase()
+        .contains(&format!("gist has no such file: \"{}\"", SYNC_BEACON_FILENAME).to_lowercase())
+}
 
+fn read_sync_beacon_gist_file_raw(gist_id: &str, file_name: &str) -> Result<String, String> {
     let mut command = gh_command();
     command
         .arg("gist")
@@ -1016,11 +1017,80 @@ fn read_sync_beacon_gist_raw(gist_id: &str) -> Result<String, String> {
         .arg(gist_id)
         .arg("--raw")
         .arg("-f")
-        .arg(SYNC_BEACON_FILENAME);
+        .arg(file_name);
     let output = command
         .output()
         .map_err(|error| friendly_gh_command_error(&error, "read Sync Beacon Gist"))?;
     gh_output_success(&output, "read Sync Beacon Gist")
+}
+
+fn extract_sync_beacon_legacy_filename_from_metadata(metadata: &str) -> Result<String, String> {
+    let value: serde_json::Value = serde_json::from_str(metadata)
+        .map_err(|error| format!("Failed to inspect Sync Beacon Gist files: {}", error))?;
+    let files = value
+        .get("files")
+        .and_then(|files| files.as_array())
+        .ok_or_else(|| "Failed to inspect Sync Beacon Gist files: missing files array.".to_string())?;
+
+    if files.is_empty() {
+        return Err("Sync Beacon Gist does not contain any files.".to_string());
+    }
+
+    if let Some(canonical) = files.iter().find_map(|file| {
+        file.get("name")
+            .and_then(|name| name.as_str())
+            .filter(|name| *name == SYNC_BEACON_FILENAME)
+            .map(str::to_string)
+    }) {
+        return Ok(canonical);
+    }
+
+    if files.len() == 1 {
+        return files[0]
+            .get("name")
+            .and_then(|name| name.as_str())
+            .filter(|name| !name.trim().is_empty())
+            .map(str::to_string)
+            .ok_or_else(|| "Legacy Sync Beacon Gist file is missing a readable filename.".to_string());
+    }
+
+    let file_names: Vec<String> = files
+        .iter()
+        .filter_map(|file| file.get("name").and_then(|name| name.as_str()))
+        .map(str::to_string)
+        .collect();
+    Err(format!(
+        "Sync Beacon Gist is incompatible: expected `{}` or exactly one legacy file, but found multiple files: {}",
+        SYNC_BEACON_FILENAME,
+        file_names.join(", ")
+    ))
+}
+
+fn read_sync_beacon_gist_raw(gist_id: &str) -> Result<String, String> {
+    let gist_id = gist_id.trim();
+    if gist_id.is_empty() {
+        return Err("Sync Beacon Gist ID is empty.".to_string());
+    }
+
+    match read_sync_beacon_gist_file_raw(gist_id, SYNC_BEACON_FILENAME) {
+        Ok(raw) => Ok(raw),
+        Err(error) if sync_beacon_missing_canonical_filename(&error) => {
+            let mut metadata_command = gh_command();
+            metadata_command
+                .arg("gist")
+                .arg("view")
+                .arg(gist_id)
+                .arg("--json")
+                .arg("files");
+            let metadata_output = metadata_command
+                .output()
+                .map_err(|command_error| friendly_gh_command_error(&command_error, "inspect Sync Beacon Gist files"))?;
+            let metadata = gh_output_success(&metadata_output, "inspect Sync Beacon Gist files")?;
+            let fallback_file_name = extract_sync_beacon_legacy_filename_from_metadata(&metadata)?;
+            read_sync_beacon_gist_file_raw(gist_id, &fallback_file_name)
+        }
+        Err(error) => Err(error),
+    }
 }
 
 fn read_sync_beacon_gist(gist_id: &str) -> Result<SyncBeaconData, String> {
@@ -3162,6 +3232,40 @@ mod sync_beacon_tests {
         let gist_id = extract_gist_id_from_output("- https://gist.github.com/user/abcdef1234567890")
             .expect("gist id should be extracted");
         assert_eq!(gist_id, "abcdef1234567890");
+    }
+
+    #[test]
+    fn detects_missing_canonical_sync_beacon_filename_error() {
+        let stderr = "gist has no such file: \"vibogit-beacon.json\"";
+        assert!(sync_beacon_missing_canonical_filename(stderr));
+        assert!(!sync_beacon_missing_canonical_filename("some other gh error"));
+    }
+
+    #[test]
+    fn legacy_sync_beacon_metadata_prefers_canonical_file_when_present() {
+        let metadata = r#"{"files":[{"name":"legacy.json"},{"name":"vibogit-beacon.json"}]}"#;
+        let file_name = extract_sync_beacon_legacy_filename_from_metadata(metadata)
+            .expect("canonical filename should win");
+        assert_eq!(file_name, "vibogit-beacon.json");
+    }
+
+    #[test]
+    fn legacy_sync_beacon_metadata_falls_back_to_single_file() {
+        let metadata = r#"{"files":[{"name":"legacy-beacon.json"}]}"#;
+        let file_name = extract_sync_beacon_legacy_filename_from_metadata(metadata)
+            .expect("single legacy file should be accepted");
+        assert_eq!(file_name, "legacy-beacon.json");
+    }
+
+    #[test]
+    fn legacy_sync_beacon_metadata_rejects_ambiguous_multiple_files() {
+        let metadata = r#"{"files":[{"name":"legacy-beacon.json"},{"name":"notes.txt"}]}"#;
+        let error = extract_sync_beacon_legacy_filename_from_metadata(metadata)
+            .expect_err("multiple non-canonical files should be rejected");
+        assert!(error.contains("incompatible"));
+        assert!(error.contains("vibogit-beacon.json"));
+        assert!(error.contains("legacy-beacon.json"));
+        assert!(error.contains("notes.txt"));
     }
 
     #[test]
