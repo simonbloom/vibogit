@@ -1,6 +1,6 @@
 [package]
 name = "vibogit"
-version = "5.0.5"
+version = "5.0.6"
 description = "Git for the Vibe Coder - Desktop App"
 authors = ["ViboGit"]
 edition = "2021"
