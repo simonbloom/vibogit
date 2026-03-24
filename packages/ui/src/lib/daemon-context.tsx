@@ -256,25 +256,6 @@ async function tauriSend<T>(type: string, payload?: unknown): Promise<T> {
       return { config: result } as T;
     }
 
-    case "sync_beacon_check_gh": {
-      const result = await tauriInvoke("sync_beacon_check_gh");
-      return result as T;
-    }
-
-    case "sync_beacon_pull": {
-      const pairingCode = (args.pairingCode as string | undefined) || "";
-      const result = await tauriInvoke("sync_beacon_pull", { pairingCode });
-      return result as T;
-    }
-
-    case "sync_beacon_push": {
-      const repos = (args.repos as unknown[] | undefined) || [];
-      const configPath = (args.configPath as string | undefined) || "";
-      const machineName = args.machineName as string | undefined;
-      const pairingCode = args.pairingCode as string | undefined;
-      const result = await tauriInvoke("sync_beacon_push", { configPath, repos, machineName, pairingCode });
-      return result as T;
-    }
 
     case "listFiles": {
       const showHidden = args.showHidden as boolean | undefined;

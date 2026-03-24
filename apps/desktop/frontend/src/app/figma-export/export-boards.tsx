@@ -352,7 +352,7 @@ export function FigmaExportScreensPage() {
           theme={exportTheme}
         >
           <div className="h-[860px] overflow-hidden">
-            <AppLayout initialPane="project">
+            <AppLayout initialActivePane="project">
               <MainInterface />
             </AppLayout>
           </div>
@@ -365,7 +365,7 @@ export function FigmaExportScreensPage() {
             theme={exportTheme}
           >
             <div className="h-[860px] overflow-hidden">
-              <AppLayout initialPane="project">
+              <AppLayout initialActivePane="project">
                 <MainInterface
                   initialActiveView="tree"
                   initialSelectedFile={{
@@ -383,7 +383,7 @@ export function FigmaExportScreensPage() {
             theme={exportTheme}
           >
             <div className="h-[860px] overflow-hidden">
-              <AppLayout initialPane="project">
+              <AppLayout initialActivePane="project">
                 <MainInterface initialActiveView="graph" />
               </AppLayout>
             </div>
@@ -396,7 +396,7 @@ export function FigmaExportScreensPage() {
           theme={exportTheme}
         >
           <div className="h-[860px] overflow-hidden">
-            <AppLayout initialPane="project">
+            <AppLayout initialActivePane="project">
               <MainInterface initialActiveView="logs" />
             </AppLayout>
           </div>
@@ -409,7 +409,7 @@ export function FigmaExportScreensPage() {
             theme={exportTheme}
           >
             <div className="h-[760px] overflow-hidden">
-              <AppLayout initialPane="project">
+              <AppLayout initialActivePane="project">
                 <WelcomeScreen />
               </AppLayout>
             </div>
@@ -421,7 +421,7 @@ export function FigmaExportScreensPage() {
             theme={exportTheme}
           >
             <div className="h-[760px] overflow-hidden">
-              <AppLayout initialPane="settings">
+              <AppLayout initialActivePane="settings">
                 <MainInterface />
               </AppLayout>
             </div>

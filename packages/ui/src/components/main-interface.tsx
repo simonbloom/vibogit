@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { useWindowActivity } from "@/lib/use-window-activity";
 import { BranchSelector } from "@/components/branch-selector";
@@ -45,7 +45,6 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
-import { SyncBeaconContext } from "@/lib/sync-beacon-context";
 import type {
   DevServerConfig,
   DevServerState,
@@ -62,31 +61,6 @@ function getErrorMessage(error: unknown, fallback: string): string {
     if (typeof message === "string" && message) return message;
   }
   return fallback;
-}
-
-function BeaconStatusBadge({ repoName }: { repoName: string }) {
-  const context = useContext(SyncBeaconContext);
-  if (!context) return null;
-  const matches = context.getMatchedStatus(repoName);
-  if (matches.length === 0) return null;
-  return (
-    <div className="ml-auto flex items-center gap-2">
-      {matches.map((m) => (
-        <span
-          key={m.machineName}
-          className={clsx(
-            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs",
-            m.ahead > 0
-              ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
-              : "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
-          )}
-          title={`${m.machineName}: branch ${m.branch}, ${m.ahead} ahead, ${m.behind} behind`}
-        >
-          {m.machineName}: {m.ahead > 0 ? `${m.ahead} ahead` : "synced"}
-        </span>
-      ))}
-    </div>
-  );
 }
 
 function isValidGitHubCloneUrl(value: string): boolean {
@@ -855,7 +829,6 @@ export function MainInterface({
           <GitPullRequest className="w-4 h-4" />
           PR
         </Button>
-        <BeaconStatusBadge repoName={repoPath?.split("/").pop() || ""} />
       </div>
 
       {/* Tabs */}

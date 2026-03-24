@@ -8,17 +8,15 @@ import { useAutoUpdate } from "@/lib/use-auto-update";
 import { Sidebar } from "@/components/sidebar/sidebar";
 import { ProjectList } from "@/components/sidebar/project-list";
 import { SettingsPanel } from "@/components/settings-panel";
-import { SyncBeaconPanel } from "@/components/sync-beacon-panel";
 import { UpdateBanner } from "@/components/update-banner";
 import { isMacTauri } from "@/platform";
 import type { AutoUpdateActions, AutoUpdateState } from "@/lib/use-auto-update";
 import type { SettingsTabId } from "@/components/settings/SettingsTabs";
 import { useConfig } from "@/lib/config-context";
-import { useSyncBeacon } from "@/lib/sync-beacon-context";
 
 interface AppLayoutProps {
   children: React.ReactNode;
-  initialActivePane?: "project" | "settings" | "beacon";
+  initialActivePane?: "project" | "settings";
   autoUpdateOverride?: AutoUpdateState & AutoUpdateActions;
   settingsInitialTab?: SettingsTabId;
 }
@@ -32,8 +30,7 @@ export function AppLayout({
   const { state: daemonState, setRepoPath, send } = useDaemon();
   const { state: projectsState, addProject } = useProjects();
   const { config } = useConfig();
-  const { remoteMachines, isRefreshing, lastRefreshedAt, error, refreshBeacon } = useSyncBeacon();
-  const [activePane, setActivePane] = useState<"project" | "settings" | "beacon">(initialActivePane);
+  const [activePane, setActivePane] = useState<"project" | "settings">(initialActivePane);
   const [isMacOverlayChrome, setIsMacOverlayChrome] = useState(false);
   const autoUpdateState = useAutoUpdate();
   const autoUpdate = autoUpdateOverride ?? autoUpdateState;
@@ -104,10 +101,7 @@ export function AppLayout({
       <Sidebar
         onAddRepository={() => void handleAddRepository()}
         onOpenSettings={() => setActivePane("settings")}
-        onOpenBeacon={() => setActivePane("beacon")}
         isSettingsActive={activePane === "settings"}
-        isBeaconActive={activePane === "beacon"}
-        isBeaconEnabled={config.syncBeaconEnabled}
         isMacOverlayChrome={isMacOverlayChrome}
       >
         {(isCollapsed) => (
@@ -123,17 +117,6 @@ export function AppLayout({
         <div className="flex-1 overflow-hidden">
           {activePane === "settings" ? (
             <SettingsPanel updateState={autoUpdate} initialTab={settingsInitialTab} />
-          ) : activePane === "beacon" ? (
-            <SyncBeaconPanel
-              machines={remoteMachines}
-              localMachineName={config.syncBeaconMachineName || config.computerName}
-              isEnabled={config.syncBeaconEnabled}
-              isLoading={isRefreshing}
-              error={error}
-              lastRefreshedAt={lastRefreshedAt}
-              onRefresh={refreshBeacon}
-              onOpenSettings={() => setActivePane("settings")}
-            />
           ) : (
             children
           )}

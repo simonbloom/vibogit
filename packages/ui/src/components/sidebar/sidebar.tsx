@@ -5,17 +5,14 @@ import { Logo } from "@/components/logo";
 import { WindowDragRegion } from "@/components/window-drag-region";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
-import { Settings, Plus, PanelLeftClose, PanelLeft, Sun, Moon, Flame, Binary, Monitor, Radio } from "lucide-react";
+import { Settings, Plus, PanelLeftClose, PanelLeft, Sun, Moon, Flame, Binary, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
   children?: ReactNode | ((isCollapsed: boolean) => ReactNode);
   onAddRepository?: () => void;
   onOpenSettings?: () => void;
-  onOpenBeacon?: () => void;
   isSettingsActive?: boolean;
-  isBeaconActive?: boolean;
-  isBeaconEnabled?: boolean;
   isMacOverlayChrome?: boolean;
   className?: string;
   initialCollapsed?: boolean;
@@ -49,10 +46,7 @@ export function Sidebar({
   children, 
   onAddRepository, 
   onOpenSettings,
-  onOpenBeacon,
   isSettingsActive = false,
-  isBeaconActive = false,
-  isBeaconEnabled = false,
   isMacOverlayChrome = false,
   className,
   initialCollapsed,
@@ -154,16 +148,6 @@ export function Sidebar({
             <Button
               variant="ghost"
               size="icon"
-              onClick={onOpenBeacon}
-              className={cn("h-8 w-8", isBeaconActive && "bg-muted text-foreground", !isBeaconEnabled && "opacity-60")}
-              title={isBeaconEnabled ? "Sync Beacon" : "Enable Sync Beacon in settings"}
-              aria-pressed={isBeaconActive}
-            >
-              <Radio className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
               onClick={onOpenSettings}
               className={cn("h-8 w-8", isSettingsActive && "bg-muted text-foreground")}
               title="Settings"
@@ -186,7 +170,7 @@ export function Sidebar({
             {!mounted && <Button variant="ghost" size="icon" className="h-8 w-8" disabled><Sun className="h-4 w-4" /></Button>}
           </div>
           {!isCollapsed && (
-            <span className="pr-1 text-[10px] text-muted-foreground/50">v5.0.14</span>
+            <span className="pr-1 text-[10px] text-muted-foreground/50">v5.0.15</span>
           )}
         </div>
       </div>

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import { Suspense } from "react";
 import { Toaster } from "sonner";
 import "./globals.css";
 import { ThemeProvider } from "@vibogit/ui/providers/ThemeProvider";
@@ -9,7 +10,6 @@ import { DaemonProvider } from "@vibogit/ui/lib/daemon-context";
 import { ConfigProvider } from "@vibogit/ui/lib/config-context";
 import { TabsProvider } from "@vibogit/ui/lib/tabs-context";
 import { ProjectsProvider } from "@vibogit/ui/lib/projects-context";
-import { SyncBeaconProvider } from "@vibogit/ui/lib/sync-beacon-context";
 import { ThemeSync } from "@vibogit/ui/components/theme-sync";
 import { AgentationWrapper } from "@vibogit/ui/components/agentation-wrapper";
 
@@ -44,15 +44,14 @@ export default function RootLayout({
         )}
       </head>
       <body className="antialiased min-h-screen">
+        <Suspense>
         <ThemeProvider>
           <MatrixRain />
           <DaemonProvider>
             <ProjectsProvider>
               <ConfigProvider>
                 <ThemeSync />
-                <SyncBeaconProvider>
-                  <TabsProvider>{children}</TabsProvider>
-                </SyncBeaconProvider>
+                <TabsProvider>{children}</TabsProvider>
               </ConfigProvider>
             </ProjectsProvider>
           </DaemonProvider>
@@ -63,6 +62,7 @@ export default function RootLayout({
           <EmberVideoFilter />
           <Toaster position="bottom-right" />
         </ThemeProvider>
+        </Suspense>
       </body>
     </html>
   );

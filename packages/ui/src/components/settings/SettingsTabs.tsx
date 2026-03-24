@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useRef, type KeyboardEvent } from "react";
-import { Brain, Wrench, Palette, Camera, AppWindow, Radio } from "lucide-react";
+import { Brain, Wrench, Palette, Camera, AppWindow } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type SettingsTabId = "ai" | "tools" | "appearance" | "capture" | "beacon" | "app";
+export type SettingsTabId = "ai" | "tools" | "appearance" | "capture" | "app";
 
 interface SettingsTab {
   id: SettingsTabId;
@@ -17,7 +17,6 @@ const SETTINGS_TABS: SettingsTab[] = [
   { id: "tools", label: "Tools", Icon: Wrench },
   { id: "appearance", label: "Appearance", Icon: Palette },
   { id: "capture", label: "Capture", Icon: Camera },
-  { id: "beacon", label: "Sync Beacon", Icon: Radio },
   { id: "app", label: "App", Icon: AppWindow },
 ];
 
@@ -33,7 +32,6 @@ export function SettingsTabs({ activeTab, onTabChange, className }: SettingsTabs
     tools: null,
     appearance: null,
     capture: null,
-    beacon: null,
     app: null,
   });
 

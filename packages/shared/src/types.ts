@@ -331,11 +331,7 @@ export interface Config {
   aiModel: string;
   aiApiKey: string;
   githubPat: string;
-  syncBeaconEnabled: boolean;
-  syncBeaconMachineName: string;
-  syncBeaconPairingCode: string;
-  syncBeaconGistId: string;
-  syncBeaconInterval: number;
+
   editor: EditorOption;
   customEditorCommand: string;
   terminal: TerminalOption;
@@ -354,11 +350,7 @@ export const DEFAULT_CONFIG: Config = {
   aiModel: "gpt-5.4",
   aiApiKey: "",
   githubPat: "",
-  syncBeaconEnabled: false,
-  syncBeaconMachineName: "",
-  syncBeaconPairingCode: "",
-  syncBeaconGistId: "",
-  syncBeaconInterval: 300000,
+
   editor: "cursor",
   customEditorCommand: "",
   terminal: "Terminal",
