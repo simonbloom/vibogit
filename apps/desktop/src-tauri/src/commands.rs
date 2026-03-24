@@ -1134,13 +1134,10 @@ fn update_sync_beacon_gist(gist_id: &str, content: &str) -> Result<(), String> {
         let target_file_name = select_sync_beacon_fallback_filename(&file_names)?;
 
         let mut command = gh_command();
-        command.arg("gist").arg("edit").arg(gist_id);
-
-        if target_file_name != SYNC_BEACON_FILENAME {
-            command.arg("-r").arg(&target_file_name);
-        }
-
         command
+            .arg("gist")
+            .arg("edit")
+            .arg(gist_id)
             .arg("-f")
             .arg(SYNC_BEACON_FILENAME)
             .arg(&temp_path);
@@ -1148,7 +1145,23 @@ fn update_sync_beacon_gist(gist_id: &str, content: &str) -> Result<(), String> {
         let output = command
             .output()
             .map_err(|error| friendly_gh_command_error(&error, "update Sync Beacon Gist"))?;
-        gh_output_success(&output, "update Sync Beacon Gist").map(|_| ())
+        gh_output_success(&output, "update Sync Beacon Gist")?;
+
+        if target_file_name != SYNC_BEACON_FILENAME {
+            let mut remove_command = gh_command();
+            remove_command
+                .arg("gist")
+                .arg("edit")
+                .arg(gist_id)
+                .arg("-r")
+                .arg(&target_file_name);
+            let remove_output = remove_command
+                .output()
+                .map_err(|error| friendly_gh_command_error(&error, "remove legacy Sync Beacon Gist file"))?;
+            let _ = gh_output_success(&remove_output, "remove legacy Sync Beacon Gist file");
+        }
+
+        Ok(())
     })();
     let _ = std::fs::remove_file(temp_path);
     result
@@ -3289,32 +3302,31 @@ mod sync_beacon_tests {
     }
 
     #[test]
-    fn legacy_single_file_update_strategy_renames_to_canonical_filename() {
+    fn legacy_single_file_update_strategy_uses_separate_commands() {
         let file_names = vec!["legacy-beacon.json".to_string()];
         let target_file_name = select_sync_beacon_fallback_filename(&file_names)
             .expect("single legacy file should be writable");
 
-        let mut command = vec!["gist", "edit", "gist123"];
-        if target_file_name != SYNC_BEACON_FILENAME {
-            command.push("-r");
-            command.push(target_file_name.as_str());
-        }
-        command.push("-f");
-        command.push(SYNC_BEACON_FILENAME);
-        command.push("/tmp/payload.json");
+        let mut write_command = vec!["gist", "edit", "gist123"];
+        write_command.push("-f");
+        write_command.push(SYNC_BEACON_FILENAME);
+        write_command.push("/tmp/payload.json");
 
         assert_eq!(
-            command,
-            vec![
-                "gist",
-                "edit",
-                "gist123",
-                "-r",
-                "legacy-beacon.json",
-                "-f",
-                "vibogit-beacon.json",
-                "/tmp/payload.json"
-            ]
+            write_command,
+            vec!["gist", "edit", "gist123", "-f", "vibogit-beacon.json", "/tmp/payload.json"]
+        );
+
+        let needs_remove = target_file_name != SYNC_BEACON_FILENAME;
+        assert!(needs_remove);
+
+        let mut remove_command = vec!["gist", "edit", "gist123"];
+        remove_command.push("-r");
+        remove_command.push(target_file_name.as_str());
+
+        assert_eq!(
+            remove_command,
+            vec!["gist", "edit", "gist123", "-r", "legacy-beacon.json"]
         );
     }
 
@@ -3325,25 +3337,17 @@ mod sync_beacon_tests {
             .expect("canonical file should be writable");
 
         let mut command = vec!["gist", "edit", "gist123"];
-        if target_file_name != SYNC_BEACON_FILENAME {
-            command.push("-r");
-            command.push(target_file_name.as_str());
-        }
         command.push("-f");
         command.push(SYNC_BEACON_FILENAME);
         command.push("/tmp/payload.json");
 
         assert_eq!(
             command,
-            vec![
-                "gist",
-                "edit",
-                "gist123",
-                "-f",
-                "vibogit-beacon.json",
-                "/tmp/payload.json"
-            ]
+            vec!["gist", "edit", "gist123", "-f", "vibogit-beacon.json", "/tmp/payload.json"]
         );
+
+        let needs_remove = target_file_name != SYNC_BEACON_FILENAME;
+        assert!(!needs_remove);
     }
 
     #[test]
