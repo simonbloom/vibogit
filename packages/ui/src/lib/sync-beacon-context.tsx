@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { useConfig } from "@/lib/config-context";
 import { useDaemon } from "@/lib/daemon-context";
 import { useProjects } from "@/lib/projects-context";
+import { TabsContext } from "@/lib/tabs-context";
 
 export interface SyncBeaconRepo {
   path: string;
@@ -24,6 +25,7 @@ export interface SyncBeaconRepo {
   lastCommitHash: string;
   lastCommitMessage: string;
   lastCommitTimestamp: number;
+  remoteUrl?: string;
 }
 
 export interface SyncBeaconMachine {
@@ -36,6 +38,14 @@ interface SyncBeaconData {
   machines: SyncBeaconMachine[];
 }
 
+export interface BeaconMatchedStatus {
+  machineName: string;
+  branch: string;
+  ahead: number;
+  behind: number;
+  timestamp: number;
+}
+
 interface SyncBeaconContextValue {
   remoteMachines: SyncBeaconMachine[];
   isRefreshing: boolean;
@@ -43,9 +53,10 @@ interface SyncBeaconContextValue {
   error: string | null;
   refreshBeacon: () => Promise<void>;
   pushBeacon: () => Promise<void>;
+  getMatchedStatus: (repoName: string) => BeaconMatchedStatus[];
 }
 
-const SyncBeaconContext = createContext<SyncBeaconContextValue | null>(null);
+export const SyncBeaconContext = createContext<SyncBeaconContextValue | null>(null);
 
 type RepoStatusWithCommitMetadata = {
   currentBranch?: string;
@@ -66,34 +77,32 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
   const { config, setConfig } = useConfig();
   const { state, send, getConfigPath, getHostname } = useDaemon();
   const { state: projectsState } = useProjects();
+  const tabsContext = useContext(TabsContext);
   const [remoteMachines, setRemoteMachines] = useState<SyncBeaconMachine[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastToastErrorRef = useRef<string | null>(null);
-  const getRepoStatusWithCommitMetadata = useCallback(
-    (projectPath: string): RepoStatusWithCommitMetadata => {
-      return (projectsState.statuses[projectPath] as RepoStatusWithCommitMetadata | undefined) ?? {};
-    },
-    [projectsState.statuses]
-  );
+  const lastPushedStateRef = useRef<string | null>(null);
 
   const beaconRepos = useMemo<SyncBeaconRepo[]>(() => {
-    return projectsState.projects.map((project) => {
-      const projectStatus = getRepoStatusWithCommitMetadata(project.path);
-      return {
-        path: project.path,
-        name: project.name,
-        branch: projectStatus.currentBranch || "unknown",
-        ahead: projectStatus.ahead || 0,
-        behind: projectStatus.behind || 0,
-        lastCommitHash: projectStatus.lastCommitHash || "",
-        lastCommitMessage: projectStatus.lastCommitMessage || "",
-        lastCommitTimestamp: projectStatus.lastCommitTimestamp || 0,
-      };
-    });
-  }, [getRepoStatusWithCommitMetadata, projectsState.projects]);
+    const activeTab = tabsContext?.getActiveTab();
+    if (!activeTab) return [];
+    const project = projectsState.projects.find((p) => p.path === activeTab.repoPath);
+    if (!project) return [];
+    const status = (projectsState.statuses[project.path] as RepoStatusWithCommitMetadata | undefined) ?? {};
+    return [{
+      path: project.path,
+      name: project.name,
+      branch: status.currentBranch || "unknown",
+      ahead: status.ahead || 0,
+      behind: status.behind || 0,
+      lastCommitHash: status.lastCommitHash || "",
+      lastCommitMessage: status.lastCommitMessage || "",
+      lastCommitTimestamp: status.lastCommitTimestamp || 0,
+    }];
+  }, [tabsContext, projectsState.projects, projectsState.statuses]);
 
   const localMachineName = useMemo(() => {
     const configured = config.syncBeaconMachineName.trim();
@@ -139,6 +148,9 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
   const pushBeacon = useCallback(async () => {
     if (!config.syncBeaconEnabled) return;
 
+    const stateKey = JSON.stringify(beaconRepos.map((r) => `${r.path}:${r.branch}:${r.ahead}:${r.behind}:${r.lastCommitHash}`));
+    if (lastPushedStateRef.current === stateKey) return;
+
     try {
       const configPath = await getConfigPath();
       const hostnameFallback = await getHostname();
@@ -148,6 +160,8 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
         machineName: localMachineName || hostnameFallback,
         pairingCode: config.syncBeaconPairingCode.trim() || undefined,
       });
+
+      lastPushedStateRef.current = stateKey;
 
       if (!config.syncBeaconMachineName.trim()) {
         void setConfig({ syncBeaconMachineName: hostnameFallback });
@@ -167,6 +181,38 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [applyBeaconData, beaconRepos, config, getConfigPath, getHostname, localMachineName, send, setConfig]);
+
+  const getMatchedStatus = useCallback((repoName: string): BeaconMatchedStatus[] => {
+    if (!repoName) return [];
+    const matches: BeaconMatchedStatus[] = [];
+    for (const machine of remoteMachines) {
+      const repo = machine.repos.find((r) => r.name === repoName);
+      if (repo) {
+        matches.push({
+          machineName: machine.machineName,
+          branch: repo.branch,
+          ahead: repo.ahead,
+          behind: repo.behind,
+          timestamp: machine.timestamp,
+        });
+      }
+    }
+    return matches;
+  }, [remoteMachines]);
+
+  const pushBeaconRef = useRef(pushBeacon);
+  pushBeaconRef.current = pushBeacon;
+  const refreshBeaconRef = useRef(refreshBeacon);
+  refreshBeaconRef.current = refreshBeacon;
+  const lastPushAtRef = useRef(0);
+  const MIN_PUSH_INTERVAL_MS = 60_000;
+
+  const throttledPush = useCallback(async () => {
+    const now = Date.now();
+    if (now - lastPushAtRef.current < MIN_PUSH_INTERVAL_MS) return;
+    lastPushAtRef.current = now;
+    await pushBeaconRef.current();
+  }, []);
 
   useEffect(() => {
     if (!config.syncBeaconMachineName.trim()) {
@@ -192,10 +238,10 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    void pushBeacon();
-    void refreshBeacon();
+    void throttledPush();
+    void refreshBeaconRef.current();
     intervalRef.current = setInterval(() => {
-      void pushBeacon();
+      void throttledPush();
     }, 300_000);
 
     return () => {
@@ -204,18 +250,18 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
         intervalRef.current = null;
       }
     };
-  }, [config.syncBeaconEnabled, pushBeacon, refreshBeacon, state.connection]);
+  }, [config.syncBeaconEnabled, state.connection, throttledPush]);
 
   useEffect(() => {
     if (!config.syncBeaconEnabled) return;
 
     const handleFocus = () => {
-      void refreshBeacon();
+      void refreshBeaconRef.current();
     };
 
     window.addEventListener("focus", handleFocus);
     return () => window.removeEventListener("focus", handleFocus);
-  }, [config.syncBeaconEnabled, refreshBeacon]);
+  }, [config.syncBeaconEnabled]);
 
   return (
     <SyncBeaconContext.Provider
@@ -226,6 +272,7 @@ export function SyncBeaconProvider({ children }: { children: ReactNode }) {
         error,
         refreshBeacon,
         pushBeacon,
+        getMatchedStatus,
       }}
     >
       {children}

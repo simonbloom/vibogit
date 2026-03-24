@@ -844,6 +844,8 @@ pub struct BeaconRepo {
     pub last_commit_hash: String,
     pub last_commit_message: String,
     pub last_commit_timestamp: i64,
+    #[serde(default)]
+    pub remote_url: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -1276,6 +1278,34 @@ pub async fn sync_beacon_pull(pairing_code: String) -> Result<SyncBeaconData, St
     read_sync_beacon_gist(&gist_id)
 }
 
+fn normalize_remote_url(url: &str) -> String {
+    let mut normalized = url.trim().to_string();
+    if normalized.starts_with("git@") {
+        if let Some(rest) = normalized.strip_prefix("git@") {
+            normalized = format!("https://{}", rest.replacen(':', "/", 1));
+        }
+    }
+    if normalized.ends_with(".git") {
+        normalized.truncate(normalized.len() - 4);
+    }
+    normalized
+}
+
+fn read_repo_remote_url(repo_path: &str) -> String {
+    let Ok(repo) = git2::Repository::open(repo_path) else { return String::new() };
+    let Ok(remote) = repo.find_remote("origin") else { return String::new() };
+    remote.url().map(|u| normalize_remote_url(u)).unwrap_or_default()
+}
+
+fn enrich_repos_with_remote_url(repos: Vec<BeaconRepo>) -> Vec<BeaconRepo> {
+    repos.into_iter().map(|mut repo| {
+        if repo.remote_url.is_empty() {
+            repo.remote_url = read_repo_remote_url(&repo.path);
+        }
+        repo
+    }).collect()
+}
+
 #[tauri::command]
 pub async fn sync_beacon_push(
     config_path: String,
@@ -1283,7 +1313,6 @@ pub async fn sync_beacon_push(
     machine_name: Option<String>,
     pairing_code: Option<String>,
 ) -> Result<SyncBeaconPushResult, String> {
-    // Check gist scope first
     let has_scope = check_gist_scope().unwrap_or(false);
     if !has_scope {
         return Err("GitHub token missing gist scope. Run: gh auth refresh -s gist".to_string());
@@ -1297,10 +1326,11 @@ pub async fn sync_beacon_push(
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| machine_name_from_config(&config));
     let persisted_machine_name = machine_name.clone();
+    let enriched_repos = enrich_repos_with_remote_url(repos);
     let payload = BeaconPayload {
         machine_name,
         timestamp: current_unix_timestamp(),
-        repos,
+        repos: enriched_repos,
     };
 
     // Determine pairing code: use provided, fall back to config, or generate new
@@ -3142,6 +3172,7 @@ mod sync_beacon_tests {
             last_commit_hash: "abc123def456".to_string(),
             last_commit_message: "Add sync beacon".to_string(),
             last_commit_timestamp: 1_710_000_000,
+            remote_url: String::new(),
         }
     }
 
@@ -3526,6 +3557,15 @@ mod sync_beacon_tests {
         assert!(saved.sync_beacon_enabled);
         assert_eq!(saved.sync_beacon_pairing_code, "xyz789");
         assert_eq!(saved.sync_beacon_machine_name, "Desk Mac");
+    }
+
+    #[test]
+    fn normalize_remote_url_strips_git_suffix_and_converts_ssh() {
+        assert_eq!(normalize_remote_url("git@github.com:user/repo.git"), "https://github.com/user/repo");
+        assert_eq!(normalize_remote_url("https://github.com/user/repo.git"), "https://github.com/user/repo");
+        assert_eq!(normalize_remote_url("https://github.com/user/repo"), "https://github.com/user/repo");
+        assert_eq!(normalize_remote_url(""), "");
+        assert_eq!(normalize_remote_url("  git@gitlab.com:team/project.git  "), "https://gitlab.com/team/project");
     }
 }
 

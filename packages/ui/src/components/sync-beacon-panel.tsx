@@ -14,6 +14,7 @@ export interface SyncBeaconRepo {
   lastCommitHash: string;
   lastCommitMessage: string;
   lastCommitTimestamp: number;
+  remoteUrl?: string;
 }
 
 export interface SyncBeaconMachine {

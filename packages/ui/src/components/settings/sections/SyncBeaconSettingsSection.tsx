@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, Copy, Check, Loader2, Radio, Pencil, RefreshCw } from "lucide-react";
+import { AlertCircle, Copy, Check, Loader2, Radio, Link2 } from "lucide-react";
 import type { Config } from "@vibogit/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,6 @@ interface SyncBeaconCheckResult {
 interface SyncBeaconPushResult {
   data: unknown;
   pairingCode: string;
-  config?: Config;
 }
 
 interface SyncBeaconSettingsSectionProps {
@@ -36,16 +35,12 @@ interface SyncBeaconSettingsSectionProps {
 export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettingsSectionProps) {
   const { send, getConfigPath, getHostname } = useDaemon();
   const [machineNameInput, setMachineNameInput] = useState(config.syncBeaconMachineName);
-  const [isToggling, setIsToggling] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isWorking, setIsWorking] = useState(false);
   const [localPairingCode, setLocalPairingCode] = useState<string>("");
-
-  // Unified code field state
-  const [isEditing, setIsEditing] = useState(false);
-  const [editCodeInput, setEditCodeInput] = useState("");
-  const [isSavingCode, setIsSavingCode] = useState(false);
+  const [joinMode, setJoinMode] = useState(false);
+  const [joinCodeInput, setJoinCodeInput] = useState("");
 
   useEffect(() => {
     setMachineNameInput(config.syncBeaconMachineName);
@@ -58,7 +53,6 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
   }, [config.syncBeaconPairingCode]);
 
   const displayCode = localPairingCode || config.syncBeaconPairingCode.trim();
-  const hasPairingCode = Boolean(displayCode);
 
   const handleMachineNameBlur = async () => {
     const trimmed = machineNameInput.trim();
@@ -66,75 +60,80 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
       onSave({ syncBeaconMachineName: trimmed });
       return;
     }
-
     const fallback = await getHostname();
     setMachineNameInput(fallback);
     onSave({ syncBeaconMachineName: fallback });
   };
 
-  const handleToggle = async () => {
+  const checkGhAuth = async (): Promise<boolean> => {
+    const result = await send<SyncBeaconCheckResult>("sync_beacon_check_gh");
+    if (!result.available || !result.authenticated) {
+      setInlineError(result.message);
+      toast.error(result.message);
+      return false;
+    }
+    if (!result.hasGistScope) {
+      const msg = "GitHub token missing gist scope. Run in terminal: gh auth refresh -s gist";
+      setInlineError(msg);
+      toast.error(msg);
+      return false;
+    }
+    return true;
+  };
+
+  const handleCreateBeacon = async () => {
     setInlineError(null);
-    if (config.syncBeaconEnabled) {
-      setLocalPairingCode("");
-      onSave({ syncBeaconEnabled: false });
-      return;
-    }
-
-    setIsToggling(true);
+    setIsWorking(true);
     try {
-      const result = await send<SyncBeaconCheckResult>("sync_beacon_check_gh");
-      if (!result.available || !result.authenticated) {
-        setInlineError(result.message);
-        toast.error(result.message);
-        return;
+      if (!(await checkGhAuth())) return;
+      const configPath = await getConfigPath();
+      const machineName = machineNameInput.trim() || (await getHostname());
+      const pushResult = await send<SyncBeaconPushResult>("sync_beacon_push", {
+        configPath,
+        repos: [],
+        machineName,
+        pairingCode: undefined,
+      });
+      if (pushResult.pairingCode) {
+        setLocalPairingCode(pushResult.pairingCode);
+        onSave({ syncBeaconPairingCode: pushResult.pairingCode, syncBeaconEnabled: true });
+        if (!machineNameInput.trim()) setMachineNameInput(machineName);
+        toast.success("Beacon created");
       }
-
-      if (!result.hasGistScope) {
-        const scopeMessage = "GitHub token missing gist scope. Run in terminal: gh auth refresh -s gist";
-        setInlineError(scopeMessage);
-        toast.error(scopeMessage);
-        return;
-      }
-
-      // If no pairing code exists, generate one and save everything atomically
-      if (!hasPairingCode) {
-        setIsGenerating(true);
-        try {
-          const configPath = await getConfigPath();
-          const machineName = machineNameInput.trim() || (await getHostname());
-          const pushResult = await send<SyncBeaconPushResult>("sync_beacon_push", {
-            configPath,
-            repos: [],
-            machineName,
-            pairingCode: undefined,
-          });
-          if (pushResult.pairingCode) {
-            setLocalPairingCode(pushResult.pairingCode);
-            if (machineNameInput.trim() !== machineName) {
-              setMachineNameInput(machineName);
-            }
-            toast.success("Sync Beacon enabled — pairing code generated");
-          } else {
-            toast.success("Sync Beacon enabled");
-          }
-        } catch (err) {
-          const message = getErrorMessage(err, "Failed to generate pairing code");
-          setInlineError(message);
-          toast.error(message);
-        } finally {
-          setIsGenerating(false);
-        }
-      } else {
-        onSave({ syncBeaconEnabled: true });
-        toast.success("Sync Beacon enabled");
-      }
-    } catch (error) {
-      const message = getErrorMessage(error, "Unable to enable Sync Beacon");
-      setInlineError(message);
-      toast.error(message);
+    } catch (err) {
+      setInlineError(getErrorMessage(err, "Failed to create beacon"));
+      toast.error(getErrorMessage(err, "Failed to create beacon"));
     } finally {
-      setIsToggling(false);
+      setIsWorking(false);
     }
+  };
+
+  const handleJoinBeacon = async () => {
+    const trimmed = joinCodeInput.trim().toLowerCase();
+    if (!trimmed) return;
+    setInlineError(null);
+    setIsWorking(true);
+    try {
+      if (!(await checkGhAuth())) return;
+      await send<unknown>("sync_beacon_pull", { pairingCode: trimmed });
+      setLocalPairingCode(trimmed);
+      onSave({ syncBeaconPairingCode: trimmed, syncBeaconEnabled: true });
+      setJoinMode(false);
+      setJoinCodeInput("");
+      toast.success("Joined beacon");
+    } catch (err) {
+      setInlineError(getErrorMessage(err, "No beacon found for this code"));
+      toast.error(getErrorMessage(err, "No beacon found for this code"));
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  const handleDisable = () => {
+    setLocalPairingCode("");
+    setJoinMode(false);
+    onSave({ syncBeaconEnabled: false });
+    toast.success("Sync Beacon disabled");
   };
 
   const handleCopyCode = async () => {
@@ -148,72 +147,6 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
       toast.error("Couldn't copy pairing code");
     }
   };
-
-  const handleStartEdit = () => {
-    setEditCodeInput(displayCode);
-    setIsEditing(true);
-    setInlineError(null);
-  };
-
-  const handleCancelEdit = () => {
-    setIsEditing(false);
-    setEditCodeInput("");
-    setInlineError(null);
-  };
-
-  const handleSaveCode = async () => {
-    const trimmed = editCodeInput.trim().toLowerCase();
-    if (!trimmed) return;
-
-    setIsSavingCode(true);
-    setInlineError(null);
-    try {
-      // Verify the code exists by pulling
-      await send<unknown>("sync_beacon_pull", { pairingCode: trimmed });
-      setLocalPairingCode(trimmed);
-      onSave({ syncBeaconPairingCode: trimmed });
-      setIsEditing(false);
-      setEditCodeInput("");
-      toast.success("Pairing code updated");
-    } catch (err) {
-      const message = getErrorMessage(err, "No beacon found for this code");
-      setInlineError(message);
-      toast.error(message);
-    } finally {
-      setIsSavingCode(false);
-    }
-  };
-
-  const handleGenerateNew = async () => {
-    setIsGenerating(true);
-    setInlineError(null);
-    try {
-      const configPath = await getConfigPath();
-      const machineName = machineNameInput.trim() || (await getHostname());
-      const pushResult = await send<SyncBeaconPushResult>("sync_beacon_push", {
-        configPath,
-        repos: [],
-        machineName,
-        pairingCode: undefined,
-      });
-      if (pushResult.pairingCode) {
-        setLocalPairingCode(pushResult.pairingCode);
-        onSave({ syncBeaconPairingCode: pushResult.pairingCode });
-        setIsEditing(false);
-        setEditCodeInput("");
-        toast.success("New pairing code generated");
-      }
-    } catch (err) {
-      const message = getErrorMessage(err, "Failed to generate new code");
-      setInlineError(message);
-      toast.error(message);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  // Determine if we should show edit mode: explicitly editing, or enabled with no code (and not generating)
-  const showEditMode = config.syncBeaconEnabled && (isEditing || (!hasPairingCode && !isGenerating));
 
   return (
     <section className="space-y-5">
@@ -230,120 +163,88 @@ export function SyncBeaconSettingsSection({ config, onSave }: SyncBeaconSettings
         </Badge>
       </div>
 
-      {/* Enable/disable toggle */}
-      <div className="rounded-lg border border-border bg-muted/30 p-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-foreground">Enable Sync Beacon</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Checks `gh` authentication before enabling and starts automatic background syncs.
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant={config.syncBeaconEnabled ? "default" : "outline"}
-            onClick={() => void handleToggle()}
-            disabled={isToggling}
-          >
-            {isToggling ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {config.syncBeaconEnabled ? "Disable" : "Enable"}
-          </Button>
-        </div>
-      </div>
-
-      {/* Pairing code field — unified display/edit */}
       {config.syncBeaconEnabled ? (
-        <div className="rounded-lg border border-border bg-muted/20 p-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-foreground">Pairing Code</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Share this code with your other machines to join the same beacon.
-              </p>
-            </div>
-          </div>
-
-          {/* Loading state during first-enable code generation */}
-          {isGenerating ? (
-            <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Generating pairing code…</span>
-            </div>
-          ) : showEditMode ? (
-            /* Edit mode */
-            <div className="mt-3 space-y-2">
-              <div className="flex gap-2">
-                <Input
-                  value={editCodeInput}
-                  onChange={(event) => setEditCodeInput(event.target.value)}
-                  placeholder="Enter a 6-character code"
-                  maxLength={6}
-                  className="font-mono tracking-widest"
-                  aria-label="Pairing code input"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void handleSaveCode()}
-                  disabled={isSavingCode || editCodeInput.trim().length < 1}
-                >
-                  {isSavingCode ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Save
-                </Button>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void handleGenerateNew()}
-                  disabled={isGenerating}
-                  className="text-xs"
-                >
-                  <RefreshCw className="mr-1 h-3 w-3" />
-                  Generate New
-                </Button>
-                {isEditing ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleCancelEdit}
-                    className="text-xs"
-                  >
-                    Cancel
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-          ) : hasPairingCode ? (
-            /* Display mode */
+        <>
+          {/* Connected state */}
+          <div className="rounded-lg border border-border bg-muted/20 p-4">
+            <p className="text-sm font-medium text-foreground">Pairing Code</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Share this code with your other machines to join the same beacon.
+            </p>
             <div className="mt-3 flex items-center gap-2">
               <div className="flex-1 rounded-md border border-border bg-background px-4 py-2.5 font-mono text-lg tracking-widest text-foreground select-all">
                 {displayCode}
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void handleCopyCode()}
-              >
+              <Button type="button" variant="outline" onClick={() => void handleCopyCode()}>
                 {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 {isCopied ? "Copied" : "Copy"}
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handleStartEdit}
-                className="text-xs"
-              >
-                <Pencil className="mr-1 h-3 w-3" />
-                Change
+            </div>
+          </div>
+
+          <Button type="button" variant="outline" size="sm" onClick={handleDisable}>
+            Disable
+          </Button>
+        </>
+      ) : (
+        <>
+          {/* Disconnected — Create or Join */}
+          {joinMode ? (
+            <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+              <p className="text-sm font-medium text-foreground">Join an existing beacon</p>
+              <p className="text-xs text-muted-foreground">
+                Enter the pairing code from your other machine.
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  value={joinCodeInput}
+                  onChange={(e) => setJoinCodeInput(e.target.value)}
+                  placeholder="Enter pairing code"
+                  maxLength={6}
+                  className="font-mono tracking-widest"
+                  autoFocus
+                />
+                <Button
+                  type="button"
+                  onClick={() => void handleJoinBeacon()}
+                  disabled={isWorking || joinCodeInput.trim().length < 1}
+                >
+                  {isWorking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+                  Join
+                </Button>
+              </div>
+              <Button type="button" variant="ghost" size="sm" onClick={() => { setJoinMode(false); setInlineError(null); }}>
+                Back
               </Button>
             </div>
-          ) : null}
-        </div>
-      ) : null}
+          ) : (
+            <div className="rounded-lg border border-border bg-muted/30 p-4">
+              <p className="text-sm font-medium text-foreground">Get started</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Create a new beacon to generate a pairing code, or join an existing one from another machine.
+              </p>
+              <div className="mt-3 flex items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={() => void handleCreateBeacon()}
+                  disabled={isWorking}
+                >
+                  {isWorking ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Create Beacon
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => { setJoinMode(true); setInlineError(null); }}
+                  disabled={isWorking}
+                >
+                  Join Beacon
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Machine name */}
       <div>
