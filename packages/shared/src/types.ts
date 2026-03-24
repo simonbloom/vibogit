@@ -334,6 +334,7 @@ export interface Config {
   syncBeaconEnabled: boolean;
   syncBeaconMachineName: string;
   syncBeaconPairingCode: string;
+  syncBeaconGistId: string;
   syncBeaconInterval: number;
   editor: EditorOption;
   customEditorCommand: string;
@@ -356,6 +357,7 @@ export const DEFAULT_CONFIG: Config = {
   syncBeaconEnabled: false,
   syncBeaconMachineName: "",
   syncBeaconPairingCode: "",
+  syncBeaconGistId: "",
   syncBeaconInterval: 300000,
   editor: "cursor",
   customEditorCommand: "",

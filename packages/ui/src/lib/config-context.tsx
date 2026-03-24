@@ -32,8 +32,6 @@ function normalizeConfig(config: Config): Config {
   const aiModel = getModelForProvider(aiProvider, config.aiModel);
   const syncBeaconInterval = Number(config.syncBeaconInterval || DEFAULT_CONFIG.syncBeaconInterval);
 
-  // Migration: old syncBeaconGistId field is ignored, normalized to syncBeaconPairingCode
-
   return {
     ...config,
     aiProvider,

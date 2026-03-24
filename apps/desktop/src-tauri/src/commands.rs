@@ -783,6 +783,8 @@ pub struct AppConfig {
     #[serde(default)]
     pub sync_beacon_pairing_code: String,
     #[serde(default)]
+    pub sync_beacon_gist_id: String,
+    #[serde(default)]
     pub recent_tabs: Vec<ConfigTab>,
     #[serde(default)]
     pub active_tab_id: Option<String>,
@@ -824,6 +826,7 @@ impl Default for AppConfig {
             clean_shot_mode: false,
             auto_execute_prompt: false,
             sync_beacon_pairing_code: String::new(),
+            sync_beacon_gist_id: String::new(),
             recent_tabs: vec![],
             active_tab_id: None,
         }
@@ -956,6 +959,10 @@ fn classify_gh_failure(stderr: &str, operation: &str) -> String {
 
     if lowered.contains("not found") || lowered.contains("404") {
         return format!("Sync Beacon Gist was not found or you do not have access to it while attempting to {}.", operation);
+    }
+
+    if lowered.contains("rate limit") || lowered.contains("403") && lowered.contains("limit") {
+        return format!("GitHub API rate limit reached while trying to {}. Will retry on the next sync cycle.", operation);
     }
 
     if lowered.contains("409") || lowered.contains("conflict") {
@@ -1096,48 +1103,11 @@ fn create_sync_beacon_gist(content: &str, description: &str) -> Result<String, S
 }
 
 fn update_sync_beacon_gist(gist_id: &str, content: &str) -> Result<(), String> {
-    let max_retries = 3;
-    for attempt in 0..max_retries {
-        match try_update_sync_beacon_gist(gist_id, content) {
-            Ok(()) => return Ok(()),
-            Err(error) if error.contains("409") && attempt < max_retries - 1 => {
-                std::thread::sleep(std::time::Duration::from_millis(500 * (attempt as u64 + 1)));
-                continue;
-            }
-            Err(error) => return Err(error),
+    let payload = serde_json::json!({
+        "files": {
+            SYNC_BEACON_FILENAME: { "content": content }
         }
-    }
-    Err("update Sync Beacon Gist failed after retries.".to_string())
-}
-
-fn try_update_sync_beacon_gist(gist_id: &str, content: &str) -> Result<(), String> {
-    let mut command = gh_command();
-    command
-        .arg("api")
-        .arg(format!("/gists/{}", gist_id));
-    let output = command
-        .output()
-        .map_err(|error| friendly_gh_command_error(&error, "inspect Sync Beacon Gist"))?;
-    let response = gh_output_success(&output, "inspect Sync Beacon Gist")?;
-
-    let gist: serde_json::Value = serde_json::from_str(&response)
-        .map_err(|error| format!("Failed to parse Gist API response: {}", error))?;
-    let file_keys: Vec<String> = gist.get("files")
-        .and_then(|f| f.as_object())
-        .map(|files| files.keys().cloned().collect())
-        .unwrap_or_default();
-
-    let mut files_payload = serde_json::json!({
-        SYNC_BEACON_FILENAME: { "content": content }
     });
-
-    for key in &file_keys {
-        if key != SYNC_BEACON_FILENAME {
-            files_payload[key] = serde_json::Value::Null;
-        }
-    }
-
-    let payload = serde_json::json!({ "files": files_payload });
     let endpoint = format!("/gists/{}", gist_id);
     gh_api_stdin("PATCH", &endpoint, &payload.to_string(), "update Sync Beacon Gist")?;
     Ok(())
@@ -1244,9 +1214,11 @@ fn persist_sync_beacon_enable_state(
     config: &mut AppConfig,
     pairing_code: &str,
     machine_name: &str,
+    gist_id: &str,
 ) -> Result<(), String> {
     config.sync_beacon_enabled = true;
     config.sync_beacon_pairing_code = pairing_code.to_string();
+    config.sync_beacon_gist_id = gist_id.to_string();
 
     let trimmed_machine_name = machine_name.trim();
     if !trimmed_machine_name.is_empty() {
@@ -1292,8 +1264,15 @@ pub async fn sync_beacon_pull(pairing_code: String) -> Result<SyncBeaconData, St
         return Err("No pairing code provided.".to_string());
     }
 
-    let gist_id = find_beacon_gist(code)?
-        .ok_or_else(|| "No beacon found for this code".to_string())?;
+    let config = load_app_config();
+    let cached_id = config.sync_beacon_gist_id.trim().to_string();
+    let cached_code = config.sync_beacon_pairing_code.trim().to_string();
+    let gist_id = if !cached_id.is_empty() && cached_code == code {
+        cached_id
+    } else {
+        find_beacon_gist(code)?
+            .ok_or_else(|| "No beacon found for this code".to_string())?
+    };
     read_sync_beacon_gist(&gist_id)
 }
 
@@ -1338,28 +1317,34 @@ pub async fn sync_beacon_push(
 
     let description = format!("vibogit-beacon-{}", code);
 
-    // Find existing gist or create new one
-    let gist_id = find_beacon_gist(&code)?;
+    // Use cached gist ID if available and pairing code matches, otherwise look it up
+    let cached_id = config.sync_beacon_gist_id.trim().to_string();
+    let cached_code = config.sync_beacon_pairing_code.trim().to_string();
+    let gist_id = if !cached_id.is_empty() && cached_code == code {
+        Some(cached_id)
+    } else {
+        find_beacon_gist(&code)?
+    };
 
-    let merged = if let Some(existing_gist_id) = gist_id {
+    let (merged, resolved_gist_id) = if let Some(existing_gist_id) = gist_id {
         let existing = read_sync_beacon_gist(&existing_gist_id)
             .unwrap_or_else(|_| SyncBeaconData { machines: vec![] });
         let merged = merge_beacon_payload(existing, payload);
         let content = serde_json::to_string_pretty(&merged)
             .map_err(|error| format!("Failed to serialize Sync Beacon payload: {}", error))?;
         update_sync_beacon_gist(&existing_gist_id, &content)?;
-        merged
+        (merged, existing_gist_id)
     } else {
         let data = normalize_sync_beacon_data(SyncBeaconData {
             machines: vec![payload.clone()],
         });
         let content = serde_json::to_string_pretty(&data)
             .map_err(|error| format!("Failed to serialize Sync Beacon payload: {}", error))?;
-        create_sync_beacon_gist(&content, &description)?;
-        data
+        let new_id = create_sync_beacon_gist(&content, &description)?;
+        (data, new_id)
     };
 
-    persist_sync_beacon_enable_state(&config_path, &mut config, &code, &persisted_machine_name)?;
+    persist_sync_beacon_enable_state(&config_path, &mut config, &code, &persisted_machine_name, &resolved_gist_id)?;
 
     Ok(SyncBeaconPushResult {
         data: merged,
@@ -1416,6 +1401,7 @@ pub struct AppConfigPatch {
     pub sync_beacon_enabled: Option<bool>,
     pub sync_beacon_machine_name: Option<String>,
     pub sync_beacon_pairing_code: Option<String>,
+    pub sync_beacon_gist_id: Option<String>,
     pub sync_beacon_interval: Option<i64>,
     pub editor: Option<String>,
     pub custom_editor_command: Option<String>,
@@ -1439,6 +1425,7 @@ impl AppConfig {
         if let Some(value) = patch.sync_beacon_enabled { self.sync_beacon_enabled = value; }
         if let Some(value) = patch.sync_beacon_machine_name { self.sync_beacon_machine_name = value; }
         if let Some(value) = patch.sync_beacon_pairing_code { self.sync_beacon_pairing_code = value; }
+        if let Some(value) = patch.sync_beacon_gist_id { self.sync_beacon_gist_id = value; }
         if let Some(value) = patch.sync_beacon_interval { self.sync_beacon_interval = value; }
         if let Some(value) = patch.editor { self.editor = value; }
         if let Some(value) = patch.custom_editor_command { self.custom_editor_command = value; }
@@ -3384,7 +3371,7 @@ mod sync_beacon_tests {
         assert!(json.contains("syncBeaconEnabled"), "JSON should contain syncBeaconEnabled");
         assert!(json.contains("syncBeaconInterval"), "JSON should contain syncBeaconInterval");
         assert!(json.contains("aiModel"), "JSON should contain aiModel");
-        assert!(!json.contains("syncBeaconGistId"), "JSON should not contain syncBeaconGistId");
+        assert!(json.contains("syncBeaconGistId"), "JSON should contain syncBeaconGistId");
     }
 
     #[test]
@@ -3428,6 +3415,7 @@ mod sync_beacon_tests {
             clean_shot_mode: true,
             auto_execute_prompt: true,
             sync_beacon_pairing_code: "abc123".to_string(),
+            sync_beacon_gist_id: String::new(),
             recent_tabs: vec![],
             active_tab_id: Some("tab-1".to_string()),
         };
@@ -3500,17 +3488,19 @@ mod sync_beacon_tests {
             ..AppConfig::default()
         };
 
-        persist_sync_beacon_enable_state(&config_path_str, &mut config, "abc123", "Laptop")
+        persist_sync_beacon_enable_state(&config_path_str, &mut config, "abc123", "Laptop", "gist_abc")
             .expect("persist beacon state");
 
         assert!(config.sync_beacon_enabled);
         assert_eq!(config.sync_beacon_pairing_code, "abc123");
         assert_eq!(config.sync_beacon_machine_name, "Laptop");
+        assert_eq!(config.sync_beacon_gist_id, "gist_abc");
 
         let saved = load_app_config_from_path(&config_path_str).expect("load saved config");
         assert!(saved.sync_beacon_enabled);
         assert_eq!(saved.sync_beacon_pairing_code, "abc123");
         assert_eq!(saved.sync_beacon_machine_name, "Laptop");
+        assert_eq!(saved.sync_beacon_gist_id, "gist_abc");
     }
 
     #[test]
@@ -3525,7 +3515,7 @@ mod sync_beacon_tests {
             ..AppConfig::default()
         };
 
-        persist_sync_beacon_enable_state(&config_path_str, &mut config, "xyz789", "   ")
+        persist_sync_beacon_enable_state(&config_path_str, &mut config, "xyz789", "   ", "gist_xyz")
             .expect("persist beacon state");
 
         assert!(config.sync_beacon_enabled);
