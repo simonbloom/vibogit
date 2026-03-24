@@ -1024,41 +1024,37 @@ fn read_sync_beacon_gist_file_raw(gist_id: &str, file_name: &str) -> Result<Stri
     gh_output_success(&output, "read Sync Beacon Gist")
 }
 
-fn extract_sync_beacon_legacy_filename_from_metadata(metadata: &str) -> Result<String, String> {
-    let value: serde_json::Value = serde_json::from_str(metadata)
-        .map_err(|error| format!("Failed to inspect Sync Beacon Gist files: {}", error))?;
-    let files = value
-        .get("files")
-        .and_then(|files| files.as_array())
-        .ok_or_else(|| "Failed to inspect Sync Beacon Gist files: missing files array.".to_string())?;
+fn parse_sync_beacon_gist_files_output(files_output: &str) -> Result<Vec<String>, String> {
+    let file_names: Vec<String> = files_output
+        .lines()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .collect();
 
-    if files.is_empty() {
+    if file_names.is_empty() {
         return Err("Sync Beacon Gist does not contain any files.".to_string());
     }
 
-    if let Some(canonical) = files.iter().find_map(|file| {
-        file.get("name")
-            .and_then(|name| name.as_str())
-            .filter(|name| *name == SYNC_BEACON_FILENAME)
-            .map(str::to_string)
-    }) {
-        return Ok(canonical);
-    }
+    Ok(file_names)
+}
 
-    if files.len() == 1 {
-        return files[0]
-            .get("name")
-            .and_then(|name| name.as_str())
-            .filter(|name| !name.trim().is_empty())
-            .map(str::to_string)
-            .ok_or_else(|| "Legacy Sync Beacon Gist file is missing a readable filename.".to_string());
-    }
-
-    let file_names: Vec<String> = files
+fn select_sync_beacon_fallback_filename(file_names: &[String]) -> Result<String, String> {
+    if let Some(canonical) = file_names
         .iter()
-        .filter_map(|file| file.get("name").and_then(|name| name.as_str()))
-        .map(str::to_string)
-        .collect();
+        .find(|name| name.as_str() == SYNC_BEACON_FILENAME)
+    {
+        return Ok(canonical.clone());
+    }
+
+    if file_names.len() == 1 {
+        let file_name = file_names[0].trim();
+        if file_name.is_empty() {
+            return Err("Legacy Sync Beacon Gist file is missing a readable filename.".to_string());
+        }
+        return Ok(file_name.to_string());
+    }
+
     Err(format!(
         "Sync Beacon Gist is incompatible: expected `{}` or exactly one legacy file, but found multiple files: {}",
         SYNC_BEACON_FILENAME,
@@ -1075,18 +1071,18 @@ fn read_sync_beacon_gist_raw(gist_id: &str) -> Result<String, String> {
     match read_sync_beacon_gist_file_raw(gist_id, SYNC_BEACON_FILENAME) {
         Ok(raw) => Ok(raw),
         Err(error) if sync_beacon_missing_canonical_filename(&error) => {
-            let mut metadata_command = gh_command();
-            metadata_command
+            let mut files_command = gh_command();
+            files_command
                 .arg("gist")
                 .arg("view")
                 .arg(gist_id)
-                .arg("--json")
-                .arg("files");
-            let metadata_output = metadata_command
+                .arg("--files");
+            let files_output = files_command
                 .output()
                 .map_err(|command_error| friendly_gh_command_error(&command_error, "inspect Sync Beacon Gist files"))?;
-            let metadata = gh_output_success(&metadata_output, "inspect Sync Beacon Gist files")?;
-            let fallback_file_name = extract_sync_beacon_legacy_filename_from_metadata(&metadata)?;
+            let files = gh_output_success(&files_output, "inspect Sync Beacon Gist files")?;
+            let file_names = parse_sync_beacon_gist_files_output(&files)?;
+            let fallback_file_name = select_sync_beacon_fallback_filename(&file_names)?;
             read_sync_beacon_gist_file_raw(gist_id, &fallback_file_name)
         }
         Err(error) => Err(error),
@@ -3242,25 +3238,32 @@ mod sync_beacon_tests {
     }
 
     #[test]
-    fn legacy_sync_beacon_metadata_prefers_canonical_file_when_present() {
-        let metadata = r#"{"files":[{"name":"legacy.json"},{"name":"vibogit-beacon.json"}]}"#;
-        let file_name = extract_sync_beacon_legacy_filename_from_metadata(metadata)
+    fn parse_sync_beacon_gist_files_output_rejects_empty_lists() {
+        let error = parse_sync_beacon_gist_files_output("\n \n")
+            .expect_err("empty gist file listing should be rejected");
+        assert!(error.contains("does not contain any files"));
+    }
+
+    #[test]
+    fn select_sync_beacon_fallback_filename_prefers_canonical_file_when_present() {
+        let file_names = vec!["legacy.json".to_string(), "vibogit-beacon.json".to_string()];
+        let file_name = select_sync_beacon_fallback_filename(&file_names)
             .expect("canonical filename should win");
         assert_eq!(file_name, "vibogit-beacon.json");
     }
 
     #[test]
-    fn legacy_sync_beacon_metadata_falls_back_to_single_file() {
-        let metadata = r#"{"files":[{"name":"legacy-beacon.json"}]}"#;
-        let file_name = extract_sync_beacon_legacy_filename_from_metadata(metadata)
+    fn select_sync_beacon_fallback_filename_falls_back_to_single_file() {
+        let file_names = vec!["legacy-beacon.json".to_string()];
+        let file_name = select_sync_beacon_fallback_filename(&file_names)
             .expect("single legacy file should be accepted");
         assert_eq!(file_name, "legacy-beacon.json");
     }
 
     #[test]
-    fn legacy_sync_beacon_metadata_rejects_ambiguous_multiple_files() {
-        let metadata = r#"{"files":[{"name":"legacy-beacon.json"},{"name":"notes.txt"}]}"#;
-        let error = extract_sync_beacon_legacy_filename_from_metadata(metadata)
+    fn select_sync_beacon_fallback_filename_rejects_ambiguous_multiple_files() {
+        let file_names = vec!["legacy-beacon.json".to_string(), "notes.txt".to_string()];
+        let error = select_sync_beacon_fallback_filename(&file_names)
             .expect_err("multiple non-canonical files should be rejected");
         assert!(error.contains("incompatible"));
         assert!(error.contains("vibogit-beacon.json"));
