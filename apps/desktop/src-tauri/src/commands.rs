@@ -958,6 +958,10 @@ fn classify_gh_failure(stderr: &str, operation: &str) -> String {
         return format!("Sync Beacon Gist was not found or you do not have access to it while attempting to {}.", operation);
     }
 
+    if lowered.contains("409") || lowered.contains("conflict") {
+        return format!("GitHub CLI failed to {}: conflict (HTTP 409). Another device may be updating at the same time. This will resolve on the next sync.", operation);
+    }
+
     if lowered.contains("could not resolve host")
         || lowered.contains("network")
         || lowered.contains("connection refused")
@@ -1092,6 +1096,21 @@ fn create_sync_beacon_gist(content: &str, description: &str) -> Result<String, S
 }
 
 fn update_sync_beacon_gist(gist_id: &str, content: &str) -> Result<(), String> {
+    let max_retries = 3;
+    for attempt in 0..max_retries {
+        match try_update_sync_beacon_gist(gist_id, content) {
+            Ok(()) => return Ok(()),
+            Err(error) if error.contains("409") && attempt < max_retries - 1 => {
+                std::thread::sleep(std::time::Duration::from_millis(500 * (attempt as u64 + 1)));
+                continue;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err("update Sync Beacon Gist failed after retries.".to_string())
+}
+
+fn try_update_sync_beacon_gist(gist_id: &str, content: &str) -> Result<(), String> {
     let mut command = gh_command();
     command
         .arg("api")
@@ -1323,7 +1342,8 @@ pub async fn sync_beacon_push(
     let gist_id = find_beacon_gist(&code)?;
 
     let merged = if let Some(existing_gist_id) = gist_id {
-        let existing = read_sync_beacon_gist(&existing_gist_id)?;
+        let existing = read_sync_beacon_gist(&existing_gist_id)
+            .unwrap_or_else(|_| SyncBeaconData { machines: vec![] });
         let merged = merge_beacon_payload(existing, payload);
         let content = serde_json::to_string_pretty(&merged)
             .map_err(|error| format!("Failed to serialize Sync Beacon payload: {}", error))?;
