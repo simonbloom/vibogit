@@ -974,18 +974,6 @@ fn classify_gh_failure(stderr: &str, operation: &str) -> String {
     }
 }
 
-fn write_temp_sync_beacon_file(content: &str) -> Result<PathBuf, String> {
-    let file_name = format!(
-        "vibogit-sync-beacon-{}-{}.json",
-        std::process::id(),
-        current_unix_timestamp()
-    );
-    let path = std::env::temp_dir().join(file_name);
-    std::fs::write(&path, content)
-        .map_err(|error| format!("Failed to prepare Sync Beacon payload file: {}", error))?;
-    Ok(path)
-}
-
 fn gh_output_success(output: &std::process::Output, operation: &str) -> Result<String, String> {
     if output.status.success() {
         return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
@@ -1003,62 +991,62 @@ fn gh_auth_status_output() -> Result<std::process::Output, String> {
         .map_err(|error| friendly_gh_command_error(&error, "check GitHub CLI authentication"))
 }
 
-fn sync_beacon_missing_canonical_filename(stderr: &str) -> bool {
-    stderr
-        .to_lowercase()
-        .contains(&format!("gist has no such file: \"{}\"", SYNC_BEACON_FILENAME).to_lowercase())
+fn gh_api_stdin(method: &str, endpoint: &str, json_body: &str, operation: &str) -> Result<String, String> {
+    let mut child = gh_command()
+        .arg("api")
+        .arg("--method")
+        .arg(method)
+        .arg(endpoint)
+        .arg("--input")
+        .arg("-")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| friendly_gh_command_error(&error, operation))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        let _ = stdin.write_all(json_body.as_bytes());
+    }
+
+    let output = child.wait_with_output()
+        .map_err(|error| format!("GitHub CLI failed to {}: {}", operation, error))?;
+    gh_output_success(&output, operation)
 }
 
-fn read_sync_beacon_gist_file_raw(gist_id: &str, file_name: &str) -> Result<String, String> {
-    let mut command = gh_command();
-    command
-        .arg("gist")
-        .arg("view")
-        .arg(gist_id)
-        .arg("--raw")
-        .arg("-f")
-        .arg(file_name);
-    let output = command
-        .output()
-        .map_err(|error| friendly_gh_command_error(&error, "read Sync Beacon Gist"))?;
-    gh_output_success(&output, "read Sync Beacon Gist")
-}
+fn extract_beacon_content_from_gist_response(response: &str) -> Result<String, String> {
+    let gist: serde_json::Value = serde_json::from_str(response)
+        .map_err(|error| format!("Failed to parse Gist API response: {}", error))?;
 
-fn parse_sync_beacon_gist_files_output(files_output: &str) -> Result<Vec<String>, String> {
-    let file_names: Vec<String> = files_output
-        .lines()
-        .map(str::trim)
-        .filter(|name| !name.is_empty())
-        .map(str::to_string)
-        .collect();
+    let files = gist.get("files")
+        .and_then(|f| f.as_object())
+        .ok_or_else(|| "Gist API response missing files object.".to_string())?;
 
-    if file_names.is_empty() {
+    if let Some(canonical) = files.get(SYNC_BEACON_FILENAME) {
+        return canonical.get("content")
+            .and_then(|c| c.as_str())
+            .map(|s| s.to_string())
+            .ok_or_else(|| format!("Gist file `{}` has no content.", SYNC_BEACON_FILENAME));
+    }
+
+    if files.len() == 1 {
+        let (name, file) = files.iter().next().unwrap();
+        return file.get("content")
+            .and_then(|c| c.as_str())
+            .map(|s| s.to_string())
+            .ok_or_else(|| format!("Gist file `{}` has no content.", name));
+    }
+
+    if files.is_empty() {
         return Err("Sync Beacon Gist does not contain any files.".to_string());
     }
 
-    Ok(file_names)
-}
-
-fn select_sync_beacon_fallback_filename(file_names: &[String]) -> Result<String, String> {
-    if let Some(canonical) = file_names
-        .iter()
-        .find(|name| name.as_str() == SYNC_BEACON_FILENAME)
-    {
-        return Ok(canonical.clone());
-    }
-
-    if file_names.len() == 1 {
-        let file_name = file_names[0].trim();
-        if file_name.is_empty() {
-            return Err("Legacy Sync Beacon Gist file is missing a readable filename.".to_string());
-        }
-        return Ok(file_name.to_string());
-    }
-
+    let names: Vec<&String> = files.keys().collect();
     Err(format!(
-        "Sync Beacon Gist is incompatible: expected `{}` or exactly one legacy file, but found multiple files: {}",
+        "Sync Beacon Gist is incompatible: expected `{}` or exactly one legacy file, but found: {}",
         SYNC_BEACON_FILENAME,
-        file_names.join(", ")
+        names.iter().map(|n| n.as_str()).collect::<Vec<_>>().join(", ")
     ))
 }
 
@@ -1068,25 +1056,15 @@ fn read_sync_beacon_gist_raw(gist_id: &str) -> Result<String, String> {
         return Err("Sync Beacon Gist ID is empty.".to_string());
     }
 
-    match read_sync_beacon_gist_file_raw(gist_id, SYNC_BEACON_FILENAME) {
-        Ok(raw) => Ok(raw),
-        Err(error) if sync_beacon_missing_canonical_filename(&error) => {
-            let mut files_command = gh_command();
-            files_command
-                .arg("gist")
-                .arg("view")
-                .arg(gist_id)
-                .arg("--files");
-            let files_output = files_command
-                .output()
-                .map_err(|command_error| friendly_gh_command_error(&command_error, "inspect Sync Beacon Gist files"))?;
-            let files = gh_output_success(&files_output, "inspect Sync Beacon Gist files")?;
-            let file_names = parse_sync_beacon_gist_files_output(&files)?;
-            let fallback_file_name = select_sync_beacon_fallback_filename(&file_names)?;
-            read_sync_beacon_gist_file_raw(gist_id, &fallback_file_name)
-        }
-        Err(error) => Err(error),
-    }
+    let mut command = gh_command();
+    command
+        .arg("api")
+        .arg(format!("/gists/{}", gist_id));
+    let output = command
+        .output()
+        .map_err(|error| friendly_gh_command_error(&error, "read Sync Beacon Gist"))?;
+    let response = gh_output_success(&output, "read Sync Beacon Gist")?;
+    extract_beacon_content_from_gist_response(&response)
 }
 
 fn read_sync_beacon_gist(gist_id: &str) -> Result<SyncBeaconData, String> {
@@ -1095,120 +1073,55 @@ fn read_sync_beacon_gist(gist_id: &str) -> Result<SyncBeaconData, String> {
 }
 
 fn create_sync_beacon_gist(content: &str, description: &str) -> Result<String, String> {
-    let temp_path = write_temp_sync_beacon_file(content)?;
-    let result = (|| {
-        let mut command = gh_command();
-        command
-            .arg("gist")
-            .arg("create")
-            .arg("--public=false")
-            .arg("-d")
-            .arg(description)
-            .arg("-f")
-            .arg(SYNC_BEACON_FILENAME)
-            .arg(&temp_path);
-        let output = command
-            .output()
-            .map_err(|error| friendly_gh_command_error(&error, "create Sync Beacon Gist"))?;
-        let stdout = gh_output_success(&output, "create Sync Beacon Gist")?;
-        extract_gist_id_from_output(&stdout)
-    })();
-    let _ = std::fs::remove_file(temp_path);
-    result
-}
-
-fn write_temp_sync_beacon_canonical_file(content: &str) -> Result<(PathBuf, PathBuf), String> {
-    let dir = std::env::temp_dir().join(format!(
-        "vibogit-beacon-{}-{}",
-        std::process::id(),
-        current_unix_timestamp()
-    ));
-    std::fs::create_dir_all(&dir)
-        .map_err(|error| format!("Failed to create temp directory for Sync Beacon: {}", error))?;
-    let path = dir.join(SYNC_BEACON_FILENAME);
-    std::fs::write(&path, content)
-        .map_err(|error| format!("Failed to prepare Sync Beacon payload file: {}", error))?;
-    Ok((dir, path))
+    let payload = serde_json::json!({
+        "public": false,
+        "description": description,
+        "files": {
+            SYNC_BEACON_FILENAME: {
+                "content": content
+            }
+        }
+    });
+    let response = gh_api_stdin("POST", "/gists", &payload.to_string(), "create Sync Beacon Gist")?;
+    let gist: serde_json::Value = serde_json::from_str(&response)
+        .map_err(|error| format!("Failed to parse Gist creation response: {}", error))?;
+    gist.get("id")
+        .and_then(|id| id.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| "Gist creation response missing id field.".to_string())
 }
 
 fn update_sync_beacon_gist(gist_id: &str, content: &str) -> Result<(), String> {
-    let mut files_command = gh_command();
-    files_command
-        .arg("gist")
-        .arg("view")
-        .arg(gist_id)
-        .arg("--files");
-    let files_output = files_command
+    let mut command = gh_command();
+    command
+        .arg("api")
+        .arg(format!("/gists/{}", gist_id));
+    let output = command
         .output()
-        .map_err(|error| friendly_gh_command_error(&error, "inspect Sync Beacon Gist files"))?;
-    let files = gh_output_success(&files_output, "inspect Sync Beacon Gist files")?;
-    let file_names = parse_sync_beacon_gist_files_output(&files)?;
-    let target_file_name = select_sync_beacon_fallback_filename(&file_names)?;
+        .map_err(|error| friendly_gh_command_error(&error, "inspect Sync Beacon Gist"))?;
+    let response = gh_output_success(&output, "inspect Sync Beacon Gist")?;
 
-    if target_file_name == SYNC_BEACON_FILENAME {
-        let temp_path = write_temp_sync_beacon_file(content)?;
-        let result = (|| {
-            let mut command = gh_command();
-            command
-                .arg("gist")
-                .arg("edit")
-                .arg(gist_id)
-                .arg("-f")
-                .arg(SYNC_BEACON_FILENAME)
-                .arg(&temp_path);
-            let output = command
-                .output()
-                .map_err(|error| friendly_gh_command_error(&error, "update Sync Beacon Gist"))?;
-            gh_output_success(&output, "update Sync Beacon Gist").map(|_| ())
-        })();
-        let _ = std::fs::remove_file(temp_path);
-        result
-    } else {
-        let (temp_dir, canonical_path) = write_temp_sync_beacon_canonical_file(content)?;
-        let result = (|| {
-            let mut add_command = gh_command();
-            add_command
-                .arg("gist")
-                .arg("edit")
-                .arg(gist_id)
-                .arg("-a")
-                .arg(&canonical_path);
-            let add_output = add_command
-                .output()
-                .map_err(|error| friendly_gh_command_error(&error, "add canonical Sync Beacon file to Gist"))?;
-            gh_output_success(&add_output, "add canonical Sync Beacon file to Gist")?;
+    let gist: serde_json::Value = serde_json::from_str(&response)
+        .map_err(|error| format!("Failed to parse Gist API response: {}", error))?;
+    let file_keys: Vec<String> = gist.get("files")
+        .and_then(|f| f.as_object())
+        .map(|files| files.keys().cloned().collect())
+        .unwrap_or_default();
 
-            let mut remove_command = gh_command();
-            remove_command
-                .arg("gist")
-                .arg("edit")
-                .arg(gist_id)
-                .arg("-r")
-                .arg(&target_file_name);
-            let remove_output = remove_command
-                .output()
-                .map_err(|error| friendly_gh_command_error(&error, "remove legacy Sync Beacon Gist file"))?;
-            let _ = gh_output_success(&remove_output, "remove legacy Sync Beacon Gist file");
+    let mut files_payload = serde_json::json!({
+        SYNC_BEACON_FILENAME: { "content": content }
+    });
 
-            Ok(())
-        })();
-        let _ = std::fs::remove_file(&canonical_path);
-        let _ = std::fs::remove_dir(&temp_dir);
-        result
+    for key in &file_keys {
+        if key != SYNC_BEACON_FILENAME {
+            files_payload[key] = serde_json::Value::Null;
+        }
     }
-}
 
-fn extract_gist_id_from_output(output: &str) -> Result<String, String> {
-    output
-        .split(|character: char| character.is_whitespace() || character == '/')
-        .find(|segment| {
-            let trimmed = segment.trim();
-            !trimmed.is_empty()
-                && trimmed.len() >= 8
-                && trimmed.chars().all(|character| character.is_ascii_hexdigit())
-        })
-        .map(|segment| segment.to_string())
-        .ok_or_else(|| format!("Failed to determine Sync Beacon Gist ID from GitHub CLI output: {}", output.trim()))
+    let payload = serde_json::json!({ "files": files_payload });
+    let endpoint = format!("/gists/{}", gist_id);
+    gh_api_stdin("PATCH", &endpoint, &payload.to_string(), "update Sync Beacon Gist")?;
+    Ok(())
 }
 
 fn generate_pairing_code() -> String {
@@ -3285,97 +3198,70 @@ mod sync_beacon_tests {
     }
 
     #[test]
-    fn extract_gist_id_from_cli_output_supports_url() {
-        let gist_id = extract_gist_id_from_output("- https://gist.github.com/user/abcdef1234567890")
-            .expect("gist id should be extracted");
-        assert_eq!(gist_id, "abcdef1234567890");
+    fn extract_beacon_content_from_canonical_file() {
+        let response = serde_json::json!({
+            "id": "abc123",
+            "files": {
+                "vibogit-beacon.json": {
+                    "content": "{\"machines\":[]}"
+                }
+            }
+        });
+        let content = extract_beacon_content_from_gist_response(&response.to_string())
+            .expect("should extract canonical file content");
+        assert_eq!(content, "{\"machines\":[]}");
     }
 
     #[test]
-    fn detects_missing_canonical_sync_beacon_filename_error() {
-        let stderr = "gist has no such file: \"vibogit-beacon.json\"";
-        assert!(sync_beacon_missing_canonical_filename(stderr));
-        assert!(!sync_beacon_missing_canonical_filename("some other gh error"));
+    fn extract_beacon_content_prefers_canonical_over_legacy() {
+        let response = serde_json::json!({
+            "id": "abc123",
+            "files": {
+                "legacy.json": { "content": "old" },
+                "vibogit-beacon.json": { "content": "canonical" }
+            }
+        });
+        let content = extract_beacon_content_from_gist_response(&response.to_string())
+            .expect("should prefer canonical file");
+        assert_eq!(content, "canonical");
     }
 
     #[test]
-    fn parse_sync_beacon_gist_files_output_rejects_empty_lists() {
-        let error = parse_sync_beacon_gist_files_output("\n \n")
-            .expect_err("empty gist file listing should be rejected");
+    fn extract_beacon_content_falls_back_to_single_legacy_file() {
+        let response = serde_json::json!({
+            "id": "abc123",
+            "files": {
+                "gistfile1.json": { "content": "legacy data" }
+            }
+        });
+        let content = extract_beacon_content_from_gist_response(&response.to_string())
+            .expect("should fall back to single legacy file");
+        assert_eq!(content, "legacy data");
+    }
+
+    #[test]
+    fn extract_beacon_content_rejects_empty_gist() {
+        let response = serde_json::json!({
+            "id": "abc123",
+            "files": {}
+        });
+        let error = extract_beacon_content_from_gist_response(&response.to_string())
+            .expect_err("empty gist should fail");
         assert!(error.contains("does not contain any files"));
     }
 
     #[test]
-    fn select_sync_beacon_fallback_filename_prefers_canonical_file_when_present() {
-        let file_names = vec!["legacy.json".to_string(), "vibogit-beacon.json".to_string()];
-        let file_name = select_sync_beacon_fallback_filename(&file_names)
-            .expect("canonical filename should win");
-        assert_eq!(file_name, "vibogit-beacon.json");
-    }
-
-    #[test]
-    fn select_sync_beacon_fallback_filename_falls_back_to_single_file() {
-        let file_names = vec!["legacy-beacon.json".to_string()];
-        let file_name = select_sync_beacon_fallback_filename(&file_names)
-            .expect("single legacy file should be accepted");
-        assert_eq!(file_name, "legacy-beacon.json");
-    }
-
-    #[test]
-    fn select_sync_beacon_fallback_filename_rejects_ambiguous_multiple_files() {
-        let file_names = vec!["legacy-beacon.json".to_string(), "notes.txt".to_string()];
-        let error = select_sync_beacon_fallback_filename(&file_names)
-            .expect_err("multiple non-canonical files should be rejected");
+    fn extract_beacon_content_rejects_ambiguous_multiple_files() {
+        let response = serde_json::json!({
+            "id": "abc123",
+            "files": {
+                "file1.json": { "content": "a" },
+                "file2.json": { "content": "b" }
+            }
+        });
+        let error = extract_beacon_content_from_gist_response(&response.to_string())
+            .expect_err("ambiguous files should fail");
         assert!(error.contains("incompatible"));
-        assert!(error.contains("vibogit-beacon.json"));
-        assert!(error.contains("legacy-beacon.json"));
-        assert!(error.contains("notes.txt"));
-    }
-
-    #[test]
-    fn legacy_single_file_update_strategy_adds_canonical_then_removes_legacy() {
-        let file_names = vec!["legacy-beacon.json".to_string()];
-        let target_file_name = select_sync_beacon_fallback_filename(&file_names)
-            .expect("single legacy file should be writable");
-
-        assert_ne!(target_file_name, SYNC_BEACON_FILENAME);
-
-        let mut add_command = vec!["gist", "edit", "gist123"];
-        add_command.push("-a");
-        add_command.push("/tmp/vibogit-beacon.json");
-
-        assert_eq!(
-            add_command,
-            vec!["gist", "edit", "gist123", "-a", "/tmp/vibogit-beacon.json"]
-        );
-
-        let mut remove_command = vec!["gist", "edit", "gist123"];
-        remove_command.push("-r");
-        remove_command.push(target_file_name.as_str());
-
-        assert_eq!(
-            remove_command,
-            vec!["gist", "edit", "gist123", "-r", "legacy-beacon.json"]
-        );
-    }
-
-    #[test]
-    fn canonical_update_strategy_edits_existing_file_in_place() {
-        let file_names = vec![SYNC_BEACON_FILENAME.to_string()];
-        let target_file_name = select_sync_beacon_fallback_filename(&file_names)
-            .expect("canonical file should be writable");
-
-        assert_eq!(target_file_name, SYNC_BEACON_FILENAME);
-
-        let mut command = vec!["gist", "edit", "gist123"];
-        command.push("-f");
-        command.push(SYNC_BEACON_FILENAME);
-        command.push("/tmp/payload.json");
-
-        assert_eq!(
-            command,
-            vec!["gist", "edit", "gist123", "-f", "vibogit-beacon.json", "/tmp/payload.json"]
-        );
     }
 
     #[test]
