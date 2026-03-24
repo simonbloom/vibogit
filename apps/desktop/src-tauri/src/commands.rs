@@ -1120,14 +1120,31 @@ fn create_sync_beacon_gist(content: &str, description: &str) -> Result<String, S
 fn update_sync_beacon_gist(gist_id: &str, content: &str) -> Result<(), String> {
     let temp_path = write_temp_sync_beacon_file(content)?;
     let result = (|| {
-        let mut command = gh_command();
-        command
+        let mut files_command = gh_command();
+        files_command
             .arg("gist")
-            .arg("edit")
+            .arg("view")
             .arg(gist_id)
+            .arg("--files");
+        let files_output = files_command
+            .output()
+            .map_err(|error| friendly_gh_command_error(&error, "inspect Sync Beacon Gist files"))?;
+        let files = gh_output_success(&files_output, "inspect Sync Beacon Gist files")?;
+        let file_names = parse_sync_beacon_gist_files_output(&files)?;
+        let target_file_name = select_sync_beacon_fallback_filename(&file_names)?;
+
+        let mut command = gh_command();
+        command.arg("gist").arg("edit").arg(gist_id);
+
+        if target_file_name != SYNC_BEACON_FILENAME {
+            command.arg("-r").arg(&target_file_name);
+        }
+
+        command
             .arg("-f")
             .arg(SYNC_BEACON_FILENAME)
             .arg(&temp_path);
+
         let output = command
             .output()
             .map_err(|error| friendly_gh_command_error(&error, "update Sync Beacon Gist"))?;
@@ -3269,6 +3286,64 @@ mod sync_beacon_tests {
         assert!(error.contains("vibogit-beacon.json"));
         assert!(error.contains("legacy-beacon.json"));
         assert!(error.contains("notes.txt"));
+    }
+
+    #[test]
+    fn legacy_single_file_update_strategy_renames_to_canonical_filename() {
+        let file_names = vec!["legacy-beacon.json".to_string()];
+        let target_file_name = select_sync_beacon_fallback_filename(&file_names)
+            .expect("single legacy file should be writable");
+
+        let mut command = vec!["gist", "edit", "gist123"];
+        if target_file_name != SYNC_BEACON_FILENAME {
+            command.push("-r");
+            command.push(target_file_name.as_str());
+        }
+        command.push("-f");
+        command.push(SYNC_BEACON_FILENAME);
+        command.push("/tmp/payload.json");
+
+        assert_eq!(
+            command,
+            vec![
+                "gist",
+                "edit",
+                "gist123",
+                "-r",
+                "legacy-beacon.json",
+                "-f",
+                "vibogit-beacon.json",
+                "/tmp/payload.json"
+            ]
+        );
+    }
+
+    #[test]
+    fn canonical_update_strategy_keeps_existing_filename_unchanged() {
+        let file_names = vec![SYNC_BEACON_FILENAME.to_string()];
+        let target_file_name = select_sync_beacon_fallback_filename(&file_names)
+            .expect("canonical file should be writable");
+
+        let mut command = vec!["gist", "edit", "gist123"];
+        if target_file_name != SYNC_BEACON_FILENAME {
+            command.push("-r");
+            command.push(target_file_name.as_str());
+        }
+        command.push("-f");
+        command.push(SYNC_BEACON_FILENAME);
+        command.push("/tmp/payload.json");
+
+        assert_eq!(
+            command,
+            vec![
+                "gist",
+                "edit",
+                "gist123",
+                "-f",
+                "vibogit-beacon.json",
+                "/tmp/payload.json"
+            ]
+        );
     }
 
     #[test]
