@@ -12,6 +12,7 @@ import {
 import { useDaemon } from "./daemon-context";
 import type { Config } from "@vibogit/shared";
 import { DEFAULT_CONFIG } from "@vibogit/shared";
+import { getProviderById, getModelForProvider } from "./ai-service";
 
 const SETTINGS_KEY = "vibogit-settings";
 
@@ -23,14 +24,34 @@ interface ConfigContextValue {
   lastSaveError: string | null;
 }
 
-const ConfigContext = createContext<ConfigContextValue | null>(null);
+export const ConfigContext = createContext<ConfigContextValue | null>(null);
+
+function normalizeConfig(config: Config): Config {
+  const provider = getProviderById(config.aiProvider);
+  const aiProvider = provider?.id ?? DEFAULT_CONFIG.aiProvider;
+  const aiModel = getModelForProvider(aiProvider, config.aiModel);
+  const syncBeaconInterval = Number(config.syncBeaconInterval || DEFAULT_CONFIG.syncBeaconInterval);
+
+  return {
+    ...config,
+    aiProvider,
+    aiModel,
+    syncBeaconEnabled: Boolean(config.syncBeaconEnabled),
+    syncBeaconMachineName: config.syncBeaconMachineName?.trim() || config.computerName || DEFAULT_CONFIG.syncBeaconMachineName,
+    syncBeaconPairingCode: config.syncBeaconPairingCode?.trim() || "",
+    syncBeaconInterval:
+      Number.isFinite(syncBeaconInterval) && syncBeaconInterval > 0
+        ? syncBeaconInterval
+        : DEFAULT_CONFIG.syncBeaconInterval,
+  };
+}
 
 function getLocalConfig(): Config {
   if (typeof window === "undefined") return DEFAULT_CONFIG;
   try {
     const stored = localStorage.getItem(SETTINGS_KEY);
     if (stored) {
-      return { ...DEFAULT_CONFIG, ...JSON.parse(stored) };
+      return normalizeConfig({ ...DEFAULT_CONFIG, ...JSON.parse(stored) });
     }
   } catch {
     // Ignore
@@ -41,7 +62,7 @@ function getLocalConfig(): Config {
 function saveLocalConfig(config: Config): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(config));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(normalizeConfig(config)));
   } catch {
     // Ignore
   }
@@ -65,8 +86,9 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     const fetchConfig = async () => {
       try {
         const response = await send<{ config: Config }>("getConfig");
-        setConfigState(response.config);
-        saveLocalConfig(response.config); // Keep localStorage in sync
+        const normalizedConfig = normalizeConfig(response.config);
+        setConfigState(normalizedConfig);
+        saveLocalConfig(normalizedConfig); // Keep localStorage in sync
         setLastSaveError(null);
       } catch (err) {
         console.error("[Config] Failed to fetch from daemon:", err);
@@ -103,8 +125,9 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
           const response = await send<{ config: Config }>("setConfig", {
             config: partial,
           });
-          setConfigState(response.config);
-          saveLocalConfig(response.config);
+          const normalizedConfig = normalizeConfig(response.config);
+          setConfigState(normalizedConfig);
+          saveLocalConfig(normalizedConfig);
           if (saveRequestIdRef.current === requestId) {
             setLastSaveError(null);
           }

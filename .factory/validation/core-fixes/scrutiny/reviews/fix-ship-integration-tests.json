@@ -1,0 +1,21 @@
+{
+  "featureId": "fix-ship-integration-tests",
+  "reviewedAt": "2026-03-23T14:26:03Z",
+  "commitId": "e9202dc",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The original test-only feature now lands in a corrected state because the follow-up fix updated both `ship()` and the simple-push assertions. Current `git.rs` covers the requested temporary-repo scenarios: simple push, rebase-then-push, conflict abort cleanup, and no-remote, and the simple-push case now verifies the intended first-push semantics (`commits_pushed == 1`, `has_remote == true`). I did not find remaining blocking or non-blocking defects in this reviewed area.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The `tauri-fullstack` skill describes ship() scenarios but does not explicitly call out critical postconditions for first-push tests such as establishing upstream tracking and asserting `commits_pushed`/`has_remote`. That gap likely contributed to the original incorrect simple-push assertions before the follow-up fix corrected them.",
+      "evidence": ".factory/skills/tauri-fullstack/SKILL.md lists smart-push test scenarios generally, while the initial `fix-ship-integration-tests` commit `e9202dc` asserted the wrong first-push semantics and the follow-up fix commit `c201bfd` had to correct `apps/desktop/src-tauri/src/git.rs` so simple-push now expects `commits_pushed == 1` and `status.has_remote == true` at lines 1292-1306 in the current file."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the original `fix-ship-integration-tests` handoff/transcript and the follow-up fix `fix-ship-push-tracking-and-tests`. Current code now satisfies the feature intent: ship() integration coverage exists for all requested scenarios, and the prior bad first-push expectations were corrected, so this review passes."
+}

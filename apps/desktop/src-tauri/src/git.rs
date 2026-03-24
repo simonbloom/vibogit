@@ -19,6 +19,10 @@ pub enum GitError {
     AuthFailed(String),
     #[error("Merge conflict detected")]
     MergeConflict,
+    #[error("Rebase conflict: {0}")]
+    RebaseConflict(String),
+    #[error("Push rejected: {0}")]
+    PushRejected(String),
     #[error("IO error: {0}")]
     Io(String),
 }
@@ -64,6 +68,9 @@ pub struct ProjectState {
     pub behind: usize,
     pub has_remote: bool,
     pub is_empty_repo: bool,
+    pub last_commit_hash: String,
+    pub last_commit_message: String,
+    pub last_commit_timestamp: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -88,6 +95,7 @@ pub struct ShipResult {
     pub commits_pushed: usize,
     pub remote: String,
     pub branch: String,
+    pub rebased: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -242,6 +250,19 @@ pub fn get_status(repo_path: &str) -> Result<ProjectState, GitError> {
         get_ahead_behind(&repo, &branch).unwrap_or((0, 0, false))
     };
 
+    let (last_commit_hash, last_commit_message, last_commit_timestamp) = if is_empty_repo || is_head_unborn {
+        (String::new(), String::new(), 0)
+    } else {
+        match repo.head().and_then(|head_ref| head_ref.peel_to_commit()) {
+            Ok(commit) => (
+                commit.id().to_string(),
+                commit.message().unwrap_or_default().to_string(),
+                commit.time().seconds(),
+            ),
+            Err(_) => (String::new(), String::new(), 0),
+        }
+    };
+
     Ok(ProjectState {
         branch,
         is_detached,
@@ -252,6 +273,9 @@ pub fn get_status(repo_path: &str) -> Result<ProjectState, GitError> {
         behind,
         has_remote,
         is_empty_repo,
+        last_commit_hash,
+        last_commit_message,
+        last_commit_timestamp,
     })
 }
 
@@ -308,6 +332,9 @@ pub fn save(repo_path: &str, message: Option<String>) -> Result<SaveResult, GitE
             behind: 0,
             has_remote: false,
             is_empty_repo: false,
+            last_commit_hash: String::new(),
+            last_commit_message: String::new(),
+            last_commit_timestamp: 0,
         });
 
         let total_files = status.staged_files.len() + status.changed_files.len() + status.untracked_files.len();
@@ -344,19 +371,96 @@ pub fn save(repo_path: &str, message: Option<String>) -> Result<SaveResult, GitE
 }
 
 pub fn ship(repo_path: &str) -> Result<ShipResult, GitError> {
-    let repo = open_repo(repo_path)?;
+    // First scope: open repo to get branch name and check ahead/behind
+    let (branch_name, commits_pushed_before_push) = {
+        let repo = open_repo(repo_path)?;
+        let head = repo.head()?;
+        let branch_name = head.shorthand().unwrap_or("main").to_string();
+        // Verify origin remote exists
+        let _remote = repo.find_remote("origin").map_err(|_| GitError::NoRemote)?;
+        let (ahead, _behind, has_remote) = get_ahead_behind(&repo, &branch_name)?;
 
-    let head = repo.head()?;
-    let branch_name = head.shorthand().unwrap_or("main").to_string();
+        let commits_pushed_before_push = if has_remote {
+            Some(ahead)
+        } else {
+            let output = std::process::Command::new("git")
+                .args(["rev-list", "--count", "HEAD"])
+                .current_dir(repo_path)
+                .output()
+                .map_err(|e| GitError::Io(format!("Failed to count commits before first push: {}", e)))?;
 
-    // Verify origin remote exists
-    let _remote = repo.find_remote("origin").map_err(|_| GitError::NoRemote)?;
-    
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(GitError::Io(format!(
+                    "Failed to count commits before first push: {}",
+                    stderr.trim()
+                )));
+            }
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            Some(stdout.trim().parse::<usize>().map_err(|e| {
+                GitError::Io(format!("Failed to parse commit count before first push: {}", e))
+            })?)
+        };
+
+        (branch_name, commits_pushed_before_push)
+    };
+
+    let mut rebased = false;
+
+    // If behind remote, auto-pull with rebase before pushing
+    let behind = if commits_pushed_before_push.is_some() {
+        let repo = open_repo(repo_path)?;
+        let (_ahead, behind, _has_remote) = get_ahead_behind(&repo, &branch_name)?;
+        behind
+    } else {
+        0
+    };
+
+    if behind > 0 {
+        eprintln!("Local is {} behind remote, running git pull --rebase before push", behind);
+
+        let rebase_output = std::process::Command::new("git")
+            .args(["pull", "--rebase", "origin", &branch_name])
+            .current_dir(repo_path)
+            .output()
+            .map_err(|e| GitError::Io(format!("Failed to run git pull --rebase: {}", e)))?;
+
+        if !rebase_output.status.success() {
+            let stderr = String::from_utf8_lossy(&rebase_output.stderr);
+            eprintln!("Git pull --rebase failed: {}", stderr);
+
+            let err = classify_rebase_error(&stderr);
+
+            // If it's a rebase conflict, abort the rebase to restore clean state
+            if matches!(&err, GitError::RebaseConflict(_)) {
+                eprintln!("Rebase conflict detected, aborting rebase...");
+                let abort_output = std::process::Command::new("git")
+                    .args(["rebase", "--abort"])
+                    .current_dir(repo_path)
+                    .output();
+
+                if let Ok(abort) = abort_output {
+                    if !abort.status.success() {
+                        let abort_err = String::from_utf8_lossy(&abort.stderr);
+                        eprintln!("Rebase abort warning: {}", abort_err);
+                    }
+                }
+            }
+
+            return Err(err);
+        }
+
+        rebased = true;
+        eprintln!("Rebase successful, proceeding with push");
+    }
+
+    // Re-check ahead count after potential rebase to get accurate commits_pushed
     // Use git CLI for push - it has proper credential helper support
     eprintln!("Pushing via git CLI: origin/{}", branch_name);
     
     let output = std::process::Command::new("git")
-        .args(["push", "origin", &branch_name])
+        .args(["push", "-u", "origin", &branch_name])
         .current_dir(repo_path)
         .output()
         .map_err(|e| GitError::Io(format!("Failed to run git push: {}", e)))?;
@@ -364,14 +468,17 @@ pub fn ship(repo_path: &str) -> Result<ShipResult, GitError> {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         eprintln!("Git push failed: {}", stderr);
-        return Err(GitError::AuthFailed(stderr.trim().to_string()));
+        return Err(classify_push_error(&stderr, rebased));
     }
+
+    let commits_pushed = commits_pushed_before_push.unwrap_or(0);
 
     Ok(ShipResult {
         pushed: true,
-        commits_pushed: 1,
+        commits_pushed,
         remote: "origin".to_string(),
         branch: branch_name,
+        rebased,
     })
 }
 
@@ -859,4 +966,453 @@ pub fn get_file_diff(repo_path: &str, file_path: &str, staged: bool) -> Result<D
 pub fn init_repo(path: &str) -> Result<(), GitError> {
     Repository::init(path)?;
     Ok(())
+}
+
+/// Classify a git push stderr message into the appropriate GitError variant.
+/// This is extracted for testability.
+pub fn classify_push_error(stderr: &str, rebased: bool) -> GitError {
+    let stderr_lower = stderr.to_lowercase();
+
+    // Auth failures
+    if stderr_lower.contains("authentication")
+        || stderr_lower.contains("could not read username")
+        || stderr_lower.contains("permission denied")
+    {
+        return GitError::AuthFailed(stderr.trim().to_string());
+    }
+
+    // Non-fast-forward or rejected
+    if stderr_lower.contains("rejected")
+        || stderr_lower.contains("non-fast-forward")
+        || stderr_lower.contains("failed to push")
+    {
+        return GitError::PushRejected(stderr.trim().to_string());
+    }
+
+    // If rebase succeeded but push failed, give a descriptive error
+    if rebased {
+        return GitError::PushRejected(format!(
+            "Rebase succeeded but push failed: {}",
+            stderr.trim()
+        ));
+    }
+
+    GitError::PushRejected(stderr.trim().to_string())
+}
+
+/// Classify a git pull --rebase stderr message into the appropriate GitError variant.
+/// Returns None if it looks like a conflict (caller should abort rebase first).
+pub fn classify_rebase_error(stderr: &str) -> GitError {
+    let stderr_lower = stderr.to_lowercase();
+
+    if stderr_lower.contains("conflict")
+        || stderr_lower.contains("could not apply")
+        || stderr_lower.contains("merge conflict")
+    {
+        return GitError::RebaseConflict(
+            "Rebase conflict detected. Your local changes conflict with remote changes. Please resolve conflicts manually.".to_string()
+        );
+    }
+
+    if stderr_lower.contains("authentication")
+        || stderr_lower.contains("could not read username")
+        || stderr_lower.contains("permission denied")
+    {
+        return GitError::AuthFailed(stderr.trim().to_string());
+    }
+
+    GitError::PushRejected(format!("Pull --rebase failed: {}", stderr.trim()))
+}
+
+#[cfg(test)]
+mod ship_tests {
+    use super::*;
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+        process::Command,
+    };
+
+    fn run_git<I, S>(cwd: &Path, args: I) -> std::process::Output
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<std::ffi::OsStr>,
+    {
+        let output = Command::new("git").args(args).current_dir(cwd).output().unwrap();
+        assert!(
+            output.status.success(),
+            "git command failed in {}: stdout={} stderr={}",
+            cwd.display(),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        output
+    }
+
+    fn run_git_allow_failure<I, S>(cwd: &Path, args: I) -> std::process::Output
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<std::ffi::OsStr>,
+    {
+        Command::new("git").args(args).current_dir(cwd).output().unwrap()
+    }
+
+    fn write_file(path: &Path, contents: &str) {
+        fs::write(path, contents).unwrap();
+    }
+
+    fn commit_file(repo_path: &Path, file_name: &str, contents: &str, message: &str) {
+        write_file(&repo_path.join(file_name), contents);
+        run_git(repo_path, ["add", file_name]);
+        run_git(repo_path, ["commit", "-m", message]);
+    }
+
+    fn clone_repo_on_branch(remote_path: &Path, destination: &Path, branch: &str) {
+        let output = Command::new("git")
+            .args([
+                "clone",
+                "--branch",
+                branch,
+                remote_path.to_str().unwrap(),
+                destination.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git clone --branch failed: stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn get_head(repo_path: &Path) -> String {
+        let output = run_git(repo_path, ["rev-parse", "HEAD"]);
+        String::from_utf8(output.stdout).unwrap().trim().to_string()
+    }
+
+    fn has_rebase_state(repo_path: &Path) -> bool {
+        let git_dir_output = run_git(repo_path, ["rev-parse", "--git-dir"]);
+        let git_dir = String::from_utf8(git_dir_output.stdout).unwrap();
+        let git_dir = repo_path.join(git_dir.trim());
+        git_dir.join("rebase-merge").exists() || git_dir.join("rebase-apply").exists()
+    }
+
+    fn setup_repo_with_remote() -> (tempfile::TempDir, PathBuf, PathBuf) {
+        let temp = tempfile::tempdir().unwrap();
+        let remote_path = temp.path().join("remote.git");
+        let repo_path = temp.path().join("local");
+
+        let init_remote = Command::new("git")
+            .args(["init", "--bare", remote_path.to_str().unwrap()])
+            .output()
+            .unwrap();
+        assert!(
+            init_remote.status.success(),
+            "git init --bare failed: stdout={} stderr={}",
+            String::from_utf8_lossy(&init_remote.stdout),
+            String::from_utf8_lossy(&init_remote.stderr)
+        );
+
+        fs::create_dir_all(&repo_path).unwrap();
+        run_git(&repo_path, ["init", "-b", "main"]);
+        run_git(&repo_path, ["config", "user.name", "Test User"]);
+        run_git(&repo_path, ["config", "user.email", "test@example.com"]);
+        run_git(
+            &repo_path,
+            ["remote", "add", "origin", remote_path.to_str().unwrap()],
+        );
+
+        (temp, repo_path, remote_path)
+    }
+
+    #[test]
+    fn classify_push_error_auth_failed() {
+        let err = classify_push_error("fatal: Authentication failed for 'https://github.com/...'", false);
+        match err {
+            GitError::AuthFailed(msg) => {
+                assert!(msg.contains("Authentication failed"));
+            }
+            other => panic!("Expected AuthFailed, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn classify_push_error_permission_denied() {
+        let err = classify_push_error("ERROR: Permission denied (publickey).\nfatal: Could not read from remote.", false);
+        match err {
+            GitError::AuthFailed(msg) => {
+                assert!(msg.contains("Permission denied"));
+            }
+            other => panic!("Expected AuthFailed, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn classify_push_error_rejected_non_fast_forward() {
+        let err = classify_push_error("error: failed to push some refs to 'origin'\nhint: Updates were rejected because the remote contains work", false);
+        match err {
+            GitError::PushRejected(msg) => {
+                assert!(msg.contains("failed to push"));
+            }
+            other => panic!("Expected PushRejected, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn classify_push_error_non_fast_forward() {
+        let err = classify_push_error("To github.com:user/repo.git\n ! [rejected]        main -> main (non-fast-forward)", false);
+        match err {
+            GitError::PushRejected(msg) => {
+                assert!(msg.contains("non-fast-forward"));
+            }
+            other => panic!("Expected PushRejected, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn classify_push_error_after_rebase() {
+        let err = classify_push_error("fatal: unable to access 'https://github.com/...'", true);
+        match err {
+            GitError::PushRejected(msg) => {
+                assert!(msg.contains("Rebase succeeded but push failed"));
+            }
+            other => panic!("Expected PushRejected with rebase context, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn classify_push_error_generic() {
+        let err = classify_push_error("fatal: some unknown error", false);
+        match err {
+            GitError::PushRejected(msg) => {
+                assert!(msg.contains("some unknown error"));
+                // Verify it's NOT AuthFailed
+                assert!(!msg.contains("Authentication"));
+            }
+            other => panic!("Expected PushRejected, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn classify_rebase_error_conflict() {
+        let err = classify_rebase_error("CONFLICT (content): Merge conflict in file.txt\nerror: could not apply abc1234... Fix");
+        match err {
+            GitError::RebaseConflict(msg) => {
+                assert!(msg.contains("conflict"));
+            }
+            other => panic!("Expected RebaseConflict, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn classify_rebase_error_could_not_apply() {
+        let err = classify_rebase_error("error: could not apply 123abc4... some commit message");
+        match err {
+            GitError::RebaseConflict(msg) => {
+                assert!(msg.contains("conflict"));
+            }
+            other => panic!("Expected RebaseConflict, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn classify_rebase_error_auth() {
+        let err = classify_rebase_error("fatal: Authentication failed for 'https://github.com/...'");
+        match err {
+            GitError::AuthFailed(msg) => {
+                assert!(msg.contains("Authentication"));
+            }
+            other => panic!("Expected AuthFailed, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn classify_rebase_error_generic() {
+        let err = classify_rebase_error("fatal: unable to access remote");
+        match err {
+            GitError::PushRejected(msg) => {
+                assert!(msg.contains("Pull --rebase failed"));
+            }
+            other => panic!("Expected PushRejected, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ship_result_serializes_with_rebased_field() {
+        let result = ShipResult {
+            pushed: true,
+            commits_pushed: 3,
+            remote: "origin".to_string(),
+            branch: "main".to_string(),
+            rebased: true,
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("\"rebased\":true"));
+        assert!(json.contains("\"commitsPushed\":3"));
+    }
+
+    #[test]
+    fn ship_result_no_rebase() {
+        let result = ShipResult {
+            pushed: true,
+            commits_pushed: 1,
+            remote: "origin".to_string(),
+            branch: "main".to_string(),
+            rebased: false,
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("\"rebased\":false"));
+    }
+
+    #[test]
+    fn git_error_rebase_conflict_display() {
+        let err = GitError::RebaseConflict("test conflict".to_string());
+        assert_eq!(format!("{}", err), "Rebase conflict: test conflict");
+    }
+
+    #[test]
+    fn git_error_push_rejected_display() {
+        let err = GitError::PushRejected("test rejection".to_string());
+        assert_eq!(format!("{}", err), "Push rejected: test rejection");
+    }
+
+    #[test]
+    fn git_error_serializes_correctly() {
+        let rebase_err = GitError::RebaseConflict("conflict details".to_string());
+        let json = serde_json::to_string(&rebase_err).unwrap();
+        assert!(json.contains("RebaseConflict"));
+
+        let push_err = GitError::PushRejected("push details".to_string());
+        let json = serde_json::to_string(&push_err).unwrap();
+        assert!(json.contains("PushRejected"));
+    }
+
+    #[test]
+    fn ship_no_remote_returns_error() {
+        // Create a temp repo without any remote
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = Repository::init(tmp.path()).unwrap();
+
+        // Create an initial commit so HEAD exists
+        let sig = Signature::now("Test", "test@test.com").unwrap();
+        let tree_id = {
+            let mut index = repo.index().unwrap();
+            index.write_tree().unwrap()
+        };
+        let tree = repo.find_tree(tree_id).unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "Initial", &tree, &[]).unwrap();
+
+        let result = ship(tmp.path().to_str().unwrap());
+        match result {
+            Err(GitError::NoRemote) => {} // expected
+            other => panic!("Expected NoRemote, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ship_simple_push_updates_remote_and_clears_ahead() {
+        let (_temp, repo_path, remote_path) = setup_repo_with_remote();
+        commit_file(&repo_path, "file.txt", "hello\n", "initial commit");
+
+        let result = ship(repo_path.to_str().unwrap()).unwrap();
+        assert!(result.pushed);
+        assert_eq!(result.branch, "main");
+        assert_eq!(result.remote, "origin");
+        assert_eq!(result.commits_pushed, 1);
+        assert!(!result.rebased);
+
+        let status = get_status(repo_path.to_str().unwrap()).unwrap();
+        assert_eq!(status.ahead, 0);
+        assert_eq!(status.behind, 0);
+        assert!(status.has_remote);
+
+        let remote_head_output = run_git(&remote_path, ["rev-parse", "refs/heads/main"]);
+        let remote_head = String::from_utf8(remote_head_output.stdout).unwrap().trim().to_string();
+        assert_eq!(get_head(&repo_path), remote_head);
+    }
+
+    #[test]
+    fn ship_rebases_then_pushes_when_remote_is_ahead() {
+        let (_temp, repo_path, remote_path) = setup_repo_with_remote();
+        commit_file(&repo_path, "shared.txt", "base\n", "base commit");
+        run_git(&repo_path, ["push", "-u", "origin", "main"]);
+
+        let other_dir = tempfile::tempdir().unwrap();
+        let other_path = other_dir.path().join("other");
+        clone_repo_on_branch(&remote_path, &other_path, "main");
+        run_git(&other_path, ["config", "user.name", "Remote User"]);
+        run_git(&other_path, ["config", "user.email", "remote@example.com"]);
+        commit_file(&other_path, "shared.txt", "base\nremote change\n", "remote commit");
+        run_git(&other_path, ["push", "origin", "main"]);
+
+        run_git(&repo_path, ["fetch", "origin"]);
+
+        commit_file(&repo_path, "local.txt", "local change\n", "local commit");
+
+        let result = ship(repo_path.to_str().unwrap()).unwrap();
+        assert!(result.pushed);
+        assert!(result.rebased);
+        assert_eq!(result.commits_pushed, 1);
+
+        let status = get_status(repo_path.to_str().unwrap()).unwrap();
+        assert_eq!(status.ahead, 0);
+        assert_eq!(status.behind, 0);
+
+        let log_output = run_git(&repo_path, ["log", "--oneline", "--decorate=short", "-3"]);
+        let log = String::from_utf8(log_output.stdout).unwrap();
+        assert!(log.contains("local commit"));
+        assert!(log.contains("remote commit"));
+
+        let remote_head = String::from_utf8(run_git(&remote_path, ["rev-parse", "refs/heads/main"]).stdout)
+            .unwrap()
+            .trim()
+            .to_string();
+        assert_eq!(get_head(&repo_path), remote_head);
+        assert!(String::from_utf8(run_git(&remote_path, ["show", "refs/heads/main:local.txt"]).stdout)
+            .unwrap()
+            .contains("local change"));
+        assert!(String::from_utf8(run_git(&remote_path, ["show", "refs/heads/main:shared.txt"]).stdout)
+            .unwrap()
+            .contains("remote change"));
+    }
+
+    #[test]
+    fn ship_conflict_aborts_rebase_and_leaves_repo_clean() {
+        let (_temp, repo_path, remote_path) = setup_repo_with_remote();
+        commit_file(&repo_path, "shared.txt", "base\n", "base commit");
+        run_git(&repo_path, ["push", "-u", "origin", "main"]);
+
+        let before_ship_head = get_head(&repo_path);
+
+        let other_dir = tempfile::tempdir().unwrap();
+        let other_path = other_dir.path().join("other");
+        clone_repo_on_branch(&remote_path, &other_path, "main");
+        run_git(&other_path, ["config", "user.name", "Remote User"]);
+        run_git(&other_path, ["config", "user.email", "remote@example.com"]);
+        commit_file(&other_path, "shared.txt", "remote version\n", "remote conflict");
+        run_git(&other_path, ["push", "origin", "main"]);
+
+        run_git(&repo_path, ["fetch", "origin"]);
+
+        commit_file(&repo_path, "shared.txt", "local version\n", "local conflict");
+        let local_head_before_ship = get_head(&repo_path);
+
+        let result = ship(repo_path.to_str().unwrap());
+        match result {
+            Err(GitError::RebaseConflict(message)) => assert!(message.to_lowercase().contains("conflict")),
+            other => panic!("Expected RebaseConflict, got: {:?}", other),
+        }
+
+        assert_eq!(get_head(&repo_path), local_head_before_ship);
+        assert_ne!(local_head_before_ship, before_ship_head);
+        assert!(!has_rebase_state(&repo_path));
+
+        let status_output = run_git(&repo_path, ["status", "--short"]);
+        assert!(String::from_utf8(status_output.stdout).unwrap().trim().is_empty());
+        assert_eq!(fs::read_to_string(repo_path.join("shared.txt")).unwrap(), "local version\n");
+
+        let rebase_abort_check = run_git_allow_failure(&repo_path, ["rebase", "--abort"]);
+        assert!(!rebase_abort_check.status.success());
+    }
 }

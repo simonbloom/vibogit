@@ -29,7 +29,7 @@ interface TabsContextValue {
   getActiveTab: () => Tab | undefined;
 }
 
-const TabsContext = createContext<TabsContextValue | null>(null);
+export const TabsContext = createContext<TabsContextValue | null>(null);
 
 function generateTabId(): string {
   return Math.random().toString(36).substring(2, 15);

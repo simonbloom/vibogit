@@ -1,0 +1,26 @@
+{
+  "featureId": "ai-settings-simplify",
+  "reviewedAt": "2026-03-23T14:25:52.091007+00:00",
+  "commitId": "197698f53ddd6fbac556b186899c753168580f80",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The feature requirements are satisfied in the current code: AI settings are limited to Anthropic and OpenAI, each provider exposes exactly one hardcoded model so the model selector stays hidden, shared types/defaults were updated to OpenAI + gpt-5.4, Rust commit/PR generation no longer supports Gemini, and both daemon-side and browser-side config hydration now normalize stale Gemini provider/model values back to supported defaults.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "A repo fixture still carries the retired OpenAI model string `gpt-5.3-codex-spark`, so internal demo/mock data no longer matches the simplified AI defaults even though runtime code is correct.",
+      "evidence": "apps/desktop/frontend/src/app/figma-capture/_lib/mock-data.ts:490 sets `aiModel: \"gpt-5.3-codex-spark\"` while packages/ui/src/lib/ai-service.ts:15-33 and packages/shared/src/types.ts:345-349 define the supported/default OpenAI model as `gpt-5.4`. git blame shows the stale fixture line came from commit 87123ebd on 2026-03-23, after the simplification change."
+    },
+    {
+      "area": "skills",
+      "observation": "The worker correctly treated this as a verification-only session because the feature was already present, but the `tauri-fullstack` skill still frames the workflow primarily as an implementation flow and makes browser verification sound mandatory even for already-landed or non-visual changes.",
+      "evidence": "worker-transcripts.jsonl entry for session 66b1f04f-12aa-4e06-a4b6-49d7deddffff shows no code changes were needed and skillFeedback marks the procedure as not followed for skipping TDD/browser steps; .factory/skills/tauri-fullstack/SKILL.md sections 3 and 6 require test-first Rust work and browser verification without an explicit verification-only exception."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Pass. The reviewed commit and current code satisfy the AI settings simplification requirements, including Gemini removal and migration fallback behavior. I noted two non-blocking shared-state observations: stale mock data still references `gpt-5.3-codex-spark`, and the `tauri-fullstack` skill could better document verification-only runs for already-implemented features."
+}

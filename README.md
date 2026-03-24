@@ -4,6 +4,12 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+## Features
+
+- **Smart Push** — Push even when the remote has new commits. ViboGit automatically rebases your local work on top and pushes in one step. If there are conflicts, it aborts cleanly and tells you exactly what happened.
+- **Simplified AI Settings** — Two providers: OpenAI (GPT 5.4) and Anthropic (Sonnet 4.6). Pick your provider, enter your API key, done. No model dropdowns or extra configuration.
+- **Sync Beacon** — See your repo status across machines with a simple 6-digit pairing code. Enable the beacon and ViboGit generates a code automatically, backed by a private GitHub Gist. Share the code with your other machine, enter it there, and both machines sync branch, ahead/behind counts, and last-commit info. Requires the `gist` scope on your GitHub CLI token (`gh auth refresh -s gist` if needed).
+
 ## Install
 
 Use the latest DMG release and move `ViboGit.app` to `/Applications`.

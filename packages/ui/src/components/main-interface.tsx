@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
 import { useDaemon } from "@/lib/daemon-context";
 import { useWindowActivity } from "@/lib/use-window-activity";
 import { BranchSelector } from "@/components/branch-selector";
@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import { toast } from "sonner";
+import { SyncBeaconContext } from "@/lib/sync-beacon-context";
 import type {
   DevServerConfig,
   DevServerState,
@@ -61,6 +62,31 @@ function getErrorMessage(error: unknown, fallback: string): string {
     if (typeof message === "string" && message) return message;
   }
   return fallback;
+}
+
+function BeaconStatusBadge({ repoName }: { repoName: string }) {
+  const context = useContext(SyncBeaconContext);
+  if (!context) return null;
+  const matches = context.getMatchedStatus(repoName);
+  if (matches.length === 0) return null;
+  return (
+    <div className="ml-auto flex items-center gap-2">
+      {matches.map((m) => (
+        <span
+          key={m.machineName}
+          className={clsx(
+            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs",
+            m.ahead > 0
+              ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+              : "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+          )}
+          title={`${m.machineName}: branch ${m.branch}, ${m.ahead} ahead, ${m.behind} behind`}
+        >
+          {m.machineName}: {m.ahead > 0 ? `${m.ahead} ahead` : "synced"}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function isValidGitHubCloneUrl(value: string): boolean {
@@ -102,28 +128,54 @@ function getRepoLabelFromCloneUrl(value: string): string {
 
 const AUTO_FETCH_INTERVAL_MS = 120_000;
 
-type MainInterfaceView = "graph" | "tree" | "changes" | "logs";
-
 interface MainInterfaceProps {
-  initialActiveView?: MainInterfaceView;
+  initialActiveView?: "graph" | "tree" | "changes" | "logs";
   initialSelectedFile?: { path: string; name: string } | null;
+  initialShowCreatePR?: boolean;
+  initialShowCloneDialog?: boolean;
+  initialShowPortPrompt?: boolean;
+  initialCloneMode?: "url" | "repos";
+  initialCloneUrl?: string;
+  initialCloneQuery?: string;
+  initialCloneRepos?: GitHubRepo[];
+  initialCloneReposPage?: number;
+  initialCloneReposHasMore?: boolean;
+  initialCloneAuthStatus?: GitHubAuthStatus | null;
+  initialSelectedCloneRepo?: GitHubRepo | null;
+  initialCloneBranch?: string;
+  initialDevServerPort?: number | null;
+  initialIsMonorepo?: boolean;
 }
 
 export function MainInterface({
   initialActiveView = "changes",
   initialSelectedFile = null,
-}: MainInterfaceProps = {}) {
+  initialShowCreatePR = false,
+  initialShowCloneDialog = false,
+  initialShowPortPrompt = false,
+  initialCloneMode = "url",
+  initialCloneUrl = "",
+  initialCloneQuery = "",
+  initialCloneRepos = [],
+  initialCloneReposPage = 1,
+  initialCloneReposHasMore = false,
+  initialCloneAuthStatus = null,
+  initialSelectedCloneRepo = null,
+  initialCloneBranch = "",
+  initialDevServerPort = null,
+  initialIsMonorepo = false,
+}: MainInterfaceProps) {
   const { state, send, refreshStatus, refreshBranches, setRepoPath } = useDaemon();
   const { isForeground } = useWindowActivity();
   const [isPulling, setIsPulling] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
-  const [activeView, setActiveView] = useState<MainInterfaceView>(initialActiveView);
-  const [showCreatePR, setShowCreatePR] = useState(false);
-  const [devServerPort, setDevServerPort] = useState<number | null>(null);
-  const [showPortPrompt, setShowPortPrompt] = useState(false);
-  const [isMonorepo, setIsMonorepo] = useState(false);
+  const [activeView, setActiveView] = useState<"graph" | "tree" | "changes" | "logs">(initialActiveView);
+  const [showCreatePR, setShowCreatePR] = useState(initialShowCreatePR);
+  const [devServerPort, setDevServerPort] = useState<number | null>(initialDevServerPort);
+  const [showPortPrompt, setShowPortPrompt] = useState(initialShowPortPrompt);
+  const [isMonorepo, setIsMonorepo] = useState(initialIsMonorepo);
   const [projectFiles, setProjectFiles] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<{ path: string; name: string } | null>(initialSelectedFile);
   const [graphRefreshKey, setGraphRefreshKey] = useState(0);
@@ -132,18 +184,18 @@ export function MainInterface({
   const [isTauriEnv, setIsTauriEnv] = useState(false);
   const lastFetchAtRef = useRef(0);
   const wasForegroundRef = useRef(isForeground);
-  const [showCloneDialog, setShowCloneDialog] = useState(false);
-  const [cloneMode, setCloneMode] = useState<"url" | "repos">("url");
-  const [cloneUrl, setCloneUrl] = useState("");
-  const [cloneQuery, setCloneQuery] = useState("");
-  const [cloneRepos, setCloneRepos] = useState<GitHubRepo[]>([]);
-  const [cloneReposPage, setCloneReposPage] = useState(1);
-  const [cloneReposHasMore, setCloneReposHasMore] = useState(false);
+  const [showCloneDialog, setShowCloneDialog] = useState(initialShowCloneDialog);
+  const [cloneMode, setCloneMode] = useState<"url" | "repos">(initialCloneMode);
+  const [cloneUrl, setCloneUrl] = useState(initialCloneUrl);
+  const [cloneQuery, setCloneQuery] = useState(initialCloneQuery);
+  const [cloneRepos, setCloneRepos] = useState<GitHubRepo[]>(initialCloneRepos);
+  const [cloneReposPage, setCloneReposPage] = useState(initialCloneReposPage);
+  const [cloneReposHasMore, setCloneReposHasMore] = useState(initialCloneReposHasMore);
   const [cloneLoading, setCloneLoading] = useState(false);
   const [cloneError, setCloneError] = useState<string | null>(null);
-  const [cloneAuthStatus, setCloneAuthStatus] = useState<GitHubAuthStatus | null>(null);
-  const [selectedCloneRepo, setSelectedCloneRepo] = useState<GitHubRepo | null>(null);
-  const [cloneBranch, setCloneBranch] = useState("");
+  const [cloneAuthStatus, setCloneAuthStatus] = useState<GitHubAuthStatus | null>(initialCloneAuthStatus);
+  const [selectedCloneRepo, setSelectedCloneRepo] = useState<GitHubRepo | null>(initialSelectedCloneRepo);
+  const [cloneBranch, setCloneBranch] = useState(initialCloneBranch);
   const [isCloning, setIsCloning] = useState(false);
 
   const { status, branches, repoPath } = state;
@@ -155,10 +207,6 @@ export function MainInterface({
     (status?.staged.length || 0) +
     (status?.unstaged.length || 0) +
     (status?.untracked.length || 0);
-
-  useEffect(() => {
-    setActiveView(initialActiveView);
-  }, [initialActiveView]);
 
   // Clear selected file when repo changes
   useEffect(() => {
@@ -387,19 +435,36 @@ export function MainInterface({
   const handlePush = async () => {
     if (!repoPath) return;
     setIsPushing(true);
+    
+    // Show sync toast if behind remote (smart push will auto-rebase)
+    const isBehind = (status?.behind || 0) > 0;
+    let syncToastId: string | number | undefined;
+    if (isBehind) {
+      syncToastId = toast.loading("Syncing with remote...");
+    }
+    
     try {
       await send("push", { repoPath });
+      if (syncToastId !== undefined) {
+        toast.dismiss(syncToastId);
+      }
       await refreshStatus();
       toast.success("Pushed successfully");
     } catch (error) {
+      if (syncToastId !== undefined) {
+        toast.dismiss(syncToastId);
+      }
       console.error("Failed to push:", error);
-      // Handle Tauri error objects which have a message property
-      const errorMsg = error instanceof Error 
-        ? error.message 
-        : typeof error === 'object' && error !== null && 'message' in error
-          ? String((error as { message: unknown }).message)
-          : JSON.stringify(error);
-      toast.error(`Push failed: ${errorMsg}`);
+      const errorMsg = getErrorMessage(error, "Push failed");
+      
+      // Show user-friendly error messages based on error type
+      if (errorMsg.toLowerCase().includes("rebase conflict") || errorMsg.toLowerCase().includes("conflict")) {
+        toast.error("Push failed: Conflicts detected with remote changes. Please resolve conflicts manually and try again.");
+      } else if (errorMsg.toLowerCase().includes("rebase succeeded but push failed")) {
+        toast.error("Push failed: Synced with remote successfully, but push failed. Please try pushing again.");
+      } else {
+        toast.error(`Push failed: ${errorMsg}`);
+      }
     } finally {
       setIsPushing(false);
     }
@@ -790,6 +855,7 @@ export function MainInterface({
           <GitPullRequest className="w-4 h-4" />
           PR
         </Button>
+        <BeaconStatusBadge repoName={repoPath?.split("/").pop() || ""} />
       </div>
 
       {/* Tabs */}

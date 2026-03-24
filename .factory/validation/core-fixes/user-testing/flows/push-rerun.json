@@ -1,0 +1,41 @@
+{
+  "surface": "tauri-rust-cli",
+  "assertionsTested": [
+    "VAL-PUSH-012"
+  ],
+  "passedAssertions": [],
+  "failedAssertions": [],
+  "blockedAssertions": [
+    {
+      "id": "VAL-PUSH-012",
+      "verdict": "blocked",
+      "reason": "The repo proves the backend classification path and frontend messaging branch for post-rebase push failures, but it still does not contain an automated/runtime harness that forces `ship()` through a successful real `git pull --rebase` followed by an actual push transport failure while preserving and then observing the rebased repository state end-to-end. Existing coverage stops at `ship_rebases_then_pushes_when_remote_is_ahead` (successful rebase+push) and `classify_push_error_after_rebase` (string classification only), so the assertion remains blocked under the tauri-rust-cli validation contract."
+    }
+  ],
+  "frictions": [
+    "Existing Rust tests split the scenario across two proofs: one real successful rebase+push flow and one classify-only post-rebase push-failure path; there is no single integrated test or Tauri harness for the combined partial-failure flow.",
+    "The tauri-rust-cli guidance prefers source inspection plus existing automated verification, and this environment does not provide a live Tauri/runtime harness for observing the toast during an induced transport failure."
+  ],
+  "blockers": [
+    "No controllable fixture in the repo currently induces a real push transport/network failure after a successful `git pull --rebase` inside `ship()` and then verifies that the rebased commit graph is preserved for retry.",
+    "Without that integrated backend/runtime fixture, the user-surface evidence required by VAL-PUSH-012 cannot be fully demonstrated from this repo alone."
+  ],
+  "toolsUsed": [
+    "Read",
+    "LS",
+    "Grep",
+    "Glob",
+    "Execute",
+    "TodoWrite"
+  ],
+  "evidenceFiles": [
+    "/Users/simonbloom/.factory/missions/6ceb9638-91db-4dfe-938e-8ab0637de724/validation-contract.md",
+    "/Users/simonbloom/apps-vol11/vibogit/.factory/library/user-testing.md",
+    "/Users/simonbloom/apps-vol11/vibogit/apps/desktop/src-tauri/src/git.rs",
+    "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/components/main-interface.tsx",
+    "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/components/mini-view.tsx",
+    "/Users/simonbloom/apps-vol11/vibogit/.factory/validation/core-fixes/user-testing/flows/push.json",
+    "/Users/simonbloom/apps-vol11/vibogit/.factory/validation/core-fixes/user-testing/synthesis.json"
+  ],
+  "summary": "Re-validated VAL-PUSH-012 only. Source inspection plus targeted automated checks confirm intended handling exists: `ship()` tracks `rebased`, `classify_push_error(stderr, true)` emits a post-rebase push-failure message, and both push handlers show the dedicated retry toast. However, the repository still lacks an integrated test or runtime harness that exercises a real successful rebase followed by a real push transport failure and proves the rebased state remains intact, so the assertion remains blocked."
+}

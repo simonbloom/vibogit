@@ -39,6 +39,9 @@ export interface ProjectStatus {
   uncommittedCount: number;
   ahead: number;
   behind: number;
+  lastCommitHash?: string;
+  lastCommitMessage?: string;
+  lastCommitTimestamp?: number;
   isClean: boolean;
 }
 
@@ -120,7 +123,7 @@ interface ProjectsContextValue {
   reorderProjects: (paths: string[]) => Promise<void>;
 }
 
-const ProjectsContext = createContext<ProjectsContextValue | null>(null);
+export const ProjectsContext = createContext<ProjectsContextValue | null>(null);
 
 const SELECTED_STATUS_REFRESH_INTERVAL_MS = 5000;
 const NON_SELECTED_STATUS_REFRESH_INTERVAL_MS = 30000;

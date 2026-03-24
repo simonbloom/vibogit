@@ -1,0 +1,120 @@
+{
+  "surface": "web-ui",
+  "assertionsTested": [
+    "VAL-AI-001",
+    "VAL-AI-002",
+    "VAL-AI-003",
+    "VAL-AI-005",
+    "VAL-AI-009",
+    "VAL-AI-010",
+    "VAL-AI-019",
+    "VAL-CROSS-001"
+  ],
+  "passedAssertions": [
+    {
+      "id": "VAL-AI-001",
+      "status": "pass",
+      "method": "browser-plus-source-inspection",
+      "reason": "The AI provider metadata and settings section render exactly two provider options: Anthropic and OpenAI.",
+      "evidence": [
+        "http://localhost:4158 returns 200 and serves the frontend shell (reachability.json)",
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/lib/ai-service.ts",
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/components/settings/sections/AISettingsSection.tsx"
+      ]
+    },
+    {
+      "id": "VAL-AI-002",
+      "status": "pass",
+      "method": "source-inspection",
+      "reason": "Fresh settings/config default aiProvider to openai and aiModel to gpt-5.4, giving new users a sensible pre-selected provider.",
+      "evidence": [
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/lib/settings.ts",
+        "/Users/simonbloom/apps-vol11/vibogit/packages/shared/src/types.ts"
+      ]
+    },
+    {
+      "id": "VAL-AI-003",
+      "status": "pass",
+      "method": "source-inspection",
+      "reason": "Provider changes persist through ConfigProvider/setConfig -> saveLocalConfig(localStorage) and are restored from getLocalConfig/getInitialTab-driven reopen flows.",
+      "evidence": [
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/lib/config-context.tsx",
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/components/settings-panel.tsx",
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/components/settings/sections/AISettingsSection.tsx"
+      ]
+    },
+    {
+      "id": "VAL-AI-005",
+      "status": "pass",
+      "method": "browser-plus-source-inspection",
+      "reason": "The model selector is only rendered when selectedProvider.models.length > 1; both supported providers have exactly one model, so no model dropdown appears.",
+      "evidence": [
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/lib/ai-service.ts",
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/components/settings/sections/AISettingsSection.tsx"
+      ]
+    },
+    {
+      "id": "VAL-AI-009",
+      "status": "pass",
+      "method": "source-inspection",
+      "reason": "The API key field uses password type by default, toggles to text with the eye button, and saves changes through onSave/setConfig into localStorage-backed config.",
+      "evidence": [
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/components/settings/sections/AISettingsSection.tsx",
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/lib/config-context.tsx"
+      ]
+    },
+    {
+      "id": "VAL-AI-010",
+      "status": "pass",
+      "method": "source-inspection",
+      "reason": "Placeholder and help link are derived from selected provider metadata, switching between Anthropic console values and OpenAI platform values.",
+      "evidence": [
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/lib/ai-service.ts",
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/components/settings/sections/AISettingsSection.tsx"
+      ]
+    },
+    {
+      "id": "VAL-AI-019",
+      "status": "pass",
+      "method": "source-inspection",
+      "reason": "Legacy gemini settings are normalized back to the default openai/gpt-5.4 config with API key cleared, preventing invalid provider state or crashes.",
+      "evidence": [
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/lib/settings.ts",
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/lib/config-context.tsx",
+        "/Users/simonbloom/apps-vol11/vibogit/packages/shared/src/types.ts"
+      ]
+    }
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [
+    {
+      "id": "VAL-CROSS-001",
+      "status": "blocked",
+      "scope": "runtime-effect-verification",
+      "reason": "Settings persistence is implemented in browser scope, but the required 'trigger commit generation and confirm the new provider/model is used' step calls @tauri-apps/api/core invoke from AICommitButton/CreatePRDialog and cannot run on the assigned browser-only surface.",
+      "evidence": [
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/components/ai-commit-button.tsx",
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/components/create-pr-dialog.tsx",
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/lib/ai-service.ts",
+        "/Users/simonbloom/apps-vol11/vibogit/packages/ui/src/lib/config-context.tsx"
+      ]
+    }
+  ],
+  "frictions": [
+    "The shared root UI at http://localhost:4158 serves the onboarding/browser shell, which does not expose settings interactions without Tauri/backend state.",
+    "Cross-area runtime verification of commit generation model selection is not possible in browser-only mode because AI generation imports Tauri invoke and requires repo/backend state."
+  ],
+  "blockers": [
+    "VAL-CROSS-001 cannot be fully completed on the assigned web-ui surface because triggering commit generation requires Tauri invoke/backend integration, which is outside browser-only scope."
+  ],
+  "toolsUsed": [
+    "Read",
+    "Grep",
+    "Execute",
+    "Playwright"
+  ],
+  "evidenceFiles": [
+    "/Users/simonbloom/.factory/missions/6ceb9638-91db-4dfe-938e-8ab0637de724/evidence/core-fixes/ai-ui-rerun/reachability.json"
+  ],
+  "summary": "Validated assigned AI settings assertions using live UI reachability checks plus source-backed browser-scope analysis. Browser evidence confirms the shared server is up, but only the figma-capture settings screen exposes the AI settings UI in browser mode; provider/model behavior and persistence are supported by the inspected implementation. VAL-CROSS-001 remains blocked for runtime 'takes effect' verification because AI generation requires Tauri invoke/backend flows excluded from this surface."
+}

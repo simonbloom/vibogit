@@ -1,0 +1,28 @@
+{
+  "featureId": "fix-beacon-machine-name-and-commit-metadata",
+  "reviewedAt": "2026-03-23T17:14:04.088065+00:00",
+  "commitId": "7ddc406",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The worker correctly updated the backend push command to accept a frontend-provided machine name and switched the fallback away from `computer_name`. It also plumbed last-commit metadata through Rust status responses and the daemon bridge, but the shared `GitStatus` contract was not updated, so the beacon context still has to bypass the typed status model with a local cast instead of consuming the metadata through the established typed path.",
+    "issues": [
+      {
+        "file": "packages/shared/src/types.ts",
+        "line": 75,
+        "severity": "blocking",
+        "description": "`GitStatus` still exposes only `branch`, `ahead`, `behind`, `staged`, `unstaged`, `untracked`, and `isEmptyRepo`. The feature's expected behavior was to populate beacon commit metadata from repo status data that is already available, but because the shared status type omits `lastCommitHash`, `lastCommitMessage`, and `lastCommitTimestamp`, `sync-beacon-context.tsx` must rely on an ad-hoc `RepoStatusWithCommitMetadata` cast instead of the typed project status path. This leaves the metadata pipeline incomplete and fragile: any consumer using the shared `GitStatus` contract still cannot see the new fields, which is exactly the gap the prior scrutiny found. Add the three commit fields to the shared status contract so the frontend can consume them without local type escape hatches."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "The repository now depends on git status responses carrying last-commit metadata through multiple layers (`git.rs` -> `commands.rs` -> `daemon-context.tsx` -> project/beacon state), but `.factory/library/architecture.md` still documents only the generic command flow and not this sync-beacon-specific status pipeline.",
+      "evidence": "apps/desktop/src-tauri/src/git.rs adds `ProjectState.last_commit_*`; apps/desktop/src-tauri/src/commands.rs `ProjectStatus` passes them through; packages/ui/src/lib/daemon-context.tsx attaches them to status payloads; packages/ui/src/lib/sync-beacon-context.tsx consumes them for beacon payload construction."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the handoff, transcript skeleton, skill guidance, and commit `7ddc406` for `fix-beacon-machine-name-and-commit-metadata`. The backend machine-name fix is correct, but the feature still misses a blocking part of the commit-metadata pipeline because the shared `GitStatus` type was not extended to include the new last-commit fields, leaving the beacon code dependent on an unsafe local cast."
+}

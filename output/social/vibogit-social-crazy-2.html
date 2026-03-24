@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ViboGit Social Ideas 2</title>
+    <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+    <style>
+      :root {
+        --mono: "Overpass Mono", "SFMono-Regular", "Menlo", monospace;
+        --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 40px;
+        background: #e7ebf2;
+        font-family: var(--sans);
+      }
+
+      .board {
+        width: max-content;
+        display: grid;
+        grid-template-columns: repeat(4, 1080px);
+        gap: 48px;
+      }
+
+      .post {
+        position: relative;
+        width: 1080px;
+        height: 1080px;
+        overflow: hidden;
+        background: linear-gradient(180deg, var(--bg1), var(--bg2));
+        color: var(--ink);
+      }
+
+      .post::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at 12% 10%, rgba(255,255,255,0.12), transparent 24%),
+          radial-gradient(circle at 88% 84%, rgba(255,255,255,0.08), transparent 22%);
+        pointer-events: none;
+      }
+
+      .noise {
+        position: absolute;
+        inset: 0;
+        opacity: 0.12;
+        background:
+          linear-gradient(transparent 0, rgba(0,0,0,0.08) 1px, transparent 2px),
+          linear-gradient(90deg, transparent 0, rgba(0,0,0,0.05) 1px, transparent 2px);
+        background-size: 14px 14px, 14px 14px;
+        mix-blend-mode: multiply;
+      }
+
+      .content {
+        position: absolute;
+        inset: 68px;
+      }
+
+      .index {
+        position: absolute;
+        top: 0;
+        right: 0;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(0,0,0,0.14);
+        color: rgba(255,255,255,0.92);
+        font: 700 18px/1 var(--mono);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.18);
+        font: 700 22px/1 var(--sans);
+        backdrop-filter: blur(8px);
+      }
+
+      .eyebrow::before {
+        content: "";
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        background: var(--signal);
+      }
+
+      h1 {
+        margin: 24px 0 0;
+        max-width: 860px;
+        font-family: var(--mono);
+        font-size: 112px;
+        line-height: 0.9;
+        letter-spacing: -0.06em;
+      }
+
+      .sub {
+        margin-top: 28px;
+        max-width: 720px;
+        font-size: 30px;
+        line-height: 1.2;
+        color: var(--sub);
+      }
+
+      .footer {
+        position: absolute;
+        left: 68px;
+        bottom: 58px;
+        display: inline-flex;
+        align-items: center;
+        gap: 14px;
+        padding: 16px 22px;
+        border-radius: 999px;
+        background: var(--footer-bg);
+        color: var(--footer-ink);
+        font: 700 24px/1 var(--mono);
+      }
+
+      .footer::before {
+        content: "";
+        width: 14px;
+        height: 14px;
+        border-radius: 999px;
+        background: currentColor;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: 14px;
+        background: rgba(15,23,41,0.92);
+        border: 1px solid rgba(255,255,255,0.08);
+        color: #f8fafc;
+        font: 700 18px/1 var(--mono);
+        box-shadow: 0 12px 28px rgba(15,23,41,0.2);
+      }
+
+      .chip::before {
+        content: "";
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: var(--signal);
+      }
+
+      .column {
+        position: absolute;
+        right: 68px;
+        bottom: 148px;
+        width: 430px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .panel {
+        padding: 22px;
+        border-radius: 24px;
+        background: rgba(15,23,41,0.94);
+        border: 1px solid rgba(255,255,255,0.08);
+        color: #f8fafc;
+        box-shadow: 0 24px 60px rgba(15,23,41,0.24);
+      }
+
+      .panel.light {
+        background: rgba(255,255,255,0.92);
+        color: #0f1729;
+        border-color: rgba(15,23,41,0.08);
+      }
+
+      .panel h2 {
+        margin: 0;
+        font: 700 32px/1 var(--mono);
+      }
+
+      .panel p {
+        margin: 12px 0 0;
+        font-size: 21px;
+        line-height: 1.24;
+      }
+
+      .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+      }
+
+      .big-stat {
+        position: absolute;
+        right: 56px;
+        top: 78px;
+        text-align: right;
+        font: 700 190px/0.88 var(--mono);
+        letter-spacing: -0.08em;
+        color: rgba(255,255,255,0.26);
+      }
+
+      .tilt-card {
+        position: absolute;
+        right: 72px;
+        bottom: 166px;
+        width: 480px;
+        border-radius: 26px;
+        overflow: hidden;
+        transform: rotate(-6deg);
+        box-shadow: 0 28px 70px rgba(15,23,41,0.28);
+      }
+
+      .tilt-card .top {
+        padding: 18px 20px;
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        background: #edf1f6;
+      }
+
+      .tilt-card .body {
+        padding: 22px;
+        background: #10192d;
+      }
+
+      .bar {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+
+      .pill {
+        padding: 10px 16px;
+        border-radius: 12px;
+        background: var(--pill-bg);
+        color: var(--pill-ink);
+        font: 700 19px/1 var(--sans);
+      }
+
+      .block {
+        height: 92px;
+        border-radius: 18px;
+        background: #16213b;
+        border: 1px solid #23304f;
+        margin-top: 12px;
+      }
+
+      .sidebar {
+        position: absolute;
+        left: 70px;
+        bottom: 150px;
+        width: 268px;
+        border-radius: 24px;
+        overflow: hidden;
+        background: rgba(15,23,41,0.96);
+        color: #f8fafc;
+        border: 1px solid rgba(255,255,255,0.08);
+        box-shadow: 0 24px 60px rgba(15,23,41,0.24);
+      }
+
+      .sidebar .top {
+        padding: 20px 22px;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        font: 700 30px/1 var(--mono);
+      }
+
+      .sidebar .item {
+        padding: 18px 22px;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        font-size: 22px;
+      }
+
+      .sidebar .item strong {
+        display: block;
+        color: #fff;
+      }
+
+      .bubble {
+        position: absolute;
+        right: 58px;
+        top: 150px;
+        width: 420px;
+        padding: 30px;
+        border-radius: 44px;
+        background: rgba(255,255,255,0.92);
+        color: #0f1729;
+        box-shadow: 0 24px 60px rgba(15,23,41,0.18);
+      }
+
+      .bubble::after {
+        content: "";
+        position: absolute;
+        left: 42px;
+        bottom: -26px;
+        width: 58px;
+        height: 58px;
+        background: inherit;
+        clip-path: polygon(0 0, 100% 0, 0 100%);
+      }
+
+      .bubble h2 {
+        margin: 0;
+        font: 700 34px/1 var(--mono);
+      }
+
+      .bubble p {
+        margin: 14px 0 0;
+        font-size: 22px;
+        line-height: 1.24;
+      }
+
+      .strip {
+        position: absolute;
+        right: 70px;
+        bottom: 148px;
+        min-width: 710px;
+        padding: 16px 20px;
+        border-radius: 22px;
+        background: rgba(15,23,41,0.96);
+        border: 1px solid rgba(255,255,255,0.08);
+        box-shadow: 0 24px 48px rgba(15,23,41,0.26);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .slash {
+        position: absolute;
+        left: -12%;
+        width: 130%;
+        height: 150px;
+        background: rgba(255,255,255,0.14);
+        transform: rotate(-14deg);
+      }
+
+      .slash.one { top: 180px; }
+      .slash.two { top: 640px; }
+
+      .ring {
+        position: absolute;
+        right: -140px;
+        bottom: -140px;
+        width: 560px;
+        height: 560px;
+        border-radius: 999px;
+        border: 32px solid rgba(255,255,255,0.16);
+        box-shadow: 0 0 0 28px rgba(255,255,255,0.08), 0 0 0 58px rgba(255,255,255,0.04);
+      }
+
+      .matrix {
+        position: absolute;
+        inset: 0;
+        opacity: 0.18;
+        font: 700 26px/1 var(--mono);
+        letter-spacing: 0.1em;
+        color: rgba(255,255,255,0.35);
+        pointer-events: none;
+      }
+
+      .matrix span {
+        position: absolute;
+      }
+
+      .ghost {
+        position: absolute;
+        right: 0;
+        bottom: 110px;
+        width: 560px;
+        height: 430px;
+        border-top-left-radius: 34px;
+        border-bottom-left-radius: 34px;
+        border: 2px solid rgba(255,255,255,0.24);
+        background: rgba(15,23,41,0.18);
+      }
+
+      .ghost .top {
+        height: 86px;
+        border-bottom: 2px solid rgba(255,255,255,0.16);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 24px;
+      }
+
+      .ghost .line {
+        height: 18px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.18);
+      }
+
+      .ghost .body {
+        padding: 22px 24px;
+      }
+
+      .ghost .panel {
+        height: 84px;
+        border-radius: 18px;
+        border: 2px solid rgba(255,255,255,0.12);
+        background: transparent;
+        margin-top: 14px;
+        box-shadow: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="board" class="board"></div>
+    <script>
+      const concepts = [
+        { no: "21", eyebrow: "Localhost aware", title: "Your Git tool should know if the port is actually alive.", sub: "Not just process running. Real port listening. Real preview. Real next step.", bg1: "#121826", bg2: "#233b66", ink: "#fff", subInk: "rgba(255,255,255,0.8)", footerBg: "#ff4f8d", footerInk: "#fff", signal: "#00c950", visual: "stat", pillBg: "#517bfb", pillInk: "#fff" },
+        { no: "22", eyebrow: "Desktop speed layer", title: "Open terminal. Open editor. Open browser. Open GitHub. Move.", sub: "The work around Git is where most of the wasted time actually lives.", bg1: "#ff4f8d", bg2: "#ff7f48", ink: "#fff", subInk: "rgba(255,255,255,0.84)", footerBg: "#0f1729", footerInk: "#fff", signal: "#ffd84d", visual: "strip", pillBg: "#0f1729", pillInk: "#fff" },
+        { no: "23", eyebrow: "Quick commit", title: "Sort the files. Preview the code. Generate the message. Done.", sub: "That is a better commit loop than a generic status pane.", bg1: "#ffe66f", bg2: "#fff6bf", ink: "#0f1729", subInk: "rgba(15,23,41,0.72)", footerBg: "#0f1729", footerInk: "#fff", signal: "#ff7a00", visual: "tilt", pillBg: "#517bfb", pillInk: "#06101f" },
+        { no: "24", eyebrow: "Prompt workflow", title: "The prompt box should understand the repo.", sub: "@ files, / skills, screenshots, image paste, terminal send. The context layer matters.", bg1: "#6f5bff", bg2: "#ae9fff", ink: "#fff", subInk: "rgba(255,255,255,0.8)", footerBg: "#ffd84d", footerInk: "#0f1729", signal: "#00c950", visual: "bubble", pillBg: "#0f1729", pillInk: "#fff" },
+        { no: "25", eyebrow: "Repo switching", title: "Multi-repo work deserves a real control surface.", sub: "Saved projects, branch state, change count, and quick actions in one desktop workspace.", bg1: "#0f1729", bg2: "#131f38", ink: "#fff", subInk: "rgba(255,255,255,0.76)", footerBg: "#ff4f8d", footerInk: "#fff", signal: "#517bfb", visual: "sidebar", pillBg: "#00c950", pillInk: "#04230f" },
+        { no: "26", eyebrow: "Port pill", title: "The little :4158 chip might be the whole pitch.", sub: "A Git client that understands localhost is a different category of useful.", bg1: "#00b1ff", bg2: "#80e4ff", ink: "#fff", subInk: "rgba(255,255,255,0.84)", footerBg: "#0f1729", footerInk: "#fff", signal: "#00c950", visual: "ring", pillBg: "#00c950", pillInk: "#04230f" },
+        { no: "27", eyebrow: "PR flow", title: "Draft the pull request while the context is still warm.", sub: "AI for title and description is useful when it removes the admin, not when it performs magic.", bg1: "#f5f7fb", bg2: "#ffffff", ink: "#0f1729", subInk: "rgba(15,23,41,0.68)", footerBg: "#517bfb", footerInk: "#fff", signal: "#517bfb", visual: "dialog", pillBg: "#edf1f6", pillInk: "#0f1729" },
+        { no: "28", eyebrow: "Mini-view", title: "An always-on-top Git bar makes more sense than a second giant window.", sub: "Keep the signals visible. Keep the full screen for actual coding.", bg1: "#ff7a00", bg2: "#ffb24b", ink: "#fff", subInk: "rgba(255,255,255,0.82)", footerBg: "#0f1729", footerInk: "#fff", signal: "#517bfb", visual: "strip", pillBg: "#0f1729", pillInk: "#fff" },
+        { no: "29", eyebrow: "State clarity", title: "See the branch. See the changes. See the next move.", sub: "Good product copy starts when the UI makes the product story obvious.", bg1: "#111", bg2: "#404040", ink: "#fff", subInk: "rgba(255,255,255,0.74)", footerBg: "#ffd84d", footerInk: "#0f1729", signal: "#ffd84d", visual: "ghost", pillBg: "#517bfb", pillInk: "#fff" },
+        { no: "30", eyebrow: "Go faster", title: "Less terminal thrash. Less tab thrash. Less Git ceremony.", sub: "That is what ViboGit should feel like in one sentence.", bg1: "#ff4f8d", bg2: "#ffd84d", ink: "#fff", subInk: "rgba(255,255,255,0.84)", footerBg: "#0f1729", footerInk: "#fff", signal: "#fff", visual: "slashes", pillBg: "#0f1729", pillInk: "#fff" },
+        { no: "31", eyebrow: "Action cluster", title: "Push. PR. Prompt. Preview.", sub: "Those are the product nouns I’d put on the wall.", bg1: "#00c950", bg2: "#95ffbd", ink: "#0f1729", subInk: "rgba(15,23,41,0.72)", footerBg: "#0f1729", footerInk: "#fff", signal: "#517bfb", visual: "column", pillBg: "#0f1729", pillInk: "#fff" },
+        { no: "32", eyebrow: "Visual Git", title: "A graph is only useful if the action stays close to the graph.", sub: "Timeline plus nearby action beats timeline as decoration.", bg1: "#a538ff", bg2: "#d18bff", ink: "#fff", subInk: "rgba(255,255,255,0.82)", footerBg: "#0f1729", footerInk: "#fff", signal: "#00c950", visual: "tilt-light", pillBg: "#ff4f8d", pillInk: "#fff" },
+        { no: "33", eyebrow: "Machine setup", title: "Settings are product too.", sub: "AI provider, terminal, editor, screenshot path, CleanShot mode, updates. The machine matters.", bg1: "#fef1dd", bg2: "#ffd3a2", ink: "#0f1729", subInk: "rgba(15,23,41,0.7)", footerBg: "#ff4f8d", footerInk: "#fff", signal: "#517bfb", visual: "sidebar-light", pillBg: "#edf1f6", pillInk: "#0f1729" },
+        { no: "34", eyebrow: "Desktop-native", title: "Built for the exact mess of real local development.", sub: "Multiple repos. Multiple tools. One machine. One active brain.", bg1: "#1a2550", bg2: "#5d76ff", ink: "#fff", subInk: "rgba(255,255,255,0.82)", footerBg: "#ffd84d", footerInk: "#0f1729", signal: "#00c950", visual: "matrix", pillBg: "#0f1729", pillInk: "#fff" },
+        { no: "35", eyebrow: "Signals", title: "A tiny green dot can sell the whole product.", sub: "Connected state, port visibility, and action proximity are part of the pitch.", bg1: "#ff6565", bg2: "#ff9789", ink: "#fff", subInk: "rgba(255,255,255,0.82)", footerBg: "#0f1729", footerInk: "#fff", signal: "#00c950", visual: "stat", pillBg: "#00c950", pillInk: "#04230f" },
+        { no: "36", eyebrow: "Momentum", title: "Context switching is the bug. ViboGit is the patch.", sub: "That line is blunt, but it is probably directionally right.", bg1: "#5a6dff", bg2: "#ff4f8d", ink: "#fff", subInk: "rgba(255,255,255,0.82)", footerBg: "#0f1729", footerInk: "#fff", signal: "#ffd84d", visual: "ring", pillBg: "#0f1729", pillInk: "#fff" },
+        { no: "37", eyebrow: "Prompt + repo", title: "AI is only as useful as the context you can package quickly.", sub: "The model is not the bottleneck if context assembly is the slow part.", bg1: "#11192d", bg2: "#314972", ink: "#fff", subInk: "rgba(255,255,255,0.76)", footerBg: "#ff4f8d", footerInk: "#fff", signal: "#00c950", visual: "bubble-dark", pillBg: "#517bfb", pillInk: "#fff" },
+        { no: "38", eyebrow: "Hot path", title: "The product is strongest when it stays near the hot path of coding.", sub: "Mini-view, quick commit, localhost, terminal, editor. No dead space.", bg1: "#ffd84d", bg2: "#ff9f2a", ink: "#0f1729", subInk: "rgba(15,23,41,0.68)", footerBg: "#0f1729", footerInk: "#fff", signal: "#517bfb", visual: "strip-dark", pillBg: "#0f1729", pillInk: "#fff" },
+        { no: "39", eyebrow: "Launch claim", title: "Git for the vibe coder, but sharper.", sub: "Less romantic. More specific. Built for repo switching and local loop recovery.", bg1: "#ff4f8d", bg2: "#5a6dff", ink: "#fff", subInk: "rgba(255,255,255,0.82)", footerBg: "#ffd84d", footerInk: "#0f1729", signal: "#00c950", visual: "column-light", pillBg: "#0f1729", pillInk: "#fff" },
+        { no: "40", eyebrow: "Product frame", title: "This is not prettier Git. This is tighter workflow.", sub: "That is probably the most defensible top-line positioning in the whole set.", bg1: "#0f1729", bg2: "#ff4f8d", ink: "#fff", subInk: "rgba(255,255,255,0.82)", footerBg: "#0f1729", footerInk: "#fff", signal: "#ffd84d", visual: "slashes", pillBg: "#517bfb", pillInk: "#fff" }
+      ];
+
+      const board = document.getElementById("board");
+
+      function chips(items, signal, bg = "rgba(15,23,41,0.92)", ink = "#f8fafc") {
+        return items.map((item) => `
+          <div class="chip" style="background:${bg};color:${ink};--signal:${signal}">${item}</div>
+        `).join("");
+      }
+
+      function visual(c) {
+        if (c.visual === "stat") {
+          return `<div class="big-stat">:4158<br>↑2 ↓5</div>`;
+        }
+        if (c.visual === "strip" || c.visual === "strip-dark") {
+          return `
+            <div class="strip">
+              ${chips(["vibogit", ":4158", "commit", "push"], c.signal, c.pillBg, c.pillInk)}
+            </div>
+          `;
+        }
+        if (c.visual === "tilt" || c.visual === "tilt-light") {
+          const light = c.visual === "tilt-light";
+          return `
+            <div class="tilt-card">
+              <div class="top">
+                ${chips(["main", ":4158"], c.signal, light ? "#edf1f6" : c.pillBg, light ? "#0f1729" : c.pillInk)}
+              </div>
+              <div class="body">
+                <div class="bar">
+                  <div class="pill" style="--pill-bg:${c.pillBg};--pill-ink:${c.pillInk}">Changes 5</div>
+                  <div class="pill" style="--pill-bg:#1a2440;--pill-ink:#fff">Graph</div>
+                </div>
+                <div class="block"></div>
+                <div class="block"></div>
+              </div>
+            </div>
+          `;
+        }
+        if (c.visual === "sidebar" || c.visual === "sidebar-light") {
+          return `
+            <div class="sidebar" style="${c.visual === "sidebar-light" ? "background:rgba(255,255,255,0.92);color:#0f1729;border-color:rgba(15,23,41,0.08)" : ""}">
+              <div class="top">VIBOGIT</div>
+              <div class="item"><strong>vibogit</strong>main • clean</div>
+              <div class="item"><strong>app</strong>feature/ui • 5 changes</div>
+              <div class="item"><strong>site</strong>:4158 • online</div>
+            </div>
+          `;
+        }
+        if (c.visual === "bubble" || c.visual === "bubble-dark") {
+          const dark = c.visual === "bubble-dark";
+          return `
+            <div class="bubble" style="${dark ? "background:rgba(15,23,41,0.94);color:#fff" : ""}">
+              <h2>Prompt-ready context</h2>
+              <p>@ files, / skills, image paste, screenshot path, terminal send.</p>
+            </div>
+          `;
+        }
+        if (c.visual === "slashes") {
+          return `<div class="slash one"></div><div class="slash two"></div>`;
+        }
+        if (c.visual === "column" || c.visual === "column-light") {
+          const light = c.visual === "column-light";
+          return `
+            <div class="column">
+              <div class="panel ${light ? "light" : ""}">
+                <h2>Quick Commit</h2>
+                <p>Generate message with AI and move on.</p>
+              </div>
+              <div class="panel ${light ? "light" : ""}">
+                <h2>Dev Server</h2>
+                <p>Check logs. Check port. Open preview.</p>
+              </div>
+            </div>
+          `;
+        }
+        if (c.visual === "ring") {
+          return `<div class="ring"></div>`;
+        }
+        if (c.visual === "ghost") {
+          return `
+            <div class="ghost">
+              <div class="top">
+                <div class="line" style="width:140px"></div>
+                <div class="line" style="width:92px"></div>
+              </div>
+              <div class="body">
+                <div class="panel"></div>
+                <div class="panel"></div>
+                <div class="panel"></div>
+              </div>
+            </div>
+          `;
+        }
+        if (c.visual === "dialog") {
+          return `
+            <div class="column" style="width:460px">
+              <div class="panel light">
+                <h2>Create Pull Request</h2>
+                <p>Generate title and description with AI.</p>
+                <div class="block" style="background:#f6f8fb;border-color:#d7dfea"></div>
+                <div class="block" style="height:160px;background:#f6f8fb;border-color:#d7dfea"></div>
+              </div>
+            </div>
+          `;
+        }
+        if (c.visual === "matrix") {
+          return `
+            <div class="matrix">
+              <span style="left:70px;top:220px">PUSH</span>
+              <span style="left:220px;top:320px">PR</span>
+              <span style="left:500px;top:180px">:4158</span>
+              <span style="left:620px;top:520px">LOGS</span>
+              <span style="left:840px;top:250px">PROMPT</span>
+              <span style="left:760px;top:640px">GRAPH</span>
+            </div>
+          `;
+        }
+        return "";
+      }
+
+      board.innerHTML = concepts.map((c) => `
+        <section class="post" style="
+          --bg1:${c.bg1};
+          --bg2:${c.bg2};
+          --ink:${c.ink};
+          --sub:${c.subInk};
+          --footer-bg:${c.footerBg};
+          --footer-ink:${c.footerInk};
+          --signal:${c.signal};
+        ">
+          <div class="noise"></div>
+          <div class="content">
+            <div class="index">OPTION ${c.no}</div>
+            <div class="eyebrow">${c.eyebrow}</div>
+            <h1>${c.title}</h1>
+            <div class="sub">${c.sub}</div>
+            ${visual(c)}
+          </div>
+          <div class="footer">VIBOGIT</div>
+        </section>
+      `).join("");
+    </script>
+  </body>
+</html>

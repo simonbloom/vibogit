@@ -314,7 +314,7 @@ export interface RecentProject {
 }
 
 // Config Types
-export type AiProvider = "anthropic" | "openai" | "gemini";
+export type AiProvider = "anthropic" | "openai";
 export type ThemeOption = "light" | "dark" | "ember" | "matrix" | "system";
 export type TerminalOption = "Terminal" | "iTerm" | "Ghostty" | "Warp" | "kitty";
 export type EditorOption = "cursor" | "antigravity" | "code" | "zed" | "custom";
@@ -331,6 +331,11 @@ export interface Config {
   aiModel: string;
   aiApiKey: string;
   githubPat: string;
+  syncBeaconEnabled: boolean;
+  syncBeaconMachineName: string;
+  syncBeaconPairingCode: string;
+  syncBeaconGistId: string;
+  syncBeaconInterval: number;
   editor: EditorOption;
   customEditorCommand: string;
   terminal: TerminalOption;
@@ -345,10 +350,15 @@ export interface Config {
 
 export const DEFAULT_CONFIG: Config = {
   computerName: "",
-  aiProvider: "anthropic",
-  aiModel: "",
+  aiProvider: "openai",
+  aiModel: "gpt-5.4",
   aiApiKey: "",
   githubPat: "",
+  syncBeaconEnabled: false,
+  syncBeaconMachineName: "",
+  syncBeaconPairingCode: "",
+  syncBeaconGistId: "",
+  syncBeaconInterval: 300000,
   editor: "cursor",
   customEditorCommand: "",
   terminal: "Terminal",

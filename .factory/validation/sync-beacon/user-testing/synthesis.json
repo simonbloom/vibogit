@@ -1,0 +1,60 @@
+{
+  "milestone": "sync-beacon",
+  "round": 1,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 14,
+    "passed": 5,
+    "failed": 1,
+    "blocked": 8
+  },
+  "passedAssertions": [
+    "VAL-BEACON-001",
+    "VAL-BEACON-013",
+    "VAL-BEACON-016",
+    "VAL-BEACON-044",
+    "VAL-PUSH-012"
+  ],
+  "failedAssertions": [
+    {
+      "id": "VAL-CROSS-002",
+      "reason": "In browser mode, the actual app shell at http://localhost:4158 is not fully navigable to all changed sections because it hard-stops on the desktop-backend connection error screen. I could only reach Sync Beacon settings via the dedicated figma-capture preview route, not through the actual app navigation. The AI Settings section is represented in that preview route as well, but the Sync Beacon remote machines panel is not reachable there. Therefore the requirement that all new/changed sections be reachable via actual UI navigation is not met on the browser surface."
+    }
+  ],
+  "blockedAssertions": [
+    {
+      "id": "VAL-BEACON-005",
+      "blockedBy": "Backend machine-name persistence into gist payload is source-supported and partially evidenced by isolated config + gist payload, but required post-relaunch UI/screenshot verification is not fully exercisable on the tauri-rust-cli surface used here."
+    },
+    {
+      "id": "VAL-BEACON-008",
+      "blockedBy": "Source shows immediate push plus periodic timer and disable cleanup, but faithfully proving timer-driven periodic updates and stop-after-toggle requires a running Tauri app session over time; not fully user-surface testable from isolated CLI checks alone."
+    },
+    {
+      "id": "VAL-BEACON-010",
+      "blockedBy": "Toggle persistence across app restarts depends on real Tauri UI/runtime restart behavior, which was not available on this tauri-rust-cli validation surface."
+    },
+    {
+      "id": "VAL-BEACON-014",
+      "blockedBy": "Browser-mode validation of the invalid Gist ID error is blocked because the live app surface fails closed with 'ViboGit desktop backend is unavailable. Launch via Tauri runtime.' and the available browser-safe mock preview does not wire `sync_beacon_validate_gist` or any inline error state. I verified the Shared Gist ID field is rendered and editable in the reachable Sync Beacon settings UI, but could not trigger a real user-visible invalid-ID error without the Tauri backend."
+    },
+    {
+      "id": "VAL-BEACON-022",
+      "blockedBy": "Blocked in browser mode. The real browser app cannot reach the Sync Beacon panel because the app stops at the desktop-backend error screen, and the only reachable browser-safe preview route includes Sync Beacon settings captures but no Sync Beacon remote-machines panel capture or seeded remote machine data. As a result, local-machine exclusion and remote machine rendering could not be exercised through the user surface."
+    },
+    {
+      "id": "VAL-BEACON-024",
+      "blockedBy": "Blocked for the same browser-only limitation as VAL-BEACON-022: there is no reachable remote-machines Sync Beacon panel with seeded ahead counts in browser mode, so the ahead>0 indicator and exact commit-count display could not be validated through the UI."
+    },
+    {
+      "id": "VAL-BEACON-036",
+      "blockedBy": "Authenticated-gh error path is source-covered, but the exact missing-gh / unauthenticated user-facing toggle error could not be fully exercised through the assigned surface without launching the Tauri UI. PATH-only simulation was insufficient because cargo itself remained invocable by absolute path and test coverage does not hit the command path."
+    },
+    {
+      "id": "VAL-BEACON-039",
+      "blockedBy": "External gist deletion was confirmed via gh returning not found, but the required Tauri UI error/offer-to-recreate flow could not be observed on this CLI-only surface."
+    }
+  ],
+  "appliedUpdates": [],
+  "previousRound": null
+}

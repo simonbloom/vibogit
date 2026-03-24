@@ -1,0 +1,57 @@
+{
+  "milestone": "core-fixes",
+  "round": 3,
+  "status": "pass",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "cd apps/desktop/src-tauri && cargo test",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "bun run typecheck",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "bun run lint",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [
+    {
+      "target": "library",
+      "description": "Documented the temporary local repo plus bare remote integration-test pattern and first-push postconditions for git CLI workflows in .factory/library/architecture.md.",
+      "sourceFeature": "smart-push"
+    }
+  ],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "skills",
+      "suggestion": "Update the tauri-fullstack skill to explicitly document the temporary local repo + bare remote fixture pattern for git CLI workflow tests and to name first-push postconditions like upstream tracking, `commits_pushed`, and `has_remote` that those tests must assert.",
+      "evidence": "Shared-state observations from smart-push, fix-ship-integration-tests, and fix-ship-push-tracking-and-tests all point to the same omission, and prior scrutiny failures in those features were corrected only after follow-up fixes added/adjusted those assertions.",
+      "isSystemic": true
+    },
+    {
+      "target": "skills",
+      "suggestion": "Clarify in tauri-fullstack that verification-only or non-visual fixes may skip browser verification and Rust-first TDD when the feature scope is limited to already-landed code review or small frontend config migrations.",
+      "evidence": "Shared-state observations from ai-settings-simplify and fix-gemini-config-migration both noted that the current skill wording over-prescribes implementation/browser steps for verification-only and frontend-only config work, leading workers to record avoidable procedure deviations.",
+      "isSystemic": true
+    }
+  ],
+  "rejectedObservations": [
+    {
+      "observation": "Stale mock fixture still references `gpt-5.3-codex-spark`.",
+      "reason": "rejected because this is isolated fixture drift rather than shared operational knowledge or milestone-blocking guidance; it can be fixed in normal product work if needed."
+    }
+  ],
+  "previousRound": ".factory/validation/core-fixes/scrutiny/synthesis.json"
+}

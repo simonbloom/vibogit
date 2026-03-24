@@ -34,7 +34,7 @@ export const EDITOR_OPTIONS: EditorConfig[] = [
 ];
 
 export interface Settings {
-  aiProvider: "anthropic" | "openai" | "gemini";
+  aiProvider: "anthropic" | "openai";
   aiModel: string;
   aiApiKey: string;
   editor: EditorOption;
@@ -47,8 +47,8 @@ export interface Settings {
 }
 
 const DEFAULT_SETTINGS: Settings = {
-  aiProvider: "anthropic",
-  aiModel: "",
+  aiProvider: "openai",
+  aiModel: "gpt-5.4",
   aiApiKey: "",
   editor: "cursor",
   terminal: "Terminal",
@@ -67,6 +67,13 @@ export function getSettings(): Settings {
     const stored = localStorage.getItem(SETTINGS_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
+      
+      // Migrate removed Gemini provider to default
+      if (parsed.aiProvider === "gemini") {
+        parsed.aiProvider = DEFAULT_SETTINGS.aiProvider;
+        parsed.aiModel = DEFAULT_SETTINGS.aiModel;
+        parsed.aiApiKey = "";
+      }
       
       // Migrate legacy string editor values to new EditorOption type
       if (parsed.editor && !EDITOR_OPTIONS.some((e) => e.id === parsed.editor)) {

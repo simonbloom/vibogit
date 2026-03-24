@@ -1,0 +1,21 @@
+{
+  "featureId": "fix-beacon-commit-metadata-pipeline",
+  "reviewedAt": "2026-03-23T17:13:24.216504Z",
+  "commitId": "180ef352cdc45bdd0c406f0d20568b98b18d82f4",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The feature correctly restores commit metadata to ProjectStatus on the Rust side and exposes the matching optional fields in the frontend projects context, which allows the existing sync beacon pipeline to consume real commit metadata instead of empty placeholders.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "The frontend ProjectStatus type for Tauri's get_all_project_statuses lives in packages/ui/src/lib/projects-context.tsx, not under a providers/ path as the feature description guessed. This data-contract location matters for future data-plumbing fixes involving project status fields.",
+      "evidence": "Commit 180ef352cdc45bdd0c406f0d20568b98b18d82f4 updates packages/ui/src/lib/projects-context.tsx; grep results show ProjectStatus is declared there and consumed by get_all_project_statuses calls in the same file."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed commit 180ef352cdc45bdd0c406f0d20568b98b18d82f4, the worker handoff, transcript skeleton, and affected Rust/TypeScript files. The implementation matches the feature requirements, and I found no blocking or non-blocking code issues."
+}
