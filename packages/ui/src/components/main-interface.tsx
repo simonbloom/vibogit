@@ -449,7 +449,7 @@ export function MainInterface({
     
     const settings = getSettings();
     if (!settings.aiApiKey) {
-      console.error("Please configure your AI API key in settings");
+      toast.error("Please configure your AI API key in settings");
       return;
     }
     
@@ -503,10 +503,13 @@ export function MainInterface({
       
       // 4. Commit with generated message
       await send("commit", { repoPath, message });
+      toast.success("Committed: " + message.split("\n")[0]);
       
       // 5. Refresh status
       await refreshStatus();
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      toast.error(`Quick commit failed: ${msg}`);
       console.error("Quick commit failed:", error);
     } finally {
       setIsCommitting(false);
@@ -712,8 +715,20 @@ export function MainInterface({
     cloneAuthStatus?.message ??
     "GitHub listing auth unavailable. Use Paste URL below, or run gh auth login.";
 
+  const viewLabels: Record<typeof activeView, string> = {
+    changes: "Changes",
+    tree: "Tree",
+    graph: "Graph",
+    logs: "Logs",
+  };
+
   return (
     <div className="flex flex-col h-full">
+      {/* Tab Title */}
+      <div className="px-4 pt-3 pb-1">
+        <h2 className="text-lg font-semibold tracking-tight">{viewLabels[activeView]}</h2>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
         <div className="flex items-center gap-3 flex-1 min-w-0">
