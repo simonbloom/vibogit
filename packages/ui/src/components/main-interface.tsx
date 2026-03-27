@@ -715,18 +715,11 @@ export function MainInterface({
     cloneAuthStatus?.message ??
     "GitHub listing auth unavailable. Use Paste URL below, or run gh auth login.";
 
-  const viewLabels: Record<typeof activeView, string> = {
-    changes: "Changes",
-    tree: "Tree",
-    graph: "Graph",
-    logs: "Logs",
-  };
-
   return (
     <div className="flex flex-col h-full">
-      {/* Tab Title */}
+      {/* Project Title */}
       <div className="px-4 pt-3 pb-1">
-        <h2 className="text-lg font-semibold tracking-tight">{viewLabels[activeView]}</h2>
+        <h2 className="text-lg font-semibold tracking-tight">{projectName}</h2>
       </div>
 
       {/* Header */}
